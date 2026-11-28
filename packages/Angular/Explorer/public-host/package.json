@@ -1,0 +1,47 @@
+{
+  "name": "@memberjunction/ng-public-host",
+  "version": "6.3.0-edge.2",
+  "description": "MemberJunction: Hosts public pages from Open Apps that visitors open before sign-in, and the main.ts hook that starts them.",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/public-api.d.ts",
+      "default": "./dist/public-api.js"
+    },
+    "./bootstrap": {
+      "types": "./dist/bootstrap.d.ts",
+      "default": "./dist/bootstrap.js"
+    }
+  },
+  "files": [
+    "/dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
+    "build": "ngc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/theme-engine": "6.3.0-edge.2",
+    "tslib": "^2.8.1"
+  },
+  "peerDependencies": {
+    "@angular/common": "^21.2.22",
+    "@angular/core": "^21.2.22",
+    "@angular/platform-browser": "^21.2.22"
+  },
+  "devDependencies": {
+    "@angular/compiler": "21.2.22",
+    "@angular/compiler-cli": "21.2.22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "mjUILayer": "shell"
+}

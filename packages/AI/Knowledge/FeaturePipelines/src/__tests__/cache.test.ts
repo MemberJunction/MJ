@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { FeatureValueCacheService, FeatureValueSaveError } from '../cache/FeatureValueCacheService';
+import { FeatureValueCacheService, FeatureValueKeyError, FeatureValueSaveError } from '../cache/FeatureValueCacheService';
 import { FeatureValueKey, type FeatureValueKeyInput } from '../spec/feature-value-key';
 import type { UserInfo, IMetadataProvider, RunViewParams } from '@memberjunction/core';
+
+/**
+ * Wall-clock ceiling for the pathological-input check (5,000-digit string). It guards against
+ * catastrophic/polynomial backtracking (seconds), not machine speed: tight millisecond bounds
+ * fail on shared CI runners (v6.3.0-edge.0's publish gate failed one at 211 ms vs 200 ms).
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 1000;
 
 /**
  * The RunView stand-in: each call returns the next entry of `queue` when there is one, else `mockResults`; tests read
@@ -24,9 +31,17 @@ const { MockRunView, logErrorSpy } = vi.hoisted(() => {
             if (MockRunView.failWith) {
                 return { Success: false, Results: [], ErrorMessage: MockRunView.failWith };
             }
+            const rawResults = MockRunView.queue.shift() ?? MockRunView.mockResults;
+            const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
+            const filtered = filter.includes("Role = 'Champion'")
+                ? rawResults.filter((r) => (r as { Role?: string }).Role !== 'Challenger')
+                : rawResults;
+            const results = typeof params.MaxRows === 'number' && params.MaxRows > 0
+                ? filtered.slice(0, params.MaxRows)
+                : filtered;
             return {
                 Success: true,
-                Results: MockRunView.queue.shift() ?? MockRunView.mockResults,
+                Results: results,
             };
         }
         public async RunViews(params: RunViewParams[]) {
@@ -421,7 +436,7 @@ describe('FeatureValueCacheService', () => {
                 expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Previous: { SeniorityLevel: null } });
                 expect(save).toHaveBeenCalledTimes(1);
                 const reread = MockRunView.calls[2];
-                expect(reread.ExtraFilter).toBe(`RecordProcessID = 'rp-1' AND ValueKeyHash IN ('${keyHash}')`);
+                expect(reread.ExtraFilter).toBe(`RecordProcessID = 'rp-1' AND ValueKeyHash IN ('${keyHash}') AND Role = 'Champion'`);
                 expect(reread.BypassCache).toBe(true);
             });
 
@@ -494,6 +509,44 @@ describe('FeatureValueCacheService', () => {
             const provider = stubProvider(vi.fn().mockResolvedValue(row));
             await expect(FeatureValueCacheService.Instance.Store({ ...base, provider })).rejects.toThrow(/UQ violation/);
         });
+
+        describe('KeyDisplay longer than its column (#4917)', () => {
+            /** A new row whose metadata gives KeyDisplay the nvarchar(500) limit. */
+            const rowWithLimit = (): Record<string, unknown> => ({
+                NewRecord: vi.fn(), Save: vi.fn().mockResolvedValue(true),
+                EntityInfo: { Fields: [{ Name: 'KeyDisplay', MaxLength: 500 }, { Name: 'KeyJSON', MaxLength: 0 }] },
+            });
+
+            it('clamps an over-long display to MaxLength, ending with an ellipsis, and still saves', async () => {
+                MockRunView.mockResults = [];
+                const row = rowWithLimit();
+                const provider = stubProvider(vi.fn().mockResolvedValue(row));
+                const longDisplay = 'x'.repeat(1200);
+                await FeatureValueCacheService.Instance.Store({ ...base, keyDisplay: longDisplay, provider });
+                const display = row.KeyDisplay as string;
+                expect(display.length).toBe(500);
+                expect(display.endsWith('…')).toBe(true);
+                expect(display.startsWith('x'.repeat(499))).toBe(true);
+                expect(row.KeyHash).toBe('k-owner');
+                expect(row.Save).toHaveBeenCalledTimes(1);
+            });
+
+            it('leaves a display within the limit unchanged', async () => {
+                MockRunView.mockResults = [];
+                const row = rowWithLimit();
+                const provider = stubProvider(vi.fn().mockResolvedValue(row));
+                const exact = 'y'.repeat(500);
+                await FeatureValueCacheService.Instance.Store({ ...base, keyDisplay: exact, provider });
+                expect(row.KeyDisplay).toBe(exact);
+                await FeatureValueCacheService.Instance.Store({ ...base, provider });
+                expect(row.KeyDisplay).toBe('Owner');
+            });
+
+            it('ClampToLength treats 0 as unlimited', () => {
+                expect(FeatureValueCacheService.ClampToLength('abcdef', 0)).toBe('abcdef');
+                expect(FeatureValueCacheService.ClampToLength('abcdef', 4)).toBe('abc…');
+            });
+        });
     });
 
     describe('Human values', () => {
@@ -545,7 +598,7 @@ describe('FeatureValueCacheService', () => {
             expect(latest.get('level')?.ValueText).toBe('Director');
             expect(MockRunView.batches).toHaveLength(1);
             const views = MockRunView.batches[0];
-            expect(views.map((v) => v.ExtraFilter?.match(/FeatureName = '([^']+)'/)?.[1])).toEqual(['Years', 'Level', 'Missing']);
+            expect(views.map((v) => (typeof v.ExtraFilter === 'string' ? v.ExtraFilter.match(/FeatureName = '([^']+)'/)?.[1] : undefined))).toEqual(['Years', 'Level', 'Missing']);
             for (const view of views) {
                 expect(view.ExtraFilter).toContain("RecordProcessID = 'rp-1' AND EntityID = 'ENT-P' AND RecordID = 'person-1'");
                 expect(view.ExtraFilter).toContain("Source = 'Pipeline'");
@@ -590,6 +643,149 @@ describe('FeatureValueCacheService', () => {
             MockRunView.mockResults = [{ Delete: vi.fn().mockResolvedValue(false), LatestResult: { CompleteMessage: 'FK violation' } }];
             await expect(FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).rejects.toThrow(/failed retiring the Human 'SeniorityLevel' value of record 'person-1': FK violation/);
         });
+
+        describe('a Human value on a binding with no Record Process (§6.2a)', () => {
+            const BIND = '9F1C2A7E-0B4D-4C55-8E21-3A6F0D9B7C11';
+            const bindingRef = { ...humanRef, RecordProcessID: null, MLModelScoringBindingID: BIND };
+            const scope = "RecordProcessID IS NULL AND MLModelScoringBindingID = '9f1c2a7e-0b4d-4c55-8e21-3a6f0d9b7c11'";
+
+            it('reads its key by binding, skips the Pipeline read, and saves the binding on the row', async () => {
+                MockRunView.mockResults = [];
+                const saved: Array<Record<string, unknown>> = [];
+                const provider = stubProvider(vi.fn().mockImplementation(async () => {
+                    const row: Record<string, unknown> = { NewRecord: vi.fn(), Save: vi.fn().mockImplementation(async () => { saved.push({ ...row }); return true; }) };
+                    return row;
+                }));
+                await FeatureValueCacheService.Instance.RecordHumanValue({ ...bindingRef, Value: 'Gold', Provider: provider });
+                expect(MockRunView.batches).toHaveLength(0);
+                expect(MockRunView.calls).toHaveLength(1);
+                expect(MockRunView.calls[0].ExtraFilter).toContain(`${scope} AND ValueKeyHash IN (`);
+                expect(MockRunView.calls[0].ExtraFilter).toContain("Role = 'Champion'");
+                expect(saved[0]).toMatchObject({ Source: 'Human', RecordProcessID: null, MLModelScoringBindingID: BIND, ValueText: 'Gold' });
+            });
+
+            it('keys the row with its binding, so two bindings never share a ValueKeyHash; a pipeline row\'s key leaves the binding out', async () => {
+                MockRunView.mockResults = [];
+                const saved: Array<Record<string, unknown>> = [];
+                const provider = stubProvider(vi.fn().mockImplementation(async () => {
+                    const row: Record<string, unknown> = { NewRecord: vi.fn(), Save: vi.fn().mockImplementation(async () => { saved.push({ ...row }); return true; }) };
+                    return row;
+                }));
+                const OTHER = '2B7E1F40-6C3A-4D8E-9A15-7F0E4C2B9D33';
+                await FeatureValueCacheService.Instance.RecordHumanValue({ ...bindingRef, Value: 'Gold', Provider: provider });
+                await FeatureValueCacheService.Instance.RecordHumanValue({ ...bindingRef, MLModelScoringBindingID: OTHER, Value: 'Gold', Provider: provider });
+                await FeatureValueCacheService.Instance.RecordHumanValue({ ...humanRef, Value: 'Gold', Provider: provider });
+                const key = { EntityID: 'ENT-P', RecordID: 'person-1', FeatureName: 'SeniorityLevel', PipelineVersion: null, PromptVersionHash: null,
+                    AIModelID: null, ParametersHash: null, InputHash: null, Source: 'Human' as const };
+                expect(saved.map((r) => r.ValueKeyHash)).toEqual([
+                    await FeatureValueKey.ComputeHash({ ...key, MLModelScoringBindingID: BIND }),
+                    await FeatureValueKey.ComputeHash({ ...key, MLModelScoringBindingID: OTHER }),
+                    await FeatureValueKey.ComputeHash(key),
+                ]);
+                expect(new Set(saved.map((r) => r.ValueKeyHash)).size).toBe(3);
+            });
+
+            it('GetLatestValue and RetireHumanValue filter by the binding, never by RecordProcessID = \'null\'', async () => {
+                MockRunView.mockResults = [];
+                await FeatureValueCacheService.Instance.GetLatestValue({ ...bindingRef, Source: 'Human' });
+                await FeatureValueCacheService.Instance.RetireHumanValue(bindingRef);
+                for (const view of MockRunView.calls) {
+                    expect(view.ExtraFilter).toContain(`${scope} AND EntityID = 'ENT-P' AND RecordID = 'person-1' AND FeatureName = 'SeniorityLevel'`);
+                    expect(view.ExtraFilter).not.toContain("RecordProcessID = 'null'");
+                    expect(view.ExtraFilter).toContain("Role = 'Champion'");
+                }
+            });
+
+            it('a pipeline-scoped Human row writes no binding ID', async () => {
+                MockRunView.mockResults = [];
+                const saved: Array<Record<string, unknown>> = [];
+                const provider = stubProvider(vi.fn().mockImplementation(async () => {
+                    const row: Record<string, unknown> = { NewRecord: vi.fn(), Save: vi.fn().mockImplementation(async () => { saved.push({ ...row }); return true; }) };
+                    return row;
+                }));
+                await FeatureValueCacheService.Instance.RecordHumanValue({ ...humanRef, Value: 'Gold', Provider: provider });
+                expect(saved[0]).toMatchObject({ RecordProcessID: 'rp-1', MLModelScoringBindingID: null });
+            });
+
+            it('refuses a scope with neither or both IDs before reading', async () => {
+                await expect(FeatureValueCacheService.Instance.RetireHumanValue({ ...humanRef, RecordProcessID: null }))
+                    .rejects.toMatchObject({ name: 'FeatureValueKeyError', Field: 'MLModelScoringBindingID' });
+                await expect(FeatureValueCacheService.Instance.GetLatestValue({ ...humanRef, MLModelScoringBindingID: BIND, Source: 'Human' }))
+                    .rejects.toBeInstanceOf(FeatureValueKeyError);
+                expect(MockRunView.calls).toHaveLength(0);
+            });
+
+            it('RecordFeatureValues refuses a Model row and a Pipeline row with no Record Process', async () => {
+                const base = {
+                    recordProcessID: null, mlModelScoringBindingID: BIND, entityID: 'ENT-P', recordID: 'person-1', promptVersionHash: null,
+                    pipelineVersion: null, aiModelID: null, parametersHash: null, inputHash: null,
+                    outputs: [{ featureName: 'SeniorityLevel', value: 'Gold' }], contextUser: mockUser, provider: lookupProvider,
+                };
+                await expect(FeatureValueCacheService.Instance.RecordFeatureValues({ ...base, source: 'Model' }))
+                    .rejects.toMatchObject({ name: 'FeatureValueKeyError', Field: 'Source' });
+                await expect(FeatureValueCacheService.Instance.RecordFeatureValues({ ...base, source: 'Pipeline' }))
+                    .rejects.toMatchObject({ name: 'FeatureValueKeyError', Field: 'RecordProcessID' });
+                expect(MockRunView.calls).toHaveLength(0);
+            });
+        });
+
+        it('ignores a newer Role = Challenger row in GetLatestValue, GetLatestPipelineValues, and RetireHumanValue (D2)', async () => {
+            const empty = { ValueText: null, ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null };
+            const newerChallenger = {
+                FeatureName: 'SeniorityLevel',
+                ...empty,
+                ValueText: 'Challenger-VP',
+                Role: 'Challenger',
+                ComputedAt: new Date('2026-11-06T12:00:00Z'),
+            };
+            const olderChampion = {
+                FeatureName: 'SeniorityLevel',
+                ...empty,
+                ValueText: 'Champion-Director',
+                Role: 'Champion',
+                ComputedAt: new Date('2026-11-06T11:00:00Z'),
+            };
+
+            // 1. GetLatestValue returns Champion even when Challenger is first (newest ComputedAt)
+            MockRunView.mockResults = [newerChallenger, olderChampion];
+            const latestSingle = await FeatureValueCacheService.Instance.GetLatestValue({
+                RecordProcessID: 'rp-1',
+                EntityID: 'ENT-P',
+                RecordID: 'person-1',
+                FeatureName: 'SeniorityLevel',
+                Source: 'Pipeline',
+                ContextUser: mockUser,
+                Provider: lookupProvider,
+            });
+            expect(latestSingle?.ValueText).toBe('Champion-Director');
+            expect(MockRunView.lastParams?.ExtraFilter).toContain("Role = 'Champion'");
+
+            // 2. GetLatestPipelineValues returns Champion even when Challenger is first
+            MockRunView.queue = [[newerChallenger, olderChampion]];
+            const latestBatch = await FeatureValueCacheService.Instance.GetLatestPipelineValues({
+                RecordProcessID: 'rp-1',
+                EntityID: 'ENT-P',
+                RecordID: 'person-1',
+                FeatureNames: ['SeniorityLevel'],
+                ContextUser: mockUser,
+                Provider: lookupProvider,
+            });
+            expect(latestBatch.get('senioritylevel')?.ValueText).toBe('Champion-Director');
+            expect(MockRunView.lastParams?.ExtraFilter).toContain("Role = 'Champion'");
+
+            // 3. RetireHumanValue filters on Role = 'Champion' and does not delete Challenger rows
+            const challengerDelete = vi.fn().mockResolvedValue(true);
+            const championDelete = vi.fn().mockResolvedValue(true);
+            MockRunView.mockResults = [
+                { Role: 'Challenger', Delete: challengerDelete, LatestResult: null },
+                { Role: 'Champion', Delete: championDelete, LatestResult: null },
+            ];
+            const retiredCount = await FeatureValueCacheService.Instance.RetireHumanValue(humanRef);
+            expect(retiredCount).toBe(1);
+            expect(challengerDelete).not.toHaveBeenCalled();
+            expect(championDelete).toHaveBeenCalledTimes(1);
+            expect(MockRunView.lastParams?.ExtraFilter).toContain("Role = 'Champion'");
+        });
     });
 
     describe('ToTypedValue with a constraint type', () => {
@@ -624,7 +820,7 @@ describe('FeatureValueCacheService', () => {
         it('rejects long digit strings with trailing non-numeric characters without polynomial backtracking', () => {
             const start = Date.now();
             const result = T('1'.repeat(5000) + 'a', 'numeric');
-            expect(Date.now() - start).toBeLessThan(100);
+            expect(Date.now() - start).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
             expect(result.ValueNumeric).toBeNull();
             expect(result.ValueText).toBe('1'.repeat(5000) + 'a');
         });

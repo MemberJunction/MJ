@@ -97,7 +97,9 @@ const prompts = AIEngineBase.Instance.Prompts;
 | `PromptTypes` | AI Prompt Types | Prompt type categories |
 | `PromptCategories` | AI Prompt Categories | Hierarchical prompt organization |
 | `Agents` | AI Agents | All agent definitions with actions and notes |
-| `AgentTypes` | MJ: AI Agent Types | Agent type definitions |
+| `AgentCategories` | MJ: AI Agent Categories | Hierarchical agent categories carrying `DefaultConfiguration` (`IAgentConfiguration`) |
+| `AgentTypes` | MJ: AI Agent Types | Agent type definitions carrying `DefaultAgentConfiguration` (`IAgentConfiguration`) and per-type `DefaultConfiguration` |
+| `AgentStepTypes` | MJ: AI Agent Step Types | Built-in and OpenApp-registered step-type definitions (`GetAgentStepTypeByName(name)`) consumed by `AgentStepTypeRegistry` |
 | `AgentActions` | AI Agent Actions | Actions associated with agents |
 | `AgentPrompts` | MJ: AI Agent Prompts | Prompts associated with agents |
 | `AgentSteps` | MJ: AI Agent Steps | Flow agent step definitions |
@@ -250,6 +252,30 @@ const agents = await AIEngineBase.Instance.GetAccessibleAgents(user, 'run');
 Use the availability set for the user-requested path (`/skill` mentions → `ExecuteAgentParams.requestedSkillIDs`) and for pickers/tooling; use the auto set for anything the *agent* triggers on its own judgment (the prompt catalog, `Skill`-step validation). Because both `ActivationMode` defaults are `RequestedOnly`, the Auto × Auto "super agent" posture is always a deliberate double opt-in.
 
 Bundle membership is resolved by ID via `GetSkillActionIDs(skillID)` / `GetSkillSubAgentIDs(skillID)`; skill permission rows are cached on `SkillPermissions` and evaluated by `AISkillPermissionHelper` (open-by-default). Full architecture: [Agent Skills & Plan Mode Guide](../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md).
+
+## 3-Table `IAgentConfiguration` Cascade, Prototype Inheritance & 2×2 RBAC
+
+`AIEngineBase` resolves multi-level `AIAgent.BaseAgentID` prototype chains (max depth 5, cycle-safe) and the **3-table `IAgentConfiguration` cascade** (`AIAgentType.DefaultAgentConfiguration` → `AIAgentCategory.DefaultConfiguration` walking up `ParentID` → `AIAgent.Configuration` root → leaf) live from cache without cloning agent metadata, with full `v6.x` dual-read fallback to the 49 deprecated `AIAgent` columns and 7 deprecated `AIAgentType` columns, and enforces the 2×2 RBAC model with fail-closed Ancestor `CanRun` verification.
+
+| API Method / Helper | Responsibility |
+| --- | --- |
+| `GetAgentInheritanceChain(agentId)` / `GetRootAgent(agentId)` | Walks `BaseAgentID` safely up to `MAX_AGENT_INHERITANCE_DEPTH` (5), returning `[root, ..., parent, leaf]`. |
+| `ResolveEffectiveAgentProperties(agent)` | Resolves the full 3-table `IAgentConfiguration` cascade (`EffectiveAgentProperties.Configuration`), collects admin-configured `EffectiveAgentProperties.HelperPlugins`, dual-reads `Configuration` JSON with fallback to legacy columns, enforces monotonic narrow-only invariants (`Isolation`, `AcceptsSkills`, `SkillActivationMode`, `SearchScopeAccess`, `RequirePlanMode`, `SupportsPlanMode`, `AllowEphemeralClientTools`, `AcceptUnregisteredFiles`, `MaxExecutionsPerRun`, `MaxSubAgentConsultRounds`), and deep-merges `TypeConfiguration` & `AgentTypePromptParams` (layered over `Configuration.promptDefaults`). |
+| `AgentStepTypes` / `GetAgentStepTypeByName(name)` | Cached `MJ: AI Agent Step Types` collection powering `AgentStepTypeRegistry` for built-in and OpenApp custom step types. |
+| `GetEffectiveAgentPrompts(agentId, status?)` | Returns leaf active prompts when defined, otherwise inherits from the nearest prompt-owning ancestor. |
+| `GetEffectiveAgentActions(agentId)` | Unions `AIAgentAction` rows root → leaf by `ActionID`; descendant non-`Active` rows (`Revoked`/`Pending`) veto inherited actions. |
+| `GetStackedAdditionalInstructions(agentId)` | Collects non-empty `AdditionalInstructions` root → leaf so org/dept rules precede personal preferences. |
+| `GetSubAgents`, `GetSkillsForAgent`, `GetAutoActivatableSkillsForAgent`, `GetAgentConfigurationPresets`, `GetClientToolsForAgent`, `GetAgentModalities`, `ResolveAgentPersona` | Walk the `BaseAgentID` chain so Open App skills, sub-agents, presets, tools, modalities, and personas flow down live to derived instances. |
+| `AIAgentPermissionHelper.ComputeEffectivePermissionsSync` | Evaluates 2×2 RBAC (`BaseAgentID == null` + 0 ACL = public; `BaseAgentID != null` + 0 ACL = private to `OwnerUserID`) plus fail-closed Ancestor `CanRun` invariant. |
+| `GetInstantiableAgents(user)` / `GetUserDerivedAgents(user)` | Lists templates with `InstantiationMode !== 'None'` and the user's personal/shared derived instances (`Required` templates are excluded from `GetUserRunnableAgentDirectory`). |
+| `ResolveAgentForUser(nameOrId, user)` / `ResolvePrimaryUserAgentInstance(baseAgentId, userId)` | Collision-free name lookup (user-owned → shared derived → root catalog) and primary active instance resolution per `(OwnerUserID, RootBaseAgentID)`. |
+
+Canonical guides:
+- [Agent Administrator Guide](../../../guides/AGENT_ADMINISTRATOR_GUIDE.md)
+- [Agent Builder & Extension Guide](../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md)
+- [Agent End-User Guide](../../../guides/AGENT_END_USER_GUIDE.md)
+- [BaseAgent Rebase Map](../../../guides/BASE_AGENT_REBASE_MAP.md)
+- [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md)
 
 ## Dependencies
 

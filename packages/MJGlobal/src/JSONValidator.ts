@@ -215,25 +215,43 @@ export class JSONValidator {
         // Check for optional suffix (?)
         if (workingKey.endsWith('?')) {
             isOptional = true;
-            workingKey = workingKey.slice(0, -1);
+            workingKey = workingKey.slice(0, -1).trim();
+            if (workingKey.endsWith(':')) {
+                workingKey = workingKey.slice(0, -1).trim();
+            }
         }
         // Check for wildcard suffix (*)
         else if (workingKey.endsWith('*')) {
             isWildcard = true;
-            workingKey = workingKey.slice(0, -1);
+            workingKey = workingKey.slice(0, -1).trim();
+            if (workingKey.endsWith(':')) {
+                workingKey = workingKey.slice(0, -1).trim();
+            }
         }
 
-        // Parse validation rules (everything after first :)
-        const colonIndex = workingKey.indexOf(':');
+        // Parse validation rules: scan ':' positions so data keys containing colons
+        // (e.g. '16:9', '9:16', '1:1', '4:5', 'brand:logo', URLs) are preserved unless
+        // a ':' is followed exclusively by recognized validation rules.
         let fieldName = workingKey;
-        
-        if (colonIndex !== -1) {
-            fieldName = workingKey.substring(0, colonIndex);
-            const rulesString = workingKey.substring(colonIndex + 1);
-            
-            // Split by : but handle array syntax [N+] specially
-            const rules = this.parseValidationRules(rulesString);
-            validationRules.push(...rules);
+        let searchFrom = 1;
+        while (searchFrom < workingKey.length) {
+            const colonIndex = workingKey.indexOf(':', searchFrom);
+            if (colonIndex === -1) {
+                break;
+            }
+            const candidateRules = this.parseValidationRules(workingKey.substring(colonIndex + 1));
+            if (candidateRules.length > 0 && candidateRules.every(r => this.isRecognizedValidationRule(r))) {
+                fieldName = workingKey.substring(0, colonIndex).trim();
+                for (const rule of candidateRules) {
+                    if (rule === '?') {
+                        isOptional = true;
+                    } else {
+                        validationRules.push(rule);
+                    }
+                }
+                break;
+            }
+            searchFrom = colonIndex + 1;
         }
 
         return {
@@ -242,6 +260,28 @@ export class JSONValidator {
             isWildcard,
             validationRules
         };
+    }
+
+    /**
+     * Checks whether a parsed colon-delimited token is one of JSONValidator's
+     * recognized validation rules (type check, `!empty`, `?`, or `[N+]` / `[N-M]` / `[=N]`).
+     *
+     * @private
+     */
+    private isRecognizedValidationRule(rule: string): boolean {
+        const trimmed = rule.trim();
+        if (
+            trimmed === 'string' ||
+            trimmed === 'number' ||
+            trimmed === 'boolean' ||
+            trimmed === 'object' ||
+            trimmed === 'array' ||
+            trimmed === '!empty' ||
+            trimmed === '?'
+        ) {
+            return true;
+        }
+        return /^\[(?:\d+\+|\d+-\d+|=\d+)\]$/.test(trimmed);
     }
 
     /**
@@ -262,8 +302,9 @@ export class JSONValidator {
                 inBrackets = false;
                 currentRule += char;
             } else if (char === ':' && !inBrackets) {
-                if (currentRule) {
-                    rules.push(currentRule);
+                const trimmed = currentRule.trim();
+                if (trimmed) {
+                    rules.push(trimmed);
                     currentRule = '';
                 }
             } else {
@@ -271,8 +312,9 @@ export class JSONValidator {
             }
         }
 
-        if (currentRule) {
-            rules.push(currentRule);
+        const trimmed = currentRule.trim();
+        if (trimmed) {
+            rules.push(trimmed);
         }
 
         return rules;
@@ -541,20 +583,36 @@ export class JSONValidator {
 
         // Process object
         const cleaned: Record<string, unknown> = {};
-        const dataObj = data as Record<string, unknown>;
+        const entries = Object.entries(data as Record<string, unknown>);
 
-        for (const [key, value] of Object.entries(dataObj)) {
-            // Parse the key to extract the clean field name
-            const parsed = this.parseFieldKey(key);
-            
-            // Recursively clean the value
-            const cleanedValue = this.CleanValidationSyntax(value);
-            
-            // Use the clean field name as the key
-            cleaned[parsed.fieldName] = cleanedValue;
+        // Keys whose clean names collide (`"time"` and `"time?"`, or `"a?"` and `"a*"`) keep their
+        // original names: renaming both onto one key would silently drop one value (#4827).
+        const cleanNames = entries.map(([key]) => this.parseFieldKey(key).fieldName);
+        const collidingNames = this.collidingCleanNames(cleanNames);
+        if (collidingNames.size > 0) {
+            const keys = entries.filter((_, i) => collidingNames.has(cleanNames[i])).map(([key]) => JSON.stringify(key));
+            console.warn(`JSONValidator: keys ${keys.join(', ')} clean to the same name; keeping them unchanged so no value is lost.`);
         }
 
+        entries.forEach(([key, value], i) => {
+            const name = collidingNames.has(cleanNames[i]) ? key : cleanNames[i];
+            cleaned[name] = this.CleanValidationSyntax(value);
+        });
+
         return cleaned as T;
+    }
+
+    /** The clean names that more than one key of an object maps to. */
+    private collidingCleanNames(cleanNames: string[]): Set<string> {
+        const seen = new Set<string>();
+        const colliding = new Set<string>();
+        for (const name of cleanNames) {
+            if (seen.has(name)) {
+                colliding.add(name);
+            }
+            seen.add(name);
+        }
+        return colliding;
     }
 
     /** @deprecated Use {@link CleanValidationSyntax}. */

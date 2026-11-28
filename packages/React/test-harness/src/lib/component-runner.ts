@@ -1,5 +1,7 @@
 import { createRequire } from 'module';
 import { BrowserManager } from './browser-context';
+import { CreateRunViewResultNormalizer, ROW_TYPE_HINTS_KEY, WithRowTypeHints } from './row-type-shaping';
+import type { HintedRunViewResult, RowTypeHintParams, RunViewBridge, RunViewResultNormalizer } from './row-type-shaping';
 import { Metadata, RunView, RunQuery, LogError } from '@memberjunction/core';
 
 // ESM compatibility: require is not available in ESM, use createRequire
@@ -19,6 +21,7 @@ import {
   SimpleEntityInfo
 } from '@memberjunction/interactive-component-types';
 import { MJComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
+import type { ExternalLibraryConfig } from '@memberjunction/react-runtime';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
@@ -611,6 +614,26 @@ interface ComponentLoadFailure {
  */
 export const SANDBOX_UTILITY_UNAVAILABLE_RULE = 'sandbox-utility-unavailable';
 
+/**
+ * Rule of the warning raised when the component made a request the harness's network allowlist
+ * refused. The page may reach only the runtime and component-library CDNs; data comes through the
+ * harness's exposed functions, so a component has no legitimate reason to call any other host.
+ */
+export const NETWORK_REQUEST_BLOCKED_RULE = 'network-request-blocked';
+
+/** Every URL the core runtime libraries load from: each primary CDN URL and its fallbacks. */
+export function CoreRuntimeNetworkUrls(libraries: readonly Pick<ExternalLibraryConfig, 'cdnUrl' | 'fallbackCdnUrls'>[]): string[] {
+  return libraries.flatMap(lib => [lib.cdnUrl, ...(lib.fallbackCdnUrls ?? [])]).filter(url => url.length > 0);
+}
+
+/** Every script and stylesheet URL the registered component libraries load from. */
+export function LibraryNetworkUrls(libraries: readonly Pick<MJComponentLibraryEntity, 'CDNUrl' | 'CDNCssUrl'>[]): string[] {
+  return libraries.flatMap(lib => [
+    ...(lib.CDNUrl ? [lib.CDNUrl] : []),
+    ...(lib.CDNCssUrl ? lib.CDNCssUrl.split(',').map(url => url.trim()).filter(url => url.length > 0) : []),
+  ]);
+}
+
 export interface ComponentExecutionResult {
   success: boolean;
   html: string;
@@ -655,6 +678,20 @@ export interface ComponentExecutionResult {
    * a component whose calls all returned zero rows.
    */
   dataAccess?: DataAccessRecord[];
+
+  /**
+   * Requests the page made that the network allowlist refused, as origin + path (the query
+   * string is dropped). Empty when nothing was blocked or the filter is off.
+   */
+  blockedNetworkRequests?: string[];
+
+  /**
+   * Requests the allowlisting proxy refused while this run was in progress, as distinct origin + path.
+   * They bypassed request routing (a Speculation Rules prefetch, a WebRTC TURN connection), so
+   * the page that made them is not known: another page running at the same time, or the
+   * browser's own background traffic, can appear here too. They raise no warning.
+   */
+  proxyBlockedNetworkRequests?: string[];
 }
 
 /**
@@ -778,6 +815,26 @@ export class ComponentRunner {
   }
 
   /**
+   * One warning per distinct blocked request. The request may come from the component's own code
+   * or from a library it loads (map tiles, web fonts, telemetry), so the message says both and
+   * tells the reader how to tell them apart rather than calling the component defective.
+   */
+  private static buildBlockedRequestWarnings(blocked: string[]): Violation[] {
+    return [...new Set(blocked)].map(url => ({
+      message:
+        `A request to ${url} was blocked by the test harness, which lets the page reach only the ` +
+        `runtime and component-library CDNs. If the component's own code calls this host, change it ` +
+        `to get data through the provided utilities. If the call comes from a library the component ` +
+        `uses, the component is not at fault; the host can be allowed with allowedNetworkHosts.`,
+      severity: 'medium' as const,
+      rule: NETWORK_REQUEST_BLOCKED_RULE,
+      line: 0,
+      column: 0,
+      source: 'test-harness' as const
+    }));
+  }
+
+  /**
    * One warning per utility the component called that this harness was not given. They are
    * warnings rather than errors so they never fail the run or reach a fixer as a defect:
    * the call was not tested, and the component may well be correct.
@@ -883,6 +940,7 @@ export class ComponentRunner {
 
     // Get a fresh page for this test execution
     const page = await this.browserManager.getPage();
+    const proxyBlockedBefore = this.browserManager.GetProxyBlockedRequests().length;
     
     // Set default timeout for all page operations (Recommendation #2)
     page.setDefaultTimeout(globalTimeout);
@@ -890,6 +948,7 @@ export class ComponentRunner {
     // Load component metadata and libraries first (needed for library loading)
     await ComponentMetadataEngine.Instance.Config(false, options.contextUser);
     const allLibraries = ComponentMetadataEngine.Instance.ComponentLibraries.map(c=>c.GetAll()) as MJComponentLibraryEntity[];
+    this.browserManager.AllowNetworkUrls(LibraryNetworkUrls(allLibraries));
 
     try {
       
@@ -1986,6 +2045,8 @@ export class ComponentRunner {
           column: 0
         }));
 
+      const blockedNetworkRequests = this.browserManager.GetBlockedRequests(page);
+      const proxyBlockedNetworkRequests = [...new Set(this.browserManager.GetProxyBlockedRequests().slice(proxyBlockedBefore))];
       const result: ComponentExecutionResult = {
         success: success && dataErrors.length === 0 && criticalWarningViolations.length === 0, // Fail on critical warnings too
         html,
@@ -2001,6 +2062,7 @@ export class ComponentRunner {
           })),
           ...capWarnings,
           ...ComponentRunner.buildUnavailableUtilityWarnings(unavailableUtilities),
+          ...ComponentRunner.buildBlockedRequestWarnings(blockedNetworkRequests),
         ],
         console: consoleLogs,
         screenshot,
@@ -2008,6 +2070,8 @@ export class ComponentRunner {
         renderCount,
         codeExecutionSuccess,
         dataAccess,
+        blockedNetworkRequests,
+        proxyBlockedNetworkRequests,
         sourceMaps: (this as any)._lastSourceMaps,
       };
 
@@ -2074,6 +2138,8 @@ export class ComponentRunner {
       const codeExecutionSuccess = nonCrashCriticalHighErrors.length === 0;
       FinalizePendingDataAccess(dataAccess);
 
+      const blockedNetworkRequests = this.browserManager.GetBlockedRequests(page);
+      const proxyBlockedNetworkRequests = [...new Set(this.browserManager.GetProxyBlockedRequests().slice(proxyBlockedBefore))];
       const result: ComponentExecutionResult = {
         success: false,
         html: '',
@@ -2087,6 +2153,7 @@ export class ComponentRunner {
             column: 0
           })),
           ...ComponentRunner.buildUnavailableUtilityWarnings(unavailableUtilities),
+          ...ComponentRunner.buildBlockedRequestWarnings(blockedNetworkRequests),
         ],
         console: consoleLogs,
         executionTime: Date.now() - startTime,
@@ -2095,6 +2162,8 @@ export class ComponentRunner {
         codeExecutionSuccess,
         // Data calls made before the failure still describe what the component reached for.
         dataAccess,
+        blockedNetworkRequests,
+        proxyBlockedNetworkRequests,
       };
 
       if (debug) {
@@ -2113,7 +2182,7 @@ export class ComponentRunner {
       // This is important because getPage() now creates a new page each time
       // Closing the page ensures clean isolation between test runs
       try {
-        await page.close();
+        await this.browserManager.ClosePage(page);
       } catch (closeError) {
         // Ignore errors when closing the page
         if (debug) {
@@ -2138,6 +2207,7 @@ export class ComponentRunner {
     // environment with window/document, but we're in Node.js with Playwright
     const { getCoreRuntimeLibraries } = await import('@memberjunction/react-runtime');
     const coreLibraries = getCoreRuntimeLibraries(debug);
+    this.browserManager.AllowNetworkUrls(CoreRuntimeNetworkUrls(coreLibraries));
     
     // Helper function to load scripts with timeout
     const loadScriptWithTimeout = async (url: string, timeout: number = 10000) => {
@@ -3127,7 +3197,8 @@ export class ComponentRunner {
           }
         }
 
-        return result;
+        // Field-type hints so the page can hand the component Explorer-shaped rows.
+        return WithRowTypeHints(result, util.md?.Entities, params);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -3183,7 +3254,7 @@ export class ComponentRunner {
           });
         }
 
-        return results;
+        return results.map((r, i) => WithRowTypeHints(r, util.md?.Entities, params[i]));
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         const entities = params.map(p => DescribeViewTarget(p)).join(', ');
@@ -3321,6 +3392,12 @@ export class ComponentRunner {
       }
     });
 
+    // The page-side half of Explorer-shaped RunView rows (see row-type-shaping.ts). Injected by
+    // source because it runs in the browser.
+    await page.evaluate(
+      `window.__mjNormalizeRunViewResult = (${CreateRunViewResultNormalizer.toString()})(${JSON.stringify(ROW_TYPE_HINTS_KEY)});`
+    );
+
     // Make them available in utilities with the mock metadata
     await page.evaluate(() => {
       // Use the mock metadata for synchronous access
@@ -3339,6 +3416,11 @@ export class ComponentRunner {
                              }
                            };
       
+      // Installed by the evaluate above; a missing one leaves rows as the bridge returned them.
+      const normalizeViewResult: RunViewResultNormalizer =
+        (window as Window & { __mjNormalizeRunViewResult?: RunViewResultNormalizer }).__mjNormalizeRunViewResult
+        ?? ((_params, result) => result);
+
       (window as any).__mjUtilities = {
         md: {
           // Use the mock metadata's Entities directly (synchronous)
@@ -3353,8 +3435,15 @@ export class ComponentRunner {
             await (window as any).__mjGetEntityObject(entityName)
         },
         rv: {
-          RunView: async (params: any) => await (window as any).__mjRunView(params),
-          RunViews: async (params: any) => await (window as any).__mjRunViews(params)
+          // Rows shaped as Explorer returns them: typed dates/numbers, getter-only entity objects.
+          RunView: async (params: RowTypeHintParams) =>
+            normalizeViewResult(params, await (window as Window & Partial<RunViewBridge>).__mjRunView!(params)),
+          RunViews: async (params: RowTypeHintParams[]) => {
+            const results: HintedRunViewResult[] = await (window as Window & Partial<RunViewBridge>).__mjRunViews!(params);
+            return Array.isArray(results)
+              ? results.map((r, i) => normalizeViewResult(params?.[i], r))
+              : results;
+          }
         },
         rq: {
           RunQuery: async (params: any) => await (window as any).__mjRunQuery(params)

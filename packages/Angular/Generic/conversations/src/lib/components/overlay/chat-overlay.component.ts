@@ -27,12 +27,25 @@ import {
 import { Subject } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { takeUntil } from 'rxjs/operators';
-import { UserInfo, Metadata, CompositeKey } from '@memberjunction/core';
-import { MJConversationEntity, MJTaskEntity, MJEnvironmentEntityExtended, UserInfoEngine } from '@memberjunction/core-entities';
+import { UserInfo, CompositeKey } from '@memberjunction/core';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import {
+    ConversationEngine,
+    MJConversationDetailEntity,
+    MJConversationEntity,
+    MJTaskEntity,
+    MJEnvironmentEntityExtended,
+    UserInfoEngine
+} from '@memberjunction/core-entities';
+import type { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { ConversationBridgeService, ConversationSwitchEvent } from '../../services/conversation-bridge.service';
-import { NavigationRequest } from '@memberjunction/ng-artifacts';
+import {
+    NavigationRequest,
+    RegisterArtifactAiAssistantHandler,
+    type ArtifactAskAiRequest
+} from '@memberjunction/ng-artifacts';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 
 /** Visual state of the overlay panel */
@@ -42,6 +55,69 @@ export type ChatOverlayState = 'collapsed' | 'expanded' | 'maximized';
 export interface OverlayConversationSwitchedEvent {
     PreviousConversationID: string | null;
     NewConversationID: string | null;
+}
+
+/** JSON-compatible primitive for overlay app context values. */
+export type OverlayContextPrimitive = string | number | boolean | null | undefined;
+
+/** JSON-compatible value within overlay app context objects. */
+export type OverlayContextValue =
+    | OverlayContextPrimitive
+    | OverlayContextValue[]
+    | { [key: string]: OverlayContextValue };
+
+/** Typed `AdditionalContext.Form.RecordState` payload from Explorer forms. */
+export interface OverlayRecordStateContext {
+    RecordDisplayName?: string | null;
+    EditMode?: boolean;
+    Dirty?: boolean;
+    DirtyFieldNames?: string[];
+    HasExternalUpdateConflict?: boolean;
+    PreviewingHistoricalChangeID?: string | null;
+    [key: string]: OverlayContextValue;
+}
+
+/** Typed `AdditionalContext.Form.Links` summary counts. */
+export interface OverlayFormLinksContext {
+    TotalCount?: number;
+    OutgoingCount?: number;
+    IncomingCount?: number;
+    [key: string]: OverlayContextValue;
+}
+
+/** Typed `AdditionalContext.Form` payload exposed to the overlay. */
+export interface OverlayFormContext {
+    Entity?: string;
+    RecordPrimaryKey?: string | null;
+    RecordState?: OverlayRecordStateContext;
+    Links?: OverlayFormLinksContext;
+    [key: string]: OverlayContextValue | OverlayRecordStateContext | OverlayFormLinksContext;
+}
+
+/** Typed `AdditionalContext.ArtifactEditor` payload for inline artifact Ask AI requests. */
+export interface OverlayArtifactEditorContext {
+    ArtifactID?: string | null;
+    ArtifactTitle?: string;
+    ArtifactKind?: string;
+    ContextLabel?: string;
+    TargetSegmentID?: string | null;
+    TargetSlideID?: string | null;
+    TargetSheetID?: string | null;
+    TargetCellRange?: string | null;
+    SuggestingMode?: boolean;
+}
+
+/** Typed `AppContext.AdditionalContext` payload consumed by the chat overlay. */
+export interface OverlayAdditionalContext {
+    Form?: OverlayFormContext;
+    ArtifactEditor?: OverlayArtifactEditorContext;
+    [key: string]: OverlayContextValue | OverlayFormContext | OverlayArtifactEditorContext;
+}
+
+/** Typed application context snapshot passed into `<mj-chat-agents-overlay>`. */
+export interface OverlayAppContext {
+    AdditionalContext?: OverlayAdditionalContext;
+    [key: string]: OverlayContextValue | OverlayAdditionalContext | object;
 }
 
 /** Summary of the active record context extracted from `AppContext.AdditionalContext.Form` */
@@ -125,7 +201,21 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
     @Input() EnvironmentId!: string;
 
     /** Application context snapshot for AI agent awareness. Updated by the host app on navigation transitions. */
-    @Input() AppContext: Record<string, unknown> | null = null;
+    private _appContext: OverlayAppContext | null = null;
+
+    @Input()
+    set AppContext(value: OverlayAppContext | null) {
+        if (this._appContext === value) {
+            return;
+        }
+        this._appContext = value;
+        if (this.initialized) {
+            void this.syncActiveRecordBinding();
+        }
+    }
+    get AppContext(): OverlayAppContext | null {
+        return this._appContext;
+    }
 
     /** Greeting message shown in the empty state when no conversation is active */
     @Input() EmptyStateGreeting: string = 'How can I help you?';
@@ -215,6 +305,30 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
     /** Pending attachments to send after conversation creation */
     public PendingAttachments: PendingAttachment[] | null = null;
 
+    /** Non-anchored AI conversations bound to the currently open record form */
+    public RecordConversations: MJConversationEntity[] = [];
+
+    /** Active Inline AI Assistant context dispatched from an open Doc, Slide Deck, or Sheet editor. */
+    public ActiveArtifactAiRequest: ArtifactAskAiRequest | null = null;
+    /** Whether proposed AI edits insert as non-destructive suggestions rather than direct overwrites. */
+    public ArtifactAiSuggestingMode = true;
+    /** Latest AI response message text eligible to apply back into the active artifact editor. */
+    public ArtifactAiLatestProposal = '';
+    /** True after the current AI proposal has been applied into the open editor. */
+    public ArtifactAiProposalApplied = false;
+    /** Pre-filled draft prompt routed to the chat composer when an Inline AI request arrives. */
+    public ArtifactAiComposerDraft: string | null = null;
+    /** Conversation ID that owns the current Inline AI artifact request (pins proposals strictly to that conversation). */
+    public ArtifactAiConversationId: string | null = null;
+
+    private initialized = false;
+    private unregisterArtifactAiHandler: (() => void) | null = null;
+
+    /** Tracks the `(entityId:recordId)` currently bound to the overlay */
+    private currentBoundRecordKey: string | null = null;
+    private recordBindingGeneration = 0;
+    private stashedGeneralConversationId: string | null = null;
+
     /** Resize drag state */
     private isResizing = false;
     private resizeEdge: 'left' | 'top' | 'top-left' | null = null;
@@ -236,13 +350,20 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
     // --- Lifecycle ---
 
     ngOnInit(): void {
+        this.initialized = true;
         this.resolveDefaults();
         this.loadPreferences();
         this.subscribeToBridgeEvents();
         this.subscribeToToolEvents();
+        this.unregisterArtifactAiHandler = RegisterArtifactAiAssistantHandler((request) =>
+            this.HandleArtifactAiRequest(request)
+        );
+        void this.syncActiveRecordBinding();
     }
 
     ngOnDestroy(): void {
+        this.unregisterArtifactAiHandler?.();
+        this.unregisterArtifactAiHandler = null;
         this.destroy$.next();
         this.destroy$.complete();
         this.removeResizeListeners();
@@ -268,6 +389,7 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
             this.IsHidden = false;
             this.savePreferences();
         }
+        void this.syncActiveRecordBinding();
         this.State = 'expanded';
         this.UnreadCount = 0;
         this.bridge.NotifyOverlayActive(true);
@@ -316,8 +438,47 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         this._conversationId = event.conversation.ID;
         this.Conversation = event.conversation;
         this.IsNewConversation = false;
-        this.bridge.SetActiveFromOverlay(event.conversation.ID);
+        if (this.ActiveArtifactAiRequest && !this.ArtifactAiConversationId) {
+            this.ArtifactAiConversationId = event.conversation.ID;
+        }
+
+        const isRecordBound = Boolean(
+            event.conversation.LinkedEntityID ||
+            (this.ActiveRecordEntityId && this.ActiveLinkedRecordId)
+        );
+        if (isRecordBound) {
+            if (!this.RecordConversations.some((c) => UUIDsEqual(c.ID, event.conversation.ID))) {
+                this.RecordConversations = [event.conversation, ...this.RecordConversations];
+            }
+            // Keep record-bound conversations off the global workspace bridge so navigating
+            // to the general-purpose Chat app does not hijack the workspace with a record chat.
+            this.bridge.SetActiveFromOverlay(null);
+        } else {
+            this.bridge.SetActiveFromOverlay(event.conversation.ID);
+        }
         this.emitConversationSwitched(prevId, event.conversation.ID);
+    }
+
+    /** Switch between existing AI conversations bound to the currently open record */
+    public OnSelectRecordConversation(conversationId: string): void {
+        if (!conversationId || UUIDsEqual(conversationId, this._conversationId)) {
+            return;
+        }
+        const match = this.RecordConversations.find((c) => UUIDsEqual(c.ID, conversationId)) ?? null;
+        const prevId = this._conversationId;
+        this._conversationId = conversationId;
+        this.Conversation = match;
+        this.IsNewConversation = false;
+        this.bridge.SetActiveFromOverlay(null);
+        this.emitConversationSwitched(prevId, conversationId);
+        this.cdr.detectChanges();
+    }
+
+    public OnSelectRecordConversationChange(event: Event): void {
+        const selectEl = event.target as HTMLSelectElement | null;
+        if (selectEl?.value) {
+            this.OnSelectRecordConversation(selectEl.value);
+        }
     }
 
     /** Handle pending message consumed by chat area */
@@ -325,6 +486,97 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         this.PendingMessage = null;
         this.PendingAttachments = null;
         this.PendingMessageConversationId = null;
+    }
+
+    /**
+     * Opens the slide-in AI Assistant widget with active artifact selection context
+     * triggered by `/ai` or "Ask AI" inside Docs, Slides, or Sheets.
+     */
+    public HandleArtifactAiRequest(request: ArtifactAskAiRequest): void {
+        this.ActiveArtifactAiRequest = request;
+        this.ArtifactAiConversationId = this.ConversationId ?? null;
+        this.ArtifactAiSuggestingMode = request.SuggestingModeDefault;
+        this.ArtifactAiLatestProposal = '';
+        this.ArtifactAiProposalApplied = false;
+
+        const snippet = request.SelectedContent?.trim();
+        const truncatedSnippet = snippet ? snippet.slice(0, 2000) : '';
+        const basePrompt = request.InitialPrompt?.trim()
+            ? request.InitialPrompt.trim()
+            : `Help me revise "${request.ArtifactTitle}" (${request.ContextLabel}).`;
+        this.ArtifactAiComposerDraft = truncatedSnippet
+            ? `${basePrompt}\n\nSelected context (${request.ContextLabel}):\n\`\`\`\n${truncatedSnippet}\n\`\`\``
+            : basePrompt;
+
+        if (this.State === 'collapsed') {
+            this.Expand();
+        } else {
+            this.cdr.detectChanges();
+        }
+    }
+
+    public OnArtifactAiComposerDraftConsumed(): void {
+        this.ArtifactAiComposerDraft = null;
+    }
+
+    public OnToggleArtifactAiSuggestingMode(event: Event): void {
+        const input = event.target as HTMLInputElement | null;
+        this.ArtifactAiSuggestingMode = Boolean(input?.checked);
+        this.cdr.detectChanges();
+    }
+
+    public OnAgentMessageReceived(event: {
+        message: MJConversationDetailEntity;
+        agentResult?: ExecuteAgentResult;
+    }): void {
+        if (!this.ActiveArtifactAiRequest) {
+            return;
+        }
+        const msgConversationId = event.message?.ConversationID ?? null;
+        if (
+            this.ArtifactAiConversationId &&
+            msgConversationId &&
+            !UUIDsEqual(this.ArtifactAiConversationId, msgConversationId)
+        ) {
+            return;
+        }
+        if (!this.ArtifactAiConversationId && msgConversationId) {
+            if (this.ConversationId && !UUIDsEqual(this.ConversationId, msgConversationId)) {
+                return;
+            }
+            this.ArtifactAiConversationId = msgConversationId;
+        }
+        const messageText = typeof event.message?.Message === 'string' ? event.message.Message.trim() : '';
+        const payloadText =
+            typeof event.agentResult?.payload === 'string' ? event.agentResult.payload.trim() : '';
+        const proposal = messageText || payloadText;
+        if (!proposal) {
+            return;
+        }
+        this.ArtifactAiLatestProposal = proposal;
+        this.ArtifactAiProposalApplied = false;
+        this.cdr.detectChanges();
+    }
+
+    public ApplyArtifactAiProposal(): boolean {
+        const req = this.ActiveArtifactAiRequest;
+        const text = this.ArtifactAiLatestProposal.trim();
+        if (!req?.ApplySuggestion || !text) {
+            return false;
+        }
+        req.ApplySuggestion(this.ArtifactAiLatestProposal, this.ArtifactAiSuggestingMode);
+        this.ArtifactAiProposalApplied = true;
+        this.cdr.detectChanges();
+        return true;
+    }
+
+    public DismissArtifactAiContext(): void {
+        this.ActiveArtifactAiRequest = null;
+        this.ArtifactAiConversationId = null;
+        this.ArtifactAiLatestProposal = '';
+        this.ArtifactAiProposalApplied = false;
+        this.ArtifactAiComposerDraft = null;
+        this.cdr.detectChanges();
     }
 
     /** Handle conversation rename from chat area */
@@ -576,38 +828,174 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
     }
 
     /**
+     * Merges host `AppContext` with active Inline AI artifact context when an editor
+     * request is open so backend agents receive structured selection/range metadata.
+     */
+    public get EffectiveAppContext(): OverlayAppContext | null {
+        const req = this.ActiveArtifactAiRequest;
+        if (!req) {
+            return this.AppContext;
+        }
+        const existingAdditional: OverlayAdditionalContext = this.AppContext?.AdditionalContext ?? {};
+        return {
+            ...(this.AppContext ?? {}),
+            AdditionalContext: {
+                ...existingAdditional,
+                ArtifactEditor: {
+                    ArtifactID: req.ArtifactID ?? null,
+                    ArtifactTitle: req.ArtifactTitle,
+                    ArtifactKind: req.ArtifactKind,
+                    ContextLabel: req.ContextLabel,
+                    TargetSegmentID: req.TargetSegmentID ?? null,
+                    TargetSlideID: req.TargetSlideID ?? null,
+                    TargetSheetID: req.TargetSheetID ?? null,
+                    TargetCellRange: req.TargetCellRange ?? null,
+                    SuggestingMode: this.ArtifactAiSuggestingMode,
+                },
+            },
+        };
+    }
+
+    /**
      * Extracts a structured summary of the currently open record form from
      * `AppContext.AdditionalContext.Form` when the user is viewing a record.
      */
     public get ActiveRecordContext(): OverlayActiveRecordContextSummary | null {
-        const additional = this.AppContext?.['AdditionalContext'] as Record<string, unknown> | undefined;
-        const form = additional?.['Form'] as Record<string, unknown> | undefined;
-        if (!form || typeof form['Entity'] !== 'string' || !form['Entity']) {
+        const additional = this.AppContext?.AdditionalContext;
+        const form = additional?.Form;
+        if (!form || typeof form.Entity !== 'string' || !form.Entity) {
             return null;
         }
-        const recordState = form['RecordState'] as Record<string, unknown> | undefined;
-        const links = form['Links'] as Record<string, unknown> | undefined;
-        const dirtyFieldNames = Array.isArray(recordState?.['DirtyFieldNames'])
-            ? (recordState['DirtyFieldNames'] as unknown[]).filter((f): f is string => typeof f === 'string')
+        const recordState = form.RecordState;
+        const links = form.Links;
+        const dirtyFieldNames = Array.isArray(recordState?.DirtyFieldNames)
+            ? recordState.DirtyFieldNames.filter((f): f is string => typeof f === 'string')
             : [];
         return {
-            Entity: form['Entity'] as string,
-            RecordPrimaryKey: typeof form['RecordPrimaryKey'] === 'string' ? (form['RecordPrimaryKey'] as string) : null,
-            RecordDisplayName: typeof recordState?.['RecordDisplayName'] === 'string' ? (recordState['RecordDisplayName'] as string) : null,
-            EditMode: recordState?.['EditMode'] === true,
-            Dirty: recordState?.['Dirty'] === true,
+            Entity: form.Entity,
+            RecordPrimaryKey: typeof form.RecordPrimaryKey === 'string' ? form.RecordPrimaryKey : null,
+            RecordDisplayName: typeof recordState?.RecordDisplayName === 'string' ? recordState.RecordDisplayName : null,
+            EditMode: recordState?.EditMode === true,
+            Dirty: recordState?.Dirty === true,
             DirtyFieldNames: dirtyFieldNames,
-            HasExternalUpdateConflict: recordState?.['HasExternalUpdateConflict'] === true,
-            PreviewingHistoricalChangeID: typeof recordState?.['PreviewingHistoricalChangeID'] === 'string'
-                ? (recordState['PreviewingHistoricalChangeID'] as string)
+            HasExternalUpdateConflict: recordState?.HasExternalUpdateConflict === true,
+            PreviewingHistoricalChangeID: typeof recordState?.PreviewingHistoricalChangeID === 'string'
+                ? recordState.PreviewingHistoricalChangeID
                 : null,
-            TotalLinksCount: typeof links?.['TotalCount'] === 'number' ? (links['TotalCount'] as number) : 0,
-            OutgoingLinksCount: typeof links?.['OutgoingCount'] === 'number' ? (links['OutgoingCount'] as number) : 0,
-            IncomingLinksCount: typeof links?.['IncomingCount'] === 'number' ? (links['IncomingCount'] as number) : 0,
+            TotalLinksCount: typeof links?.TotalCount === 'number' ? links.TotalCount : 0,
+            OutgoingLinksCount: typeof links?.OutgoingCount === 'number' ? links.OutgoingCount : 0,
+            IncomingLinksCount: typeof links?.IncomingCount === 'number' ? links.IncomingCount : 0,
         };
     }
 
+    /**
+     * Resolves the `MJ: Entities` ID for the currently active record form (`ActiveRecordContext.Entity`),
+     * or `null` when no saved record form is active.
+     */
+    public get ActiveRecordEntityId(): string | null {
+        const ctx = this.ActiveRecordContext;
+        if (!ctx?.Entity || !ctx.RecordPrimaryKey) {
+            return null;
+        }
+        const md = this.ProviderToUse;
+        const entityNameLower = ctx.Entity.trim().toLowerCase();
+        const entityInfo = md?.Entities?.find((e) => e.Name.trim().toLowerCase() === entityNameLower);
+        return entityInfo?.ID ?? null;
+    }
+
+    /**
+     * Normalizes `ActiveRecordContext.RecordPrimaryKey` into the `LinkedRecordID` value stored
+     * on `MJ: Conversations` (stripping a single-key `"ID|"` prefix while preserving multi-key segments).
+     */
+    public get ActiveLinkedRecordId(): string | null {
+        const rawKey = this.ActiveRecordContext?.RecordPrimaryKey?.trim();
+        if (!rawKey) {
+            return null;
+        }
+        if (!rawKey.includes('||') && rawKey.includes('|')) {
+            const pipeIdx = rawKey.indexOf('|');
+            const val = rawKey.slice(pipeIdx + 1).trim();
+            if (val) {
+                return val;
+            }
+        }
+        return rawKey;
+    }
+
     // --- Private Methods ---
+
+    /**
+     * Synchronizes the overlay's active conversation when the user opens, switches between,
+     * or leaves an entity record form so "Ask AI" chats stay bound to their record.
+     */
+    private async syncActiveRecordBinding(): Promise<void> {
+        const entityId = this.ActiveRecordEntityId;
+        const recordId = this.ActiveLinkedRecordId;
+        const nextRecordKey = entityId && recordId ? `${NormalizeUUID(entityId)}:${recordId}` : null;
+
+        if (nextRecordKey === this.currentBoundRecordKey) {
+            return;
+        }
+        const previousRecordKey = this.currentBoundRecordKey;
+        this.currentBoundRecordKey = nextRecordKey;
+        const generation = ++this.recordBindingGeneration;
+
+        if (nextRecordKey && entityId && recordId) {
+            // Entering a record from a non-record view: stash any active general conversation ID
+            if (!previousRecordKey && !this.Conversation?.LinkedEntityID) {
+                this.stashedGeneralConversationId = this._conversationId;
+            }
+            // Clear the global bridge so record chats never leak into the general Chat workspace on route changes
+            this.bridge.SetActiveFromOverlay(null);
+
+            this.resolveDefaults();
+            if (!this.CurrentUser) {
+                return;
+            }
+
+            const recordConvos = await ConversationEngine.Instance.LoadRecordConversations(
+                entityId,
+                recordId,
+                this.CurrentUser,
+                this.EnvironmentId,
+                this.ProviderToUse
+            );
+            if (generation !== this.recordBindingGeneration) {
+                return;
+            }
+
+            this.RecordConversations = recordConvos;
+            const prevId = this._conversationId;
+            if (recordConvos.length > 0) {
+                const latest = recordConvos[0];
+                this._conversationId = latest.ID;
+                this.Conversation = latest;
+                this.IsNewConversation = false;
+                this.emitConversationSwitched(prevId, latest.ID);
+            } else {
+                this._conversationId = null;
+                this.Conversation = null;
+                this.IsNewConversation = true;
+                this.emitConversationSwitched(prevId, null);
+            }
+            this.cdr.detectChanges();
+            return;
+        }
+
+        // Leaving a record view back to a non-record screen
+        this.RecordConversations = [];
+        if (previousRecordKey) {
+            const prevId = this._conversationId;
+            const restoredId = this.stashedGeneralConversationId;
+            this.stashedGeneralConversationId = null;
+            this._conversationId = restoredId;
+            this.Conversation = restoredId ? (ConversationEngine.Instance.GetConversation(restoredId) ?? null) : null;
+            this.IsNewConversation = restoredId === null;
+            this.bridge.SetActiveFromOverlay(restoredId);
+            this.emitConversationSwitched(prevId, restoredId);
+            this.cdr.detectChanges();
+        }
+    }
 
     /** Auto-resolve CurrentUser and EnvironmentId from Metadata when not provided as inputs */
     private resolveDefaults(): void {

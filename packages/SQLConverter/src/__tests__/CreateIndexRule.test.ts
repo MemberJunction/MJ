@@ -14,7 +14,7 @@ describe('CreateIndexRule', () => {
     it('should have the correct name, priority, and applies-to types', () => {
       expect(rule.Name).toBe('CreateIndexRule');
       expect(rule.Priority).toBe(70);
-      expect(rule.AppliesTo).toEqual(['CREATE_INDEX']);
+      expect(rule.AppliesTo).toEqual(['CREATE_INDEX', 'DROP_INDEX']);
       expect(rule.BypassSqlglot).toBe(true);
     });
   });
@@ -36,6 +36,25 @@ describe('CreateIndexRule', () => {
       const result = convert(sql);
       expect(result).toContain('"ColA"');
       expect(result).toContain('"ColB"');
+    });
+
+    // Regression: V202611110216 — an unbracketed column carrying a sort direction was left unquoted
+    // (`StartedAt DESC`), PG folded it to `startedat`, and the CREATE INDEX failed at apply time.
+    it('quotes an unbracketed column that carries a sort direction', () => {
+      const sql = 'CREATE NONCLUSTERED INDEX IX_Run_CI_StartedAt\n    ON __mj.CompanyIntegrationRun (CompanyIntegrationID, StartedAt DESC)\n    INCLUDE (EndedAt)';
+      const result = convert(sql);
+      expect(result).toContain('("CompanyIntegrationID", "StartedAt" DESC)');
+      expect(result).not.toMatch(/[(,]\s*StartedAt\b/);
+    });
+
+    it('quotes columns with ASC and NULLS FIRST/LAST modifiers', () => {
+      const result = convert('CREATE INDEX IX_T ON __mj.T (ColA ASC, ColB DESC NULLS LAST, ColC NULLS FIRST)');
+      expect(result).toContain('("ColA" ASC, "ColB" DESC NULLS LAST, "ColC" NULLS FIRST)');
+    });
+
+    it('leaves already-quoted and lowercase columns alone', () => {
+      const result = convert('CREATE INDEX IX_T ON __mj.T ("ColA" DESC, lower_col)');
+      expect(result).toContain('("ColA" DESC, lower_col)');
     });
   });
 
@@ -165,5 +184,40 @@ ON [PRIMARY]`;
       expect(result).toContain('"ColA"');
       expect(result).toContain('"ColB"');
     });
+  });
+});
+
+// Issue #5955: T-SQL `DROP INDEX name ON table` is not PostgreSQL.
+describe('CreateIndexRule — DROP INDEX (issue #5955)', () => {
+  it('rewrites DROP INDEX name ON schema.table to a schema-qualified DROP INDEX IF EXISTS', () => {
+    expect(convert('DROP INDEX [UQ_FeatureValueCache_Key] ON [__mj].[FeatureValueCache];').trim())
+      .toBe('DROP INDEX IF EXISTS __mj."UQ_FeatureValueCache_Key";');
+  });
+
+  it('accepts DROP INDEX IF EXISTS and an unqualified table', () => {
+    expect(convert('DROP INDEX IF EXISTS IX_Foo ON Foo').trim()).toBe('DROP INDEX IF EXISTS "IX_Foo";');
+  });
+
+  it('comments out a shape it cannot convert under a counted gap marker', () => {
+    const out = convert('DROP INDEX [__mj].[Foo].[IX_Foo]');
+    expect(out).toContain('-- NEEDS HAND AUTHORING: DROP INDEX');
+    expect(out).not.toMatch(/^DROP INDEX/m);
+  });
+});
+
+describe('CreateIndexRule — index names and ASC/DESC columns (issue #5567)', () => {
+  it('quotes an unquoted index name and columns followed by ASC/DESC, and __mj_ columns', () => {
+    expect(convert('CREATE INDEX IX_Foo_Name ON [dbo].[Foo] (Name ASC, __mj_CreatedAt DESC, [Code] DESC)').trim())
+      .toBe('CREATE INDEX "IX_Foo_Name" ON dbo."Foo" ("Name" ASC, "__mj_CreatedAt" DESC, "Code" DESC);');
+  });
+
+  it('quotes an all-lower-case __mj_ column by its prefix', () => {
+    expect(convert('CREATE INDEX IX_t ON [dbo].[t] (__mj_createdat DESC)').trim())
+      .toBe('CREATE INDEX "IX_t" ON dbo."t" ("__mj_createdat" DESC);');
+  });
+
+  it('leaves lower-case columns and an already quoted name alone', () => {
+    expect(convert('CREATE UNIQUE INDEX [UX_a] ON [dbo].[t] (id DESC, code)').trim())
+      .toBe('CREATE UNIQUE INDEX "UX_a" ON dbo."t" (id DESC, code) NULLS NOT DISTINCT;');
   });
 });

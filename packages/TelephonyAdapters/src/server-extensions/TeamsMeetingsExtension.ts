@@ -9,7 +9,6 @@ import { UserCache } from '@memberjunction/generic-database-provider';
 import cors from 'cors';
 import {
     BaseServerExtension,
-    ServerExtensionConfig,
     ServerExtensionPhase,
     ServerExtensionInitContext,
     ExtensionInitResult,
@@ -38,10 +37,8 @@ export class TeamsMeetingsExtension extends BaseServerExtension {
     private schedulerHandle: CalendarSchedulerHandle | null = null;
 
     public async Initialize(
-        contextOrApp: ServerExtensionInitContext,
-        _config?: ServerExtensionConfig
+        context: ServerExtensionInitContext
     ): Promise<ExtensionInitResult> {
-        const context = contextOrApp;
         const rawSettings = context.config.Settings as unknown as Partial<TeamsMeetingsConfig>;
 
         if (rawSettings?.enabled === false || !rawSettings?.appId) {

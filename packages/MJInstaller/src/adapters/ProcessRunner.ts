@@ -4,8 +4,8 @@
  * Used by installer phases that run external tools (`npm`, `npx mj codegen`,
  * `npx turbo build`, etc.). Handles cross-platform differences:
  *
- * - **Windows**: Spawns with `shell: true` so that `.cmd` shims (npm, npx)
- *   are resolved correctly. Uses `taskkill /F /T` for process tree cleanup.
+ * - **Windows**: Spawns through `cross-spawn`, which resolves `.cmd` shims (npm, npx)
+ *   and escapes each argument for `cmd.exe`. Uses `taskkill /F /T` for process tree cleanup.
  * - **Unix**: Spawns without shell. Uses process group kill (`kill -SIGTERM -pid`)
  *   with a 5-second SIGKILL fallback.
  *
@@ -26,7 +26,8 @@
  * ```
  */
 
-import { spawn, execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
+import crossSpawn from 'cross-spawn';
 
 /**
  * Result of a child process execution.
@@ -79,7 +80,8 @@ export interface ProcessOptions {
  * and process tree cleanup.
  *
  * Key behaviors:
- * - On Windows, spawns with `shell: true` to resolve `.cmd` shims.
+ * - Never builds a shell command string: commands and arguments are passed as arrays.
+ * - On Windows, spawns through `cross-spawn` to resolve `.cmd` shims safely.
  * - Supports configurable timeouts with full process tree kill on expiry.
  * - Streams stdout/stderr line-by-line via callbacks for real-time progress.
  * - Provides {@link killByPort} for port-based process cleanup (used by smoke test).
@@ -103,8 +105,9 @@ export class ProcessRunner {
   /**
    * Spawn a child process and return the full result after it exits.
    *
-   * The process is spawned with `shell: true` on Windows (for `.cmd` shim
-   * resolution) and `shell: false` on Unix. Stdout and stderr are accumulated
+   * The process is spawned without a shell. On Windows, `cross-spawn` resolves
+   * `.cmd` shims and escapes each argument, so an argument is never read as shell
+   * syntax (a plain `shell: true` would hand it to `cmd.exe` as-is). Stdout and stderr are accumulated
    * in memory and optionally streamed line-by-line via callbacks.
    *
    * If {@link ProcessOptions.TimeoutMs} is set and the process exceeds it,
@@ -126,13 +129,9 @@ export class ProcessRunner {
    */
   async Run(command: string, args: string[], options?: ProcessOptions): Promise<ProcessResult> {
     return new Promise<ProcessResult>((resolve) => {
-      const isWindows = process.platform === 'win32';
-      const shell = isWindows ? true : false;
-
-      const child = spawn(command, args, {
+      const child = crossSpawn(command, args, {
         cwd: options?.Cwd ?? process.cwd(),
         env: { ...process.env, ...options?.Env },
-        shell,
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
       });
@@ -250,8 +249,8 @@ export class ProcessRunner {
   /**
    * Kill a process and its entire process tree.
    *
-   * On Windows, `child.kill()` with `shell: true` only terminates the
-   * top-level `cmd.exe` shell, leaving turbo/node grandchild processes
+   * On Windows, a `.cmd` shim runs inside `cmd.exe`, and `child.kill()` only terminates that
+   * top-level shell, leaving turbo/node grandchild processes
    * running as orphans. This method uses `taskkill /F /T /PID` on Windows
    * and process group signals (`SIGTERM` then `SIGKILL`) on Unix to ensure
    * the full process tree is terminated.
@@ -262,7 +261,7 @@ export class ProcessRunner {
     if (!pid) return;
     try {
       if (process.platform === 'win32') {
-        execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
+        this.taskkillTree(pid);
       } else {
         process.kill(-pid, 'SIGTERM');
         setTimeout(() => {
@@ -289,41 +288,69 @@ export class ProcessRunner {
    *
    * - **Windows**: Uses `netstat -ano` to find listening PIDs, then
    *   `taskkill /F /T` to kill each process tree.
-   * - **Unix**: Uses `lsof -ti tcp:<port> -sTCP:LISTEN | xargs kill -9` — listeners
+   * - **Unix**: Uses `lsof -ti tcp:<port> -sTCP:LISTEN` and sends SIGKILL to each PID — listeners
    *   only, so client connections to the port (the installer's own) are spared.
    *
    * @param port - TCP port number to scan for listening processes.
    */
   KillByPort(port: number): void {
     try {
-      if (process.platform === 'win32') {
-        // Find PIDs listening on this port and kill their process trees
-        const output = execSync(
-          `netstat -ano | findstr ":${port}" | findstr "LISTENING"`,
-          { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }
-        );
-        const pids = new Set<string>();
-        for (const line of output.split('\n')) {
-          const parts = line.trim().split(/\s+/);
-          const pid = parts[parts.length - 1];
-          if (pid && /^\d+$/.test(pid) && pid !== '0') {
-            pids.add(pid);
+      const pids = process.platform === 'win32' ? this.listeningPidsWindows(port) : this.listeningPidsUnix(port);
+      for (const pid of pids) {
+        try {
+          if (process.platform === 'win32') {
+            this.taskkillTree(pid);
+          } else {
+            process.kill(pid, 'SIGKILL');
           }
-        }
-        for (const pid of pids) {
-          try {
-            execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
-          } catch { /* already dead */ }
-        }
-      } else {
-        // Listeners only. A bare `-ti:<port>` also matches every client socket on the
-        // port — including the installer's own health-check connection — so the
-        // installer would SIGKILL itself mid-cleanup.
-        execSync(`lsof -ti tcp:${port} -sTCP:LISTEN | xargs kill -9 2>/dev/null || true`, { stdio: 'ignore' });
+        } catch { /* already dead */ }
       }
     } catch {
-      // No process on this port, or already killed
+      // No process on this port, or the lookup tool is unavailable
     }
+  }
+
+  /** Kill a Windows process tree. Arguments go to `taskkill` directly, never through a shell. */
+  private taskkillTree(pid: number): void {
+    execFileSync('taskkill', ['/F', '/T', '/PID', String(pid)], { stdio: 'ignore', windowsHide: true });
+  }
+
+  /**
+   * PIDs listening on a TCP port, from `netstat -ano`. Matches the local address column
+   * exactly, so port 4000 does not also match 40001 or a remote address ending in `:4000`.
+   */
+  private listeningPidsWindows(port: number): number[] {
+    const output = execFileSync('netstat', ['-ano'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    });
+    const pids = new Set<number>();
+    for (const line of output.split('\n')) {
+      // e.g. "TCP    0.0.0.0:4000    0.0.0.0:0    LISTENING    5678"
+      const [proto, localAddress, , state, pidText] = line.trim().split(/\s+/);
+      if (!proto?.startsWith('TCP') || state !== 'LISTENING' || !localAddress?.endsWith(`:${port}`)) continue;
+      const pid = Number(pidText);
+      if (Number.isInteger(pid) && pid > 0) pids.add(pid);
+    }
+    return [...pids];
+  }
+
+  /**
+   * PIDs listening on a TCP port, from `lsof`. Listeners only: a bare `-ti:<port>` also matches
+   * every client socket on the port, including the installer's own health-check connection, so
+   * the installer would SIGKILL itself mid-cleanup. `lsof` exits 1 when nothing matches, which
+   * throws and is handled by the caller.
+   */
+  private listeningPidsUnix(port: number): number[] {
+    const output = execFileSync('lsof', ['-ti', `tcp:${port}`, '-sTCP:LISTEN'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return output
+      .split('\n')
+      .map((line) => Number(line.trim()))
+      .filter((pid) => Number.isInteger(pid) && pid > 0 && pid !== process.pid);
   }
 
   /** @deprecated Use {@link KillByPort}. */

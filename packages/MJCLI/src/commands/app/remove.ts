@@ -13,7 +13,9 @@ import { BuildOrchestratorContext } from '../../utils/open-app-context.js';
  * and data. Prompts for confirmation unless `--yes` is passed.
  */
 export default class AppRemove extends Command {
-  static description = 'Remove an installed MJ Open App';
+  static description = `Remove an installed MJ Open App.
+
+An app installed from a folder in this repository is removed with the migrations and teardown scripts in that folder, so the folder must be at the installed version, also with --keep-data. If the folder was deleted or changed, restore it from git first (for example: git checkout <commit> -- openapps/<name>), then run remove again. Nothing is changed until the folder is at the installed version.`;
 
   static examples = [
     '<%= config.bin %> app remove acme-crm',
@@ -42,6 +44,7 @@ export default class AppRemove extends Command {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AppRemove);
     const spinner = ora();
+    let failed = false;
 
     if (!flags.yes) {
       // Destructive: this drops a schema. A headless run must say --yes explicitly
@@ -86,12 +89,17 @@ export default class AppRemove extends Command {
         }
       } else {
         spinner.fail(chalk.red(`Remove failed: ${result.ErrorMessage}`));
-        this.exit(1);
+        failed = true;
       }
     } catch (error) {
       spinner.fail('Remove failed');
       const message = error instanceof Error ? error.message : String(error);
       this.error(message);
+    }
+    // Outside the try on purpose: oclif's exit() works by throwing, and the catch above would
+    // swallow it — printing a second failure line and exiting 2 with "EEXIT: 1".
+    if (failed) {
+      this.exit(1);
     }
   }
 }

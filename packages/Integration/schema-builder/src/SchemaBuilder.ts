@@ -29,6 +29,10 @@ import { SoftFKConfigEmitter } from './SoftFKConfigEmitter.js';
 import { MetadataEmitter } from './MetadataEmitter.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { SchemaEvolution } from './SchemaEvolution.js';
+import {
+    STANDARD_COLUMN_DESCRIPTIONS,
+    type StandardIntegrationColumnName,
+} from './DDLGenerator.js';
 import { IsIntegrationWriteAllowed } from './AccessControl.js';
 import { GetDialect } from '@memberjunction/sql-dialect';
 
@@ -90,6 +94,14 @@ export class SchemaBuilder {
             // fitting core subset + warn, rather than emit a doomed table. No-op on dialects with no
             // in-row limit (PostgreSQL/TOAST). Mutates config.Columns.
             output.Warnings.push(...this.capColumnsForRowSize(config, input.Platform));
+        }
+
+        // Resolve Soft FKs and Organic Keys onto all TargetTableConfigs BEFORE DDL generation so
+        // both new tables (CreateTable) and evolved tables (AlterTable) emit non-unique indexes
+        // on Soft PK, Soft FK, and Organic Key columns.
+        this.populateSoftFKsAndOrganicKeys(input);
+
+        for (const config of newConfigs) {
             const tableDef = this.convertToTableDefinition(config, input.Platform);
             // IfNotExists: integration Create-Tables must be idempotent — a physical table
             // may already exist with no MJ entity yet (e.g. a prior run created the table but
@@ -107,7 +119,12 @@ export class SchemaBuilder {
             if (diff.Warnings.length > 0) {
                 output.Warnings.push(...diff.Warnings);
             }
-            if (diff.AddedColumns.length === 0 && diff.ModifiedColumns.length === 0 && diff.RemovedColumns.length === 0) {
+            const hasIndexWork = (diff.AddedIndexes?.length ?? 0) > 0 && (
+                existing.Indexes !== undefined ||
+                diff.AddedColumns.length > 0 ||
+                diff.ModifiedColumns.length > 0
+            );
+            if (diff.AddedColumns.length === 0 && diff.ModifiedColumns.length === 0 && diff.RemovedColumns.length === 0 && !hasIndexWork) {
                 continue; // No changes
             }
 
@@ -292,8 +309,63 @@ export class SchemaBuilder {
             Description: config.Description,
             Columns: config.Columns.map(c => this.convertColumn(c)),
             SoftPrimaryKeys: config.PrimaryKeyFields,
+            ForeignKeys: (config.SoftForeignKeys ?? []).map(fk => ({
+                ColumnName: fk.FieldName,
+                ReferencedSchema: fk.TargetSchemaName,
+                ReferencedTable: fk.TargetTableName,
+                ReferencedColumn: fk.TargetFieldName,
+                IsSoft: true,
+            })),
+            OrganicKeys: config.OrganicKeyFields,
             AdditionalColumns: this.integrationSyncColumns(platform),
         };
+    }
+
+    /**
+     * Populate each TargetTableConfig's SoftForeignKeys (from SourceSchema relationships/FK fields)
+     * and OrganicKeyFields (from SourceObjectInfo fields marked IsUniqueKey && !IsPrimaryKey) prior
+     * to DDL generation so both CREATE TABLE and ALTER TABLE emit non-unique indexes for them.
+     */
+    private populateSoftFKsAndOrganicKeys(input: SchemaBuilderInput): void {
+        const resolvedFKs = this.softFKEmitter.GenerateConfigEntries(input.SourceSchema, input.TargetConfigs);
+        for (const config of input.TargetConfigs) {
+            const existingFKs = config.SoftForeignKeys ?? [];
+            const seenFields = new Set(existingFKs.map(fk => fk.FieldName.toLowerCase()));
+            const mergedFKs = [...existingFKs];
+            for (const fk of resolvedFKs) {
+                if (
+                    fk.SchemaName.toLowerCase() === config.SchemaName.toLowerCase() &&
+                    fk.TableName.toLowerCase() === config.TableName.toLowerCase() &&
+                    !seenFields.has(fk.FieldName.toLowerCase())
+                ) {
+                    seenFields.add(fk.FieldName.toLowerCase());
+                    mergedFKs.push(fk);
+                }
+            }
+            config.SoftForeignKeys = mergedFKs;
+
+            const sourceObj = input.SourceSchema.Objects.find(o => o.ExternalName === config.SourceObjectName);
+            if (sourceObj) {
+                const existingOKs = config.OrganicKeyFields ?? [];
+                const seenTuples = new Set(existingOKs.map(t => t.map(c => c.toLowerCase()).join(',')));
+                const mergedOKs = [...existingOKs];
+                for (const field of sourceObj.Fields) {
+                    if (field.IsUniqueKey && !field.IsPrimaryKey) {
+                        const targetCol = config.Columns.find(c => c.SourceFieldName === field.Name);
+                        if (targetCol) {
+                            const key = targetCol.TargetColumnName.toLowerCase();
+                            if (!seenTuples.has(key)) {
+                                seenTuples.add(key);
+                                mergedOKs.push([targetCol.TargetColumnName]);
+                            }
+                        }
+                    }
+                }
+                if (mergedOKs.length > 0) {
+                    config.OrganicKeyFields = mergedOKs;
+                }
+            }
+        }
     }
 
     /** Convert a TargetColumnConfig to a generic ColumnDefinition. */
@@ -384,49 +456,43 @@ export class SchemaBuilder {
 
     /** Integration-specific sync columns added to every integration table. */
     private integrationSyncColumns(platform: DatabasePlatform): ColumnDefinition[] {
-        return [
+        const columns: Array<ColumnDefinition & { Name: StandardIntegrationColumnName }> = [
             {
                 Name: '__mj_integration_SyncStatus',
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(50)' : 'VARCHAR(50)',
                 IsNullable: false,
                 DefaultValue: "'Active'",
-                Description: 'Current sync status: Active, Archived, or Error',
             },
             {
                 Name: '__mj_integration_LastSyncedAt',
                 Type: 'datetime' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ',
                 IsNullable: true,
-                Description: 'Timestamp of the last successful sync for this record',
             },
             {
                 Name: '__mj_integration_LastSyncedSnapshot',
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(MAX)' : 'TEXT',
                 IsNullable: true,
-                Description: 'The external record values as of the last successful sync, serialized as JSON. The last-known external state, kept independent of local edits, used to detect changes without a watermark and as the common ancestor for field-level merge (combine) on bidirectional push.',
             },
             {
                 Name: '__mj_integration_SyncMessage',
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(MAX)' : 'TEXT',
                 IsNullable: true,
-                Description: 'Human-readable detail when SyncStatus is Error or Conflict (the conflicting fields and values, or the apply error). NULL when Active.',
             },
             {
                 Name: '__mj_integration_ContentHash',
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(64)' : 'VARCHAR(64)',
                 IsNullable: true,
-                Description: 'SHA-256 (hex) of the last-synced external field values. Lets the engine detect changes and skip re-loading/re-writing unchanged records for sources that have no usable watermark (e.g. YourMembership, which re-fetches every record each sync).',
             },
             {
                 Name: '__mj_integration_CustomOverflow',
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(MAX)' : 'TEXT',
                 IsNullable: true,
-                Description: 'Backend staging (system) column: JSON of source fields a record returned that have no field map yet — the extra keys this table has no column for. A post-sync Runtime-Schema-Updation pass promotes pervasive keys to real columns and clears them here. Not user-facing metadata; transient until promotion.',
             },
             // ── Per-record sync ledger (plan §2.5) ──────────────────────────────────────
             {
@@ -434,28 +500,24 @@ export class SchemaBuilder {
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(255)' : 'VARCHAR(255)',
                 IsNullable: true,
-                Description: 'The external system’s version/etag/modified token for the last-synced state, used for optimistic-concurrency (OCC) detection on bidirectional push. Null when the source exposes no version token.',
             },
             {
                 Name: '__mj_integration_LastSeenModifiedValue',
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(255)' : 'VARCHAR(255)',
                 IsNullable: true,
-                Description: 'The watermark / last-modified value observed for THIS record on the last sync (per-record, independent of the entity-map-level CompanyIntegrationSyncWatermark).',
             },
             {
                 Name: '__mj_integration_LastReconciledAt',
                 Type: 'datetime' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ',
                 IsNullable: true,
-                Description: 'Timestamp this record was last confirmed against the source system. Lets a reconcile find records not seen recently (delete-detection candidates).',
             },
             {
                 Name: '__mj_integration_LastWriterDirection',
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(10)' : 'VARCHAR(10)',
                 IsNullable: true,
-                Description: 'Which side last wrote this row: "Pull" (external→MJ) or "Push" (MJ→external). Informs conflict handling and audit.',
             },
             {
                 Name: '__mj_integration_IsTombstoned',
@@ -463,16 +525,15 @@ export class SchemaBuilder {
                 RawSqlType: platform === 'sqlserver' ? 'BIT' : 'BOOLEAN',
                 IsNullable: false,
                 DefaultValue: platform === 'sqlserver' ? '0' : 'FALSE',
-                Description: 'Explicit soft-delete flag, set when the record is detected as deleted/archived upstream. A queryable tombstone, distinct from the SyncStatus="Archived" text status.',
             },
             {
                 Name: '__mj_integration_DeletedDetectedAt',
                 Type: 'datetime' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ',
                 IsNullable: true,
-                Description: 'Timestamp the upstream deletion was detected (set alongside IsTombstoned). Null while the record is live.',
             },
         ];
+        return columns.map(c => ({ ...c, Description: STANDARD_COLUMN_DESCRIPTIONS[c.Name] }));
     }
 
     /**
@@ -558,6 +619,9 @@ export class SchemaBuilder {
     ): SoftFKEntry[] {
         // From source relationships
         const fromSource = this.softFKEmitter.GenerateConfigEntries(input.SourceSchema, input.TargetConfigs);
+        const seen = new Set(
+            fromSource.map(fk => `${fk.SchemaName}.${fk.TableName}.${fk.FieldName}`.toLowerCase())
+        );
 
         // From evolution (new FK columns)
         for (const { config, existing } of evolutionConfigs) {
@@ -565,7 +629,13 @@ export class SchemaBuilder {
             if (!sourceObj) continue;
             const diff = this.evolution.DiffSchema(sourceObj, config, existing, input.Platform);
             const newFKs = this.evolution.GenerateEvolutionSoftFKUpdates(diff, config);
-            fromSource.push(...newFKs);
+            for (const fk of newFKs) {
+                const key = `${fk.SchemaName}.${fk.TableName}.${fk.FieldName}`.toLowerCase();
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    fromSource.push(fk);
+                }
+            }
         }
 
         return fromSource;

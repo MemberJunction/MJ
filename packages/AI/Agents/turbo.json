@@ -1,0 +1,19 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "extends": [
+    "//"
+  ],
+  "tasks": {
+    "test": {
+      "inputs": [
+        "$TURBO_EXTENDS$",
+        "$TURBO_ROOT$/metadata/**",
+        "$TURBO_ROOT$/migrations/**",
+        "$TURBO_ROOT$/migrations-pg/**",
+        "$TURBO_ROOT$/.github/scripts/**",
+        "$TURBO_ROOT$/docs/**",
+        "$TURBO_ROOT$/.mj-standards.json"
+      ]
+    }
+  }
+}

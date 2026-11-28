@@ -19,6 +19,8 @@ import {
   Resolver,
   Root,
 } from '@memberjunction/server';
+import { AssertNotImpersonationSession } from '../auth/impersonationGuard.js';
+import { RefuseImpersonationSessions } from '../auth/scopeLimitedAccess.js';
 import {
   createDownloadUrl,
   createUploadUrl,
@@ -978,8 +980,10 @@ export class FileResolver extends FileResolverBase {
     };
   }
 
+  @RefuseImpersonationSessions()
   @Query(() => String)
   async CreatePreAuthDownloadUrl(@Arg('input', () => CreatePreAuthDownloadUrlInput) input: CreatePreAuthDownloadUrlInput, @Ctx() context: AppContext) {
+    AssertNotImpersonationSession(context.userPayload, 'CreatePreAuthDownloadUrl');
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
 

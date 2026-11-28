@@ -6,6 +6,13 @@
  * loaded with a Xenova-converted BGE reranker model (e.g. `Xenova/bge-reranker-base`,
  * `Xenova/bge-reranker-large`, `Xenova/bge-reranker-v2-m3`).
  *
+ * **Event-loop isolation.** When the compiled worker entrypoint is available (production
+ * builds), model loading and ONNX cross-encoder inference run on a dedicated reusable
+ * `worker_threads` worker ({@link BGERerankerWorkerHost}) with a bounded candidate cap
+ * ({@link DEFAULT_BGE_MAX_CANDIDATES}), mini-batch chunking ({@link DEFAULT_BGE_BATCH_SIZE}),
+ * and a per-call timeout budget ({@link DEFAULT_BGE_RERANKER_TIMEOUT_MS}) so Node's HTTP/WS
+ * event loop never stalls.
+ *
  * **Cost.** Zero — local model. Reports 0 cents to the budget guard.
  *
  * **Model loading.** Lazy: the model is downloaded on first use into the configured
@@ -13,77 +20,32 @@
  * in the npm package. Override the model and cache directory via:
  *   - `ScopeConfig.reRanker.config.model` — HuggingFace ID or local path
  *   - `ScopeConfig.reRanker.config.cacheDir` — override TRANSFORMERS_CACHE_DIR
+ *   - `ScopeConfig.reRanker.config.batchSize` — mini-batch size (1..128, default 32)
+ *   - `ScopeConfig.reRanker.config.timeoutMs` — worker call timeout in ms (default 30000)
  *
  * **Optional peer dep.** `@huggingface/transformers` is in `optionalDependencies`. Loaded
- * via dynamic import per CLAUDE.md rule #8 case 2 — consumers who don't want a
- * local-model reranker don't pay the bundle cost.
+ * via dynamic import in `bgeRuntime` per CLAUDE.md rule #8 case 2 — consumers who don't want
+ * a local-model reranker don't pay the bundle cost.
  *
  * @module @memberjunction/search-engine
  */
 
 import { RegisterClass } from '@memberjunction/global';
 import { LogError, UserInfo } from '@memberjunction/core';
-import { BaseReRanker } from '../generic/BaseReRanker';
-import { SearchResultItem } from '../generic/search.types';
+import { BaseReRanker } from '../generic/BaseReRanker.js';
+import { SearchResultItem } from '../generic/search.types.js';
+import {
+    ClearBGEPipelines,
+    DEFAULT_BGE_BATCH_SIZE,
+    ExtractBGEScores,
+    ScorePairsWithBGEModel,
+} from './bgeRuntime.js';
+import { BGERerankerWorkerHost, DEFAULT_BGE_RERANKER_TIMEOUT_MS } from './BGERerankerWorkerHost.js';
 
-/** Transformers.js pipeline call shape for cross-encoder text classification. */
-type RerankPipeline = (
-    inputs: string | Array<string | string[]>,
-    options?: Record<string, unknown>,
-) => Promise<unknown>;
+/** Maximum candidates cross-encoded per request to bound CPU latency and memory. */
+export const DEFAULT_BGE_MAX_CANDIDATES = 100;
 
-interface TransformersModule {
-    pipeline: (
-        task: string,
-        model: string,
-        options?: { dtype?: string; cache_dir?: string },
-    ) => Promise<RerankPipeline>;
-    env: { allowLocalModels: boolean; cacheDir: string; allowRemoteModels?: boolean };
-}
-
-/**
- * Memoized loader for the transformers.js module. Same pattern as LocalEmbedding —
- * a single dynamic import the first time, reused thereafter.
- */
-let transformersPromise: Promise<TransformersModule> | null = null;
-function loadTransformers(): Promise<TransformersModule> {
-    if (!transformersPromise) {
-        transformersPromise = (async () => {
-            try {
-                // SearchEngine is ESM (`"type": "module"`), so a real dynamic import is
-                // safe here — no need for the `eval('import(...)')` workaround that
-                // packages-as-CJS use. This is also what allows tests to vi.mock().
-                const mod = await import('@huggingface/transformers' as string) as unknown as TransformersModule;
-                return mod;
-            } catch (err) {
-                throw new Error(
-                    `BGEReRanker: '@huggingface/transformers' is not installed. Add it to your project's dependencies if you intend to use the BGE local reranker. Underlying error: ${err instanceof Error ? err.message : String(err)}`
-                );
-            }
-        })();
-    }
-    return transformersPromise;
-}
-
-/**
- * Per-model pipeline cache. Keyed by `${modelId}|${cacheDir}` so the same process can
- * host multiple BGE variants without thrashing.
- */
-const pipelineCache = new Map<string, Promise<RerankPipeline>>();
-
-async function getPipeline(modelId: string, cacheDir: string | undefined): Promise<RerankPipeline> {
-    const key = `${modelId}|${cacheDir ?? ''}`;
-    let cached = pipelineCache.get(key);
-    if (!cached) {
-        cached = (async () => {
-            const transformers = await loadTransformers();
-            if (cacheDir) transformers.env.cacheDir = cacheDir;
-            return transformers.pipeline('text-classification', modelId, { dtype: 'q8' });
-        })();
-        pipelineCache.set(key, cached);
-    }
-    return cached;
-}
+const MAX_CONFIGURED_BATCH_SIZE = 128;
 
 /**
  * Local BGE reranker. Configure per scope via
@@ -102,11 +64,11 @@ export class BGEReRanker extends BaseReRanker {
     }
 
     /**
-     * No hard cap from the model itself, but practical memory limits apply. We cap at
-     * 5000 to match what fits comfortably in 16 GB RAM with `bge-reranker-base`.
+     * Bounds cross-encoding per call to {@link DEFAULT_BGE_MAX_CANDIDATES} (100) so a
+     * single local ONNX pass stays within interactive latency budgets.
      */
     public override GetMaxResultCount(): number {
-        return 5000;
+        return DEFAULT_BGE_MAX_CANDIDATES;
     }
 
     /** Local model — no per-call charge. */
@@ -125,48 +87,70 @@ export class BGEReRanker extends BaseReRanker {
 
         const modelId = (config?.['model'] as string | undefined) ?? 'Xenova/bge-reranker-base';
         const cacheDir = config?.['cacheDir'] as string | undefined;
+        const batchSize = this.resolveBatchSize(config?.['batchSize']);
+        const timeoutMs = this.resolveTimeoutMs(config?.['timeoutMs']);
+        const maxCandidates = this.resolveMaxCandidates(config?.['maxCandidates']);
 
-        let scoreFor: RerankPipeline;
-        try {
-            scoreFor = await getPipeline(modelId, cacheDir);
-        } catch (err) {
-            LogError(`BGEReRanker: failed to load pipeline for "${modelId}": ${err instanceof Error ? err.message : String(err)}`);
-            // Fall back to a top-N slice when the local model can't be loaded.
-            return candidates.slice(0, topN);
-        }
+        const candidatesToScore = candidates.length > maxCandidates
+            ? candidates.slice(0, maxCandidates)
+            : candidates;
 
         try {
-            // For cross-encoder reranking we feed each candidate as a [query, doc] pair.
-            // transformers.js text-classification accepts an array of pairs — call once
-            // with all pairs to get one response per pair.
-            const pairs: Array<[string, string]> = candidates.map(c => [query, this.buildText(c)]);
-            const raw = await scoreFor(pairs as unknown as string[][]);
+            const pairs: Array<[string, string]> = candidatesToScore.map(c => [query, this.buildText(c)]);
+            const host = BGERerankerWorkerHost.Instance;
+            const scores = host.IsAvailable
+                ? await host.Run({ Kind: 'rerank', ModelId: modelId, CacheDir: cacheDir, Pairs: pairs, BatchSize: batchSize }, timeoutMs)
+                : await ScorePairsWithBGEModel(modelId, cacheDir, pairs, batchSize);
 
-            // The pipeline returns either an array of `{label, score}` (one per pair) or
-            // an array of arrays when multi-label is enabled. Normalize to a flat array
-            // of scores. We treat `score` as relevance directly; for binary cross-encoders
-            // the model emits a logit-style score we use as-is for ranking purposes.
-            const scores = this.extractScores(raw, candidates.length);
+            if (scores.length !== candidatesToScore.length) {
+                throw new Error(`BGEReRanker: pipeline returned ${scores.length} scores for ${candidatesToScore.length} inputs`);
+            }
 
-            const ranked = candidates
+            const ranked = candidatesToScore
                 .map((c, i) => ({
                     item: c,
                     score: scores[i] ?? 0,
                 }))
                 .sort((a, b) => b.score - a.score)
-                .slice(0, topN)
                 .map(p => ({
                     ...p.item,
                     Score: p.score,
                     ScoreBreakdown: { ...p.item.ScoreBreakdown, ReRank: p.score },
                 }));
 
-            // Local model — no cost reported.
-            return ranked;
+            if (topN <= ranked.length) {
+                return ranked.slice(0, topN);
+            }
+            // If caller requested more than maxCandidates, append unreranked tail up to topN.
+            const tail = candidates.slice(candidatesToScore.length, topN);
+            return [...ranked, ...tail];
         } catch (err) {
             LogError(`BGEReRanker: rerank failed for "${modelId}": ${err instanceof Error ? err.message : String(err)}`);
+            // Fall back to a top-N slice when the local model or worker fails/times out.
             return candidates.slice(0, topN);
         }
+    }
+
+    private resolveBatchSize(raw: unknown): number {
+        if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 1) {
+            return Math.min(MAX_CONFIGURED_BATCH_SIZE, Math.floor(raw));
+        }
+        return DEFAULT_BGE_BATCH_SIZE;
+    }
+
+    private resolveTimeoutMs(raw: unknown): number {
+        if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+            return Math.floor(raw);
+        }
+        return DEFAULT_BGE_RERANKER_TIMEOUT_MS;
+    }
+
+    private resolveMaxCandidates(raw: unknown): number {
+        const cap = this.GetMaxResultCount();
+        if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 1) {
+            return Math.min(cap, Math.floor(raw));
+        }
+        return cap;
     }
 
     /** Subclasses can override to customize the candidate's text representation. */
@@ -180,25 +164,7 @@ export class BGEReRanker extends BaseReRanker {
      * with one score per input pair. Throws when the shape doesn't match.
      */
     protected extractScores(raw: unknown, expectedLength: number): number[] {
-        if (!Array.isArray(raw)) {
-            throw new Error('BGEReRanker: pipeline did not return an array');
-        }
-        const out: number[] = [];
-        for (const entry of raw) {
-            if (entry && typeof entry === 'object' && 'score' in entry && typeof (entry as { score: unknown }).score === 'number') {
-                out.push((entry as { score: number }).score);
-            } else if (Array.isArray(entry)) {
-                // Multi-label form — take the first label's score
-                const first = entry[0] as { score?: unknown } | undefined;
-                out.push(first && typeof first.score === 'number' ? first.score : 0);
-            } else {
-                out.push(0);
-            }
-        }
-        if (out.length !== expectedLength) {
-            throw new Error(`BGEReRanker: pipeline returned ${out.length} scores for ${expectedLength} inputs`);
-        }
-        return out;
+        return ExtractBGEScores(raw, expectedLength);
     }
 }
 
@@ -213,8 +179,11 @@ export function LoadBGEReRanker(): void {
  * can install its own mock pipeline.
  */
 export function ResetBGEPipelineCacheForTests(): void {
-    pipelineCache.clear();
-    transformersPromise = null;
+    ClearBGEPipelines();
+    const host = BGERerankerWorkerHost.Instance;
+    if (host.IsAvailable) {
+        host.Run({ Kind: 'clear' }).catch(() => undefined);
+    }
 }
 
 /** @deprecated Use {@link ResetBGEPipelineCacheForTests}. */

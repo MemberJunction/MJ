@@ -48,6 +48,8 @@ vi.mock('../install/package-manager.js', () => ({
     RemoveAppPackages: vi.fn(),
     RunPackageInstallAsync: vi.fn(),
     BumpPrefixedDependencies: vi.fn(),
+    PreflightAppPackages: vi.fn(async () => ({ Success: true, Checks: [], Warnings: [] })),
+    ListPackageStepFiles: vi.fn(() => []),
 }));
 vi.mock('../install/config-manager.js', () => ({
     AddServerDynamicPackages: vi.fn(),
@@ -56,6 +58,8 @@ vi.mock('../install/config-manager.js', () => ({
     // Upgrade prunes stale entries before re-adding (add-only writers would otherwise leave the
     // config converging on the union of every version ever installed).
     PruneDynamicPackagesNotInManifest: vi.fn(() => ({ Success: true })),
+    AddPublicPages: vi.fn(() => ({ Success: true })),
+    CheckPublicPageSlugConflicts: vi.fn(() => ({ Success: true })),
     ToggleServerDynamicPackages: vi.fn(),
     AddEntityPackageMapping: vi.fn(),
     RemoveEntityPackageMapping: vi.fn(),
@@ -131,7 +135,7 @@ function baseHappyPathStubs(): void {
     vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
     vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
     vi.mocked(DownloadMigrations).mockResolvedValue({ Success: true, Files: [] } as unknown as Awaited<ReturnType<typeof DownloadMigrations>>);
-    vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+    vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
     vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
     vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
     vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -145,7 +149,7 @@ function baseHappyPathStubs(): void {
     vi.mocked(ReplaceAppDependenciesAtomically).mockResolvedValue(true);
     vi.mocked(ListInstalledApps).mockResolvedValue([]);
     vi.mocked(GetLatestVersion).mockResolvedValue('2.0.0' as unknown as Awaited<ReturnType<typeof GetLatestVersion>>);
-    vi.mocked(ListGitHubTags).mockResolvedValue([]);
+    vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
     vi.mocked(ListGitHubReleases).mockResolvedValue([]);
     vi.mocked(ValidateGitHubTag).mockResolvedValue({ Exists: true });
     vi.mocked(FindDependentApps).mockResolvedValue([]);

@@ -23,7 +23,7 @@ describe('RubricOracle content', () => {
     });
 
     it('maps each built-in subject onto a column the generated entity actually has', () => {
-        const source = readFileSync(new URL('../../../../MJCoreEntities/src/generated/entities/__mj.ts', import.meta.url), 'utf8');
+        const source = readFileSync(new URL('../../../../MJCoreEntities/src/generated/schemas/__mj.ts', import.meta.url), 'utf8');
         const shape = (name: string) => {
             const start = source.indexOf(`export const ${name}`);
             const end = source.indexOf('export const ', start + 20);

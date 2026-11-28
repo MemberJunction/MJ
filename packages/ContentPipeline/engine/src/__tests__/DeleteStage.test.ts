@@ -12,6 +12,9 @@ import { ContentVectorInfrastructure } from '@memberjunction/content-autotagging
 import { FileStorageEngine } from '@memberjunction/storage';
 import { StageContext, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
 import { DeleteContentItemStage, DeleteStage } from '../stages/DeleteStage.js';
+import { GraphEvidenceRetractor } from '../GraphEvidenceRetractor.js';
+import { ContentPipelineDeleteMarker } from '../ContentPipelineDeleteMarker.js';
+import { ContentUploadIngestor, UploadItemURL } from '../ContentUploadIngestor.js';
 import { PipelineProcessor } from '../PipelineProcessor.js';
 import type { WorkingRecordCommitter } from '../WorkingRecordCommitter.js';
 import type { WorkingRecordHydrator } from '../WorkingRecordHydrator.js';
@@ -46,6 +49,36 @@ describe('nothing to remove', () => {
 
     it('marks Deleted, because absent really is absent', () => {
         expect(new DeleteStage().CompleteStatus).toBe('Deleted');
+    });
+});
+
+describe('graph evidence', () => {
+    it('retracts what the Graph stage inferred from the chunk and reports it', async () => {
+        const retract = vi.spyOn(GraphEvidenceRetractor.prototype, 'RetractChunks').mockResolvedValue({ EdgesRemoved: 3, ConceptsRemoved: 1 });
+        const outcome = await new DeleteStage().Run(chunk(), contextWith());
+        expect(retract).toHaveBeenCalledWith(['C1']);
+        expect(outcome.Status).toBe('Complete');
+        expect(outcome.Message).toContain('3 graph edge(s) and 1 orphaned concept(s)');
+    });
+
+    it('leaves the chunk pending when retraction fails, so the next run tries again', async () => {
+        vi.spyOn(GraphEvidenceRetractor.prototype, 'RetractChunks').mockRejectedValue(new Error('edge delete refused'));
+        await expect(new DeleteStage().Run(chunk(), contextWith())).rejects.toThrow(/Retracting graph evidence for 'C1' failed: edge delete refused/);
+    });
+
+    it("retracts a Content Item's own edges (its Mentions), and nothing in a dry run", async () => {
+        const chunks = vi.spyOn(GraphEvidenceRetractor.prototype, 'RetractChunks');
+        const items = vi.spyOn(GraphEvidenceRetractor.prototype, 'RetractContentItems').mockResolvedValue({ EdgesRemoved: 1, ConceptsRemoved: 0 });
+        const item = () => new WorkingRecord(new WorkingRecordIdentity('Content Item', 'u/I1', 'I1'));
+        await new DeleteContentItemStage().Run(item(), { ...contextWith(), IsTest: true });
+        await new DeleteStage().Run(chunk(), { ...contextWith(), IsTest: true });
+        expect(chunks).not.toHaveBeenCalled();
+        expect(items).not.toHaveBeenCalled();
+        vi.spyOn(ContentPipelineDeleteMarker.prototype, 'MarkDependentsOf').mockResolvedValue(0);
+        const outcome = await new DeleteContentItemStage().Run(item(), contextWith());
+        expect(items).toHaveBeenCalledWith(['I1']);
+        expect(chunks).not.toHaveBeenCalled();
+        expect(outcome.Message).toContain('1 graph edge(s)');
     });
 });
 
@@ -130,6 +163,19 @@ describe('what is left behind once the vector is gone', () => {
     it('lets an unreferenced chunk go', async () => {
         const context = { ...contextWith(), Provider: referencedBy(0) };
         expect(await internals(new DeleteStage()).isReferenced('C1', context)).toBe(false);
+    });
+
+    it('keeps a chunk a graph edge still names (a Declared edge retraction left), so the edge never dangles', async () => {
+        const reads: string[] = [];
+        const provider = {
+            EntityByName: (name: string) => ({ ID: `id:${name}`, RelatedEntities: [] }),
+            RunView: async (params: { EntityName: string; ExtraFilter?: string }) => {
+                reads.push(params.EntityName);
+                return { Success: true, Results: [], TotalRowCount: params.EntityName === 'MJ: Graph Edges' ? 1 : 0 };
+            },
+        } as never;
+        expect(await internals(new DeleteStage()).isReferenced('C1', { ...contextWith(), Provider: provider })).toBe(true);
+        expect(reads).toEqual(['MJ: Graph Edges']);
     });
 
     it('counts a failed check as referenced — losing history is worse than keeping a row', async () => {
@@ -338,5 +384,212 @@ describe('DeleteContentItemStage — dependent marking and dry-run isolation', (
         ).rejects.toThrow(/could not clear FileID on Content Item 'ITEM-1': item save refused/);
         expect(events).toEqual(['Driver.DeleteObject', 'item.Save(FileID=null)']);
     });
+
+    it('detaches FileID on an uploaded root (upload://<fileId>) while keeping its storage object and MJ: Files row', async () => {
+        const events: string[] = [];
+        const resolveSpy = vi.spyOn(FileStorageEngine.Instance, 'ResolveFileObject').mockResolvedValue({
+            ObjectKey: 'uploads/user-doc.pdf',
+            Driver: {
+                DeleteObject: async () => {
+                    events.push('Driver.DeleteObject');
+                },
+            },
+        } as never);
+
+        const uploadedItem = new WorkingRecord(
+            new WorkingRecordIdentity('Content Item', 'upload://file-user-1', 'ITEM-UPLOAD-1'),
+        );
+        uploadedItem.SetExtension('Pipeline', 'fileID', 'FILE-USER-1');
+
+        const outcome = await new DeleteContentItemStage().Run(uploadedItem, {
+            ...contextWith(),
+            Provider: {
+                EntityByName: () => undefined,
+                RunViews: async () => [
+                    { Success: true, Results: [] },
+                    { Success: true, Results: [] },
+                ],
+                GetEntityObject: async (entityName: string) => {
+                    if (entityName === 'MJ: Content Items') {
+                        const itemObj = {
+                            FileID: 'FILE-USER-1' as string | null,
+                            InnerLoad: async () => true,
+                            Save: async () => {
+                                events.push(`item.Save(FileID=${String(itemObj.FileID)})`);
+                                return true;
+                            },
+                        };
+                        return itemObj;
+                    }
+                    events.push(`Unexpected:${entityName}`);
+                    return {};
+                },
+            } as never,
+        });
+
+        expect(outcome.Status).toBe('Complete');
+        expect(resolveSpy).not.toHaveBeenCalled();
+        expect(events).toEqual(['item.Save(FileID=null)']);
+    });
+
+    it("deletes an archive member's durable copy even when its container is an upload item (upload://<rootFileId>#member)", async () => {
+        const events: string[] = [];
+        vi.spyOn(FileStorageEngine.Instance, 'ResolveFileObject').mockResolvedValue({
+            ObjectKey: 'copies/archive-member.png',
+            Driver: {
+                DeleteObject: async () => {
+                    events.push('Driver.DeleteObject');
+                },
+            },
+        } as never);
+
+        const memberRecord = new WorkingRecord(
+            new WorkingRecordIdentity('Content Item', 'upload://file-archive-1#photo.png', 'ITEM-MEMBER-1'),
+        );
+        memberRecord.SetExtension('Pipeline', 'fileID', 'FILE-DURABLE-COPY-1');
+
+        const outcome = await new DeleteContentItemStage().Run(memberRecord, {
+            ...contextWith(),
+            Provider: {
+                EntityByName: () => undefined,
+                RunViews: async () => [
+                    { Success: true, Results: [] },
+                    { Success: true, Results: [] },
+                ],
+                GetEntityObject: async (entityName: string) => {
+                    if (entityName === 'MJ: Files') {
+                        return {
+                            ProviderID: 'P1',
+                            InnerLoad: async () => true,
+                            Delete: async () => {
+                                events.push('file.Delete');
+                                return true;
+                            },
+                        };
+                    }
+                    const itemObj = {
+                        FileID: 'FILE-DURABLE-COPY-1' as string | null,
+                        InnerLoad: async () => true,
+                        Save: async () => {
+                            events.push(`item.Save(FileID=${String(itemObj.FileID)})`);
+                            return true;
+                        },
+                    };
+                    return itemObj;
+                },
+            } as never,
+        });
+
+        expect(outcome.Status).toBe('Complete');
+        expect(events).toEqual(['Driver.DeleteObject', 'item.Save(FileID=null)', 'file.Delete']);
+    });
+
+    it('lets the caller delete its MJ: Files row without an FK_ContentItem_File error after Remove plus DeleteContentItemStage', async () => {
+        const callerFileID = 'FILE-CALLER-99';
+        const items: { ID: string; URL: string; FileID: string | null; DeleteStatus: string | null }[] = [
+            {
+                ID: 'ITEM-UPLOAD-99',
+                URL: UploadItemURL(callerFileID),
+                FileID: callerFileID,
+                DeleteStatus: null,
+            },
+        ];
+        let callerFileRowExists = true;
+
+        const provider = {
+            EntityByName: () => undefined,
+            RunView: async (params: { EntityName: string; ExtraFilter?: string }) => ({
+                Success: true,
+                Results:
+                    params.EntityName === 'MJ: Content Items' && !params.ExtraFilter?.includes('ParentID')
+                        ? items.filter((i) => i.DeleteStatus === null || i.DeleteStatus !== 'Deleted')
+                        : [],
+            }),
+            RunViews: async () => [
+                { Success: true, Results: [] },
+                { Success: true, Results: [] },
+            ],
+            GetEntityObject: async (entityName: string) => {
+                if (entityName === 'MJ: Content Items') {
+                    let row = items[0];
+                    return {
+                        get ID() {
+                            return row.ID;
+                        },
+                        get FileID() {
+                            return row.FileID;
+                        },
+                        set FileID(v: string | null) {
+                            row.FileID = v;
+                        },
+                        get DeleteStatus() {
+                            return row.DeleteStatus;
+                        },
+                        set DeleteStatus(v: string | null) {
+                            row.DeleteStatus = v;
+                        },
+                        InnerLoad: async (ck: { KeyValuePairs: { Value: string }[] }) => {
+                            const found = items.find((i) => i.ID === ck.KeyValuePairs[0].Value);
+                            if (!found) {
+                                return false;
+                            }
+                            row = found;
+                            return true;
+                        },
+                        Save: async () => true,
+                    };
+                }
+                if (entityName === 'MJ: Files') {
+                    return {
+                        ProviderID: 'P1',
+                        InnerLoad: async () => callerFileRowExists,
+                        Delete: async () => {
+                            const referencingItem = items.find((i) => i.FileID === callerFileID);
+                            if (referencingItem) {
+                                throw new Error(
+                                    `The DELETE statement conflicted with the REFERENCE constraint "FK_ContentItem_File" (referenced by ${referencingItem.ID})`,
+                                );
+                            }
+                            callerFileRowExists = false;
+                            return true;
+                        },
+                    };
+                }
+                return {};
+            },
+        };
+
+        await ContentUploadIngestor.Remove({
+            FileID: callerFileID,
+            RunNow: false,
+            ContextUser: { ID: 'U1' } as never,
+            Provider: provider as never,
+        });
+        expect(items[0].DeleteStatus).toBe('Pending');
+
+        const working = new WorkingRecord(
+            new WorkingRecordIdentity('Content Item', items[0].URL, items[0].ID),
+        );
+        working.SetExtension('Pipeline', 'fileID', callerFileID);
+        working.SetExtension('Pipeline', 'deleteStatus', 'Pending');
+
+        const deleteOutcome = await new DeleteContentItemStage().Run(working, {
+            ...contextWith(),
+            Provider: provider as never,
+        });
+        expect(deleteOutcome.Status).toBe('Complete');
+        items[0].DeleteStatus = 'Deleted';
+
+        // Tombstone has FileID = null, and callerFileRowExists is still true until the caller deletes it.
+        expect(items[0].FileID).toBeNull();
+        expect(callerFileRowExists).toBe(true);
+
+        const callerFile = (await provider.GetEntityObject('MJ: Files')) as { Delete: () => Promise<boolean> };
+        await expect(callerFile.Delete()).resolves.toBe(true);
+        expect(callerFileRowExists).toBe(false);
+    });
 });
+
+
+
 

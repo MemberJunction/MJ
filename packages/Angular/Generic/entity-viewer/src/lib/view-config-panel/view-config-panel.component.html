@@ -547,19 +547,23 @@
                     type="checkbox"
                     [ngModel]="CustomWhereClause"
                     (ngModelChange)="OnToggleCustomWhereOverride($event)"
-                    [disabled]="!CanEdit"
+                    [disabled]="!CanEdit || (!CanEditCustomSql && !CustomWhereClause)"
                   />
                   <div class="sql-override-copy">
                     <div class="sql-override-title-row">
                       <strong>Override with Custom SQL WHERE Clause (One-Way)</strong>
-                      <span class="sql-source-pill" [class.editable]="CustomWhereClause">
-                        <i [class]="CustomWhereClause ? 'fa-solid fa-pen-to-square' : 'fa-solid fa-lock'"></i>
+                      <span class="sql-source-pill" [class.editable]="CustomWhereClause && CanEditCustomSql">
+                        <i [class]="CustomWhereClause && CanEditCustomSql ? 'fa-solid fa-pen-to-square' : 'fa-solid fa-lock'"></i>
                         {{ SqlWhereSourceLabel }}
                       </span>
                     </div>
                     <p>
-                      @if (CustomWhereClause) {
+                      @if (CustomWhereClause && !CanEditCustomSql && CanEdit) {
+                        Custom SQL override is active (read-only — only administrators (Owner-type users) may edit custom SQL). Uncheck the box above to revert this view to Smart Filter or Rule Builder.
+                      } @else if (CustomWhereClause) {
                         Custom SQL override is active. RunView will execute the SQL expression below directly instead of Smart Filter or Rule Builder. (One-way: edits here cannot be converted back into visual rules.)
+                      } @else if (!CanEditCustomSql && CanEdit) {
+                        Inspecting the read-only SQL <code>WHERE</code> clause. Only administrators (Owner-type users) may override a view with custom SQL.
                       } @else {
                         Inspecting the read-only SQL <code>WHERE</code> clause compiled from your Smart Filter or Rule Builder. Check the box above to unlock the editor and override it with custom SQL (one-way).
                       }
@@ -568,7 +572,7 @@
                 </label>
               </div>
 
-              <div class="sql-code-editor-card" [class.readonly]="!CustomWhereClause || !CanEdit">
+              <div class="sql-code-editor-card" [class.readonly]="!CustomWhereClause || !CanEditCustomSql">
                 <div class="sql-editor-topbar">
                   <span class="sql-editor-topbar-left">
                     <i class="fa-solid fa-database"></i>
@@ -576,9 +580,12 @@
                     <code>WHERE</code>
                   </span>
                   <span class="sql-editor-topbar-right">
-                    @if (CustomWhereClause && CanEdit) {
+                    @if (CustomWhereClause && CanEditCustomSql) {
                       <i class="fa-solid fa-unlock"></i>
                       <span>Editable SQL</span>
+                    } @else if (!CanEditCustomSql && CanEdit) {
+                      <i class="fa-solid fa-lock"></i>
+                      <span>Read-Only — Administrator (Owner) required</span>
                     } @else {
                       <i class="fa-solid fa-lock"></i>
                       <span>Read-Only — Check box above to edit</span>
@@ -589,7 +596,7 @@
                   <mj-code-editor
                     [Value]="DisplayedSqlWhereClause"
                     Language="sql"
-                    [readonly]="!CustomWhereClause || !CanEdit"
+                    [readonly]="!CustomWhereClause || !CanEditCustomSql"
                     Placeholder="e.g., [Status] = 'Active' AND [__mj_CreatedAt] >= DATEADD(day, -30, GETUTCDATE())"
                     (Change)="OnCustomSqlWhereChange($event)">
                   </mj-code-editor>

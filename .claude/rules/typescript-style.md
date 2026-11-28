@@ -199,6 +199,33 @@ SQL Server returns UUIDs upper-case and PostgreSQL lower-case, so `===`, `.inclu
 
 ---
 
+## 🚨 NO ARBITRARY HARD CAPS OR UNEXPLAINED STATIC NUMERIC LITERALS
+
+**Never add hardcoded arbitrary count caps (`MAX_CACHED_ITEMS = 50`, `MAX_SESSIONS = 1_000`, `MAX_ENTRIES = 2_000`) to caches, registries, or session stores as a band-aid for lifecycle or scoping bugs.** Arbitrary caps silently drop active sessions, break concurrent in-flight parent/child operations, penalize legitimate UI sessions, and mask 0%-hit-rate per-request cache keys.
+
+### Fix the Root-Cause Lifecycle / Scope Instead (In Order of Preference)
+1. **Per-run / per-invocation instance state**: Keep run-scoped data on the run/manager instance and release it in `finally` / `Clear()` — never populate process-global UI caches (`BaseEngine`) from server-side agent or action execution.
+2. **`WeakMap` keyed by object lifetime**: When scoping state to a per-request `IMetadataProvider` or short-lived object, use `WeakMap<IMetadataProvider, ...>` so V8 garbage-collects both the provider and its cached values automatically when the request ends.
+3. **Deterministic settlement cleanup**: For in-flight tracking maps (save queues, pending promises, locks), delete the entry in `.finally()` / `Settled().finally()` the instant the operation settles.
+4. **Explicit teardown + configurable idle TTL**: For client/cloud sessions where peers can disconnect uncleanly, wire deterministic `onclose`/cancel teardown **plus** an idle TTL configurable in `mj.config.cjs` — never evict active sessions based on a magic count.
+5. **Centralized configurable limits (`LimitsConfigResolver` / `mj.config.cjs`)**: When a genuine runaway/resource ceiling, timeout, or batch size is required, route it through `LimitsConfigResolver` (`packages/MJCore/src/generic/limitsConfig.ts`) or `mj.config.cjs` schema defaults rather than scattering static numeric literals across classes.
+
+### Mandatory Rationale Comments on Static Numeric Literals (CI-Gated)
+Every `static readonly` (or `static SCREAMING_SNAKE_CASE`) class numeric literal/expression and every module-level `MAX_*` / `MIN_*` / `DEFAULT_*` / `LIMIT_*` / `CAP_*` numeric `const` **MUST** carry an explanatory comment (either a trailing inline `// ...` comment on the declaration line or an immediately preceding `/** ... */` / `// ...` comment with no blank line gap) stating **why** that value exists (protocol spec, unit conversion, configurable fallback default, etc.):
+
+```typescript
+// ❌ DEFECT — arbitrary cap & unexplained static numeric literal (fails StaticNumericLiteralCompliance.test.ts)
+public static readonly MAX_CACHED_CONVERSATION_DETAILS = 50;
+const MAX_STORED_KEYS = 500;
+
+// ✅ CORRECT — configurable fallback default with explicit inline rationale
+public static readonly DEFAULT_IDLE_TTL_MS = 24 * 60 * 60 * 1000; // 24h fallback when mcpServerSettings.sessionIdleTtlMs is unset
+```
+
+`StaticNumericLiteralCompliance.test.ts` (run by `pnpm run check:guards` and CI's **Source guards** job) flags any undocumented static numeric literal as a defect.
+
+---
+
 ## Code Style Guide
 
 - Use TypeScript strict mode and explicit typing
@@ -240,11 +267,11 @@ export class MyComponent {
     public IsLoading: boolean = false;
     public SelectedRows: Record<string, unknown>[] = [];
 
-    // Statics and constants - visibility decides; SCREAMING_SNAKE is allowed for constants
+    // Statics and constants - visibility decides; SCREAMING_SNAKE is allowed for constants (always document numeric literals)
     public static readonly ComponentName = 'my-component'; // public static → PascalCase
-    public static readonly DEFAULT_TIMEOUT_MS = 30_000;    // constant → SCREAMING_SNAKE
-    private static readonly MAX_ENTRIES = 10_000;          // private constant → SCREAMING_SNAKE…
-    private static readonly sweepThreshold = 1_000;        // …or camelCase
+    public static readonly DEFAULT_TIMEOUT_MS = 30_000;    // 30s fallback timeout when unset in config
+    private static readonly DEBOUNCE_DELAY_MS = 250;       // 250ms input debounce before issuing search
+    private static readonly retryBackoffBaseMs = 500;      // 500ms initial exponential backoff step
 
     // Private properties - camelCase
     private destroy$ = new Subject<void>();

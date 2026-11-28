@@ -3,6 +3,7 @@ export * from './MJCollectionPermissionEntityExtended';
 export * from './MJArtifactPermissionEntityExtended';
 export * from './MJAccessControlRuleEntityExtended';
 export * from './shareNotification';
+export * from './mentionNotification';
 export * from './BaseShareEntityExtended';
 
 import { LoadMJDashboardPermissionEntityExtended } from './MJDashboardPermissionEntityExtended';

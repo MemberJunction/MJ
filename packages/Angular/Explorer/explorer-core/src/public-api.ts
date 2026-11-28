@@ -12,8 +12,11 @@ export * from './lib/resource-wrappers/search-results-resource.component'
 export * from './lib/resource-wrappers/view-resource.component'
 export * from './lib/resource-wrappers/list-detail-resource.component'
 export * from './lib/resource-wrappers/chat-conversations-resource.component'
+export * from './lib/resource-wrappers/chat-collections-resource.component'
+export * from './lib/resource-wrappers/library-resource.component'
+export * from './lib/resource-wrappers/library-agent-context'
 export * from './lib/resource-wrappers/artifact-resource.component'
-export * from './lib/resource-wrappers/meetings-resource.component'
+export * from './lib/resource-wrappers/livekit-lazy-config'
 export * from './lib/conversation-feedback'
 
 // Command Palette (only component and service, no module)
@@ -24,6 +27,8 @@ export * from './lib/command-palette/command-palette.service';
 export * from './lib/shell/shell.module'
 export * from './lib/shell/shell.component'
 export * from './lib/shell/shell-chrome-policy'
+export * from './lib/shell/services/shell-chrome-policy.service'
+export * from './lib/shell/components/no-access/shell-no-access.component'
 export * from './lib/single-record/single-record.component'
 export * from './lib/single-search-result/single-search-result.component'
 export * from './lib/single-dashboard/single-dashboard.component'
@@ -33,6 +38,8 @@ export * from './lib/single-dashboard/Components/edit-dashboard/edit-dashboard.c
 export * from './lib/single-list-detail/single-list-detail.component'
 export * from './lib/user-profile/user-profile.component'
 export * from './lib/user-notifications/user-notifications.component';
+export * from './lib/user-notifications/notification-action.helpers';
+export * from './lib/shell/components/header/notification-popover.component';
 export * from './lib/guards/auth-guard.service';
 export * from './lib/guards/app-lock-guard.service';
 export * from './lib/guards/entities.guard';
@@ -57,6 +64,9 @@ export * from './lib/system-validation/system-validation-banner.component'
 // User Menu Plugin System
 export * from './lib/user-menu'
 
+// Generic Authorization-Gated User Impersonation
+export * from './lib/user-impersonation'
+
 // About Dialog
 export * from './lib/about/about-dialog.component'
 export * from './lib/shell/services/about-dialog.service'
@@ -75,3 +85,4 @@ export * from './app-routing.module'
 export * from './module';
 // Unified Ctrl+K command palette (OmnibarProvider registry + palette component)
 export * from './lib/omnibar/index';
+export * from './lib/public-guest/public-artifact-guest.component';

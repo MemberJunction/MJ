@@ -27,10 +27,11 @@ jobs:
       relevant: ${{ steps.filter.outputs.relevant }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           filter: blob:none
+          sparse-checkout: .github
           persist-credentials: false
       - name: Check changed paths
         id: filter
@@ -38,7 +39,7 @@ jobs:
           PR_BASE_REF: ${{ github.base_ref }}
         run: |
           git fetch --no-tags origin "$PR_BASE_REF"
-          CHANGED="$(git diff --name-only "origin/$PR_BASE_REF...HEAD")"
+          CHANGED="$(git diff --name-only --no-renames "origin/$PR_BASE_REF...HEAD")"
           # The old paths filter: packages/**/*.ts, packages/**/*.tsx, packages/**/package.json,
           # package.json, pnpm-lock.yaml.
           if echo "$CHANGED" | grep -qE '^packages/(.*/)?[^/]*\.tsx?$|^packages/(.*/)?package\.json$|^(package\.json|pnpm-lock\.yaml)$'; then
@@ -62,21 +63,11 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - uses: ./.github/actions/mj-setup
         with:
-          fetch-depth: 0
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          create-explorer-env: 'false'
 
       - name: Run Knip dependency check
         id: knip
@@ -144,6 +135,7 @@ jobs:
 
       - name: Comment PR with results
         if: steps.knip.outputs.knip_crashed != 'true' && github.event_name == 'pull_request'
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -151,39 +143,47 @@ jobs:
             const fs = require('fs');
             const body = fs.readFileSync('formatted-report.md', 'utf8');
 
-            // Find existing comment
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-
-            const botComment = comments.find(comment =>
-              comment.user.type === 'Bot' &&
-              comment.body.includes('<!-- dependency-check-report -->')
-            );
-
-            if (botComment) {
-              // Update existing comment
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body: body
-              });
-            } else {
-              // Create new comment
-              await github.rest.issues.createComment({
+            try {
+              // Find existing comment
+              const { data: comments } = await github.rest.issues.listComments({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: body
               });
+
+              const botComment = comments.find(comment =>
+                comment.user.type === 'Bot' &&
+                comment.body.includes('<!-- dependency-check-report -->')
+              );
+
+              if (botComment) {
+                // Update existing comment
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: botComment.id,
+                  body: body
+                });
+              } else {
+                // Create new comment
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: body
+                });
+              }
+            } catch (error) {
+              if (error.status === 403) {
+                core.info('Skipping PR comment: GITHUB_TOKEN is read-only on pull requests from forks.');
+              } else {
+                throw error;
+              }
             }
 
       - name: Upload Knip report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: knip-report
           path: |

@@ -360,6 +360,7 @@ export class TwilioTelephonyService {
                 EntityName: AGENT_IDENTITY_ENTITY,
                 ExtraFilter: `IdentityType='${PHONE_IDENTITY_TYPE}' AND IdentityValue='${EscapeSQLString(normalized)}' AND ProviderID='${EscapeSQLString(providerId)}' AND IsActive=1`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             },
             contextUser,

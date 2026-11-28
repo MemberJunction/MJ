@@ -1,7 +1,9 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CompositeKey, UserInfo } from '@memberjunction/core';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { NavigationTab } from '../../models/conversation-state.model';
+import { BeforeFolderEditEventArgs, AfterFolderEditEventArgs } from '../../events/chat-events';
 
 @Component({
   standalone: false,
@@ -9,6 +11,16 @@ import { NavigationTab } from '../../models/conversation-state.model';
   template: `
     <div class="conversation-sidebar">
       @if (activeTab === 'conversations') {
+        <mj-my-agents-section
+          [Provider]="Provider"
+          [CurrentUser]="currentUser"
+          [ShowMyAgents]="ShowMyAgents"
+          [ActiveAgentId]="ActiveAgentId"
+          (StartChatWithAgent)="StartChatWithAgent.emit($event)"
+          (StartNewChatWithAgent)="StartNewChatWithAgent.emit($event)"
+          (StartOnboardingWithTemplate)="StartOnboardingWithTemplate.emit($event)"
+          (AgentInstanceChanged)="AgentInstanceChanged.emit($event)">
+        </mj-my-agents-section>
         <div class="sidebar-content">
           <mj-conversation-list
             [environmentId]="environmentId"
@@ -21,12 +33,15 @@ import { NavigationTab } from '../../models/conversation-state.model';
             [showNewConversationButton]="showNewConversationButton"
             [showHeaderMenu]="showHeaderMenu"
             [showSectionHeaders]="showSectionHeaders"
+            [FolderEditLabel]="FolderEditLabel"
             (conversationSelected)="conversationSelected.emit($event)"
             (conversationDeleted)="conversationDeleted.emit($event)"
             (newConversationRequested)="newConversationRequested.emit()"
             (refreshRequested)="refreshRequested.emit()"
             (pinSidebarRequested)="onPinSidebarRequested()"
-            (unpinSidebarRequested)="onUnpinSidebarRequested()">
+            (unpinSidebarRequested)="onUnpinSidebarRequested()"
+            (BeforeFolderEdit)="BeforeFolderEdit.emit($event)"
+            (AfterFolderEdit)="AfterFolderEdit.emit($event)">
           </mj-conversation-list>
         </div>
       }
@@ -147,6 +162,10 @@ export class ConversationSidebarComponent extends BaseAngularComponent {
   get isMobileView(): boolean {
     return this.IsMobileView;
   }
+  /** Show the My Agents section at the top of the sidebar (default true). */
+  @Input() ShowMyAgents: boolean = true;
+  /** Currently active/pinned agent ID in the selected conversation, highlighted in My Agents. */
+  @Input() ActiveAgentId: string | null = null;
   /** Show the Routines section at the bottom of the sidebar (bubbled from the workspace; default true). */
   @Input() ShowRoutines: boolean = true;
 
@@ -186,6 +205,17 @@ export class ConversationSidebarComponent extends BaseAngularComponent {
   /** @deprecated Use {@link ShowSectionHeaders}. */
   get showSectionHeaders(): boolean {
     return this.ShowSectionHeaders;
+  }
+  /** Label shown on the folder right-click menu's edit action (default `'Rename'`). */
+  @Input() FolderEditLabel: string = 'Rename';
+
+  /** @deprecated Use {@link FolderEditLabel}. */
+  @Input() set folderEditLabel(value: string) {
+    this.FolderEditLabel = value;
+  }
+  /** @deprecated Use {@link FolderEditLabel}. */
+  get folderEditLabel(): string {
+    return this.FolderEditLabel;
   }
 
   @Output() ConversationSelected = new EventEmitter<string>();
@@ -262,6 +292,37 @@ export class ConversationSidebarComponent extends BaseAngularComponent {
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() refreshRequested = this.RefreshRequested;
+  /** Re-emitted from the conversation list — cancelable before opening the built-in folder edit modal. */
+  @Output() BeforeFolderEdit = new EventEmitter<BeforeFolderEditEventArgs>();
+
+  /**
+   * @deprecated Use {@link BeforeFolderEdit}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeFolderEdit) keeps working. Must stay AFTER BeforeFolderEdit: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeFolderEdit = this.BeforeFolderEdit;
+  /** Re-emitted from the conversation list — fired after a folder's edits are saved through the built-in modal. */
+  @Output() AfterFolderEdit = new EventEmitter<AfterFolderEditEventArgs>();
+
+  /**
+   * @deprecated Use {@link AfterFolderEdit}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterFolderEdit) keeps working. Must stay AFTER AfterFolderEdit: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterFolderEdit = this.AfterFolderEdit;
+
+  /** User clicked one of their personal agent instances in My Agents to open/focus its thread. */
+  @Output() StartChatWithAgent = new EventEmitter<MJAIAgentEntityExtended>();
+  /** User explicitly clicked the hover '+' icon on an instance to spin up a fresh chat thread. */
+  @Output() StartNewChatWithAgent = new EventEmitter<MJAIAgentEntityExtended>();
+  /** User chose "Chat to Onboard" for an instantiable template agent. */
+  @Output() StartOnboardingWithTemplate = new EventEmitter<MJAIAgentEntityExtended>();
+  /** Emitted after a personal agent instance is created, tailored, or archived from the sidebar modal. */
+  @Output() AgentInstanceChanged = new EventEmitter<MJAIAgentEntityExtended | null>();
 
   OnPinSidebarRequested(): void {
     this.PinSidebarRequested.emit();

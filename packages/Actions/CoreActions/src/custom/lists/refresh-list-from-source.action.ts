@@ -25,8 +25,9 @@ export class RefreshListFromSourceAction extends BaseAction {
     const listId = GetStringParam(params, 'ListID');
     if (!listId) return MissingParam('ListID');
 
-    const mode = (GetStringParam(params, 'Mode') ?? 'Additive') as 'Additive' | 'Sync';
-    if (mode !== 'Additive' && mode !== 'Sync') {
+    // No Mode means the list's own RefreshMode, so a routine needn't change when the list does.
+    const mode = GetStringParam(params, 'Mode') as 'Additive' | 'Sync' | undefined;
+    if (mode !== undefined && mode !== 'Additive' && mode !== 'Sync') {
       return {
         Success: false,
         ResultCode: 'INVALID_PARAMETER',

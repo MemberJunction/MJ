@@ -17,6 +17,8 @@ export class PineconeDatabase extends VectorDBBase {
 
     private _pinecone: Pinecone;
     private _defaultIndex: Index<RecordMetadata> = null;
+    private _indexes = new Map<string, Index>();
+    private _namespaces = new WeakMap<Index, Map<string, Index>>();
 
     constructor(apiKey: string){
         super(apiKey);
@@ -72,7 +74,8 @@ export class PineconeDatabase extends VectorDBBase {
 
     /**
      * If an indexName is not provided, this will use the default index name
-     * defined in the environment variables instead.
+     * defined in the environment variables instead. Returns the same SDK Index
+     * object for a name on every call.
      */
     public GetIndex(params?: BaseRequestParams): BaseResponse {
         const name: string = params?.id || PineconeDefaultIndex;
@@ -83,10 +86,35 @@ export class PineconeDatabase extends VectorDBBase {
         const result: BaseResponse = {
             message: "",
             success: true,
-            data: this.Pinecone.Index(name)
+            data: this.indexFor(name)
         };
 
         return result;
+    }
+
+    /** Each SDK Index compiles its own argument validators, so one is kept per index name. */
+    private indexFor(name: string): Index {
+        let index = this._indexes.get(name);
+        if (!index) {
+            index = this.Pinecone.Index(name);
+            this._indexes.set(name, index);
+        }
+        return index;
+    }
+
+    /** The SDK target for a namespace of an index, kept once per namespace for the same reason as {@link indexFor}. */
+    private inNamespace(index: Index, namespace: string): Index {
+        let byName = this._namespaces.get(index);
+        if (!byName) {
+            byName = new Map<string, Index>();
+            this._namespaces.set(index, byName);
+        }
+        let target = byName.get(namespace);
+        if (!target) {
+            target = index.namespace(namespace);
+            byName.set(namespace, target);
+        }
+        return target;
     }
 
     /**
@@ -116,6 +144,7 @@ export class PineconeDatabase extends VectorDBBase {
     public async DeleteIndex(params: BaseRequestParams): Promise<BaseResponse> {
         try{
             await this.Pinecone.deleteIndex(params.id);
+            this._indexes.delete(params.id);
             return this.wrapSuccessResponse(null);
         }
         catch(ex){
@@ -153,7 +182,7 @@ export class PineconeDatabase extends VectorDBBase {
                 ? providerConfig['namespace'] as string
                 : undefined;
 
-            const target = namespace ? index.namespace(namespace) : index;
+            const target = namespace ? this.inNamespace(index, namespace) : index;
             const result: QueryResponse = await target.query(queryParams as Parameters<typeof target.query>[0]);
             return this.wrapSuccessResponse(result);
         }
@@ -242,7 +271,7 @@ export class PineconeDatabase extends VectorDBBase {
                     if (existing) { existing.push(stripped[i]); } else { groups.set(ns, [stripped[i]]); }
                 }
                 for (const [ns, groupRecords] of groups) {
-                    const target = ns ? index.namespace(ns) : index;
+                    const target = ns ? this.inNamespace(index, ns) : index;
                     await target.upsert(groupRecords);
                 }
                 return this.wrapSuccessResponse(null);
@@ -334,7 +363,7 @@ export class PineconeDatabase extends VectorDBBase {
     /** A record's namespace: its directive, then the configured namespace, then the index default. */
     private namespaceFor(index: Index, directives?: Record<string, unknown>, providerConfig?: Record<string, unknown>): Index {
         const ns = this.resolveNamespaceName(directives, providerConfig);
-        return ns ? index.namespace(ns) : index;
+        return ns ? this.inNamespace(index, ns) : index;
     }
 
     public async DeleteRecord(record: VectorRecord, indexName?: string, providerConfig?: Record<string, unknown>): Promise<BaseResponse> {
@@ -368,7 +397,7 @@ export class PineconeDatabase extends VectorDBBase {
                     if (existing) { existing.push(record.id); } else { groups.set(ns, [record.id]); }
                 }
                 for (const [ns, ids] of groups) {
-                    const target = ns ? index.namespace(ns) : index;
+                    const target = ns ? this.inNamespace(index, ns) : index;
                     await target.deleteMany(ids);
                 }
                 return this.wrapSuccessResponse(null);
@@ -389,7 +418,7 @@ export class PineconeDatabase extends VectorDBBase {
         try {
             const index: Index = this.GetIndex({ id: indexName }).data;
             if (namespace) {
-                await index.namespace(namespace).deleteAll();
+                await this.inNamespace(index, namespace).deleteAll();
             } else {
                 await index.deleteAll();
             }
@@ -404,7 +433,7 @@ export class PineconeDatabase extends VectorDBBase {
     public async ListVectorIDs(params: ListVectorIDsParams): Promise<ListVectorIDsResult> {
         try {
             const index = this.GetIndex({ id: params.IndexName }).data;
-            const ns = params.Namespace ? index.namespace(params.Namespace) : index;
+            const ns = params.Namespace ? this.inNamespace(index, params.Namespace) : index;
 
             const listParams: Record<string, unknown> = {
                 limit: params.Limit ?? 100,

@@ -145,10 +145,28 @@ The `SystemPlaceholderManager` automatically injects common values into all prom
 | Export | Purpose |
 |---|---|
 | `ConversationUtility` | Helper for creating, loading, and managing conversation records |
+| `ParseMessageCitations` / `GetCachedMessageCitations` | Inline conversation citation parser for `[[Entity\|ID\|Label]]` and `@{type:"record"}` tokens |
+| `ParseDocRecordLinks` / `DeduplicateDocRecordLinks` / `BridgeDocLinksToCitationsAndArtifactUses` | Bidirectional `DocRecordLink` (`[[...]]` & durable `@{...}`) ↔ `MessageCitation` / `ArtifactUseCitationPayload` citation unification bridge (`doc-citation-bridge.ts`) |
+| `DocRecordLinkToMessageCitation` / `MessageCitationToDocRecordLink` / `FormatDocRecordLink` / `FormatMessageCitationAsDocLink` | Lossless conversion and canonical `[[...]]` round-trip formatting preserving entity, record, composite key, artifact ID, version ID, and version number metadata |
+| `DocRecordLinkToArtifactUse` / `MessageCitationToArtifactUse` / `RecordCitedArtifactUse` | Maps cited artifact links to strongly-typed `MJ: Artifact Uses` payloads (`UsageType: MJArtifactUseEntity['UsageType']`) and persists them with explicit `contextUser` forwarding |
 | `AgentResponseForm` | Structured response format definitions for agent outputs |
 | `ActionableCommand` / `AutomaticCommand` | UI command types for agent-driven interfaces |
 | `AgentPayloadChangeRequest` | Request to modify agent payload data during execution |
 | `ForEachOperation` / `WhileOperation` | Loop operation definitions for flow-based agents |
+
+### Executable Canon: Deterministic `TaskGraph` DAG Similarity & Workflow Health Telemetry (`task-graph/dag-similarity.ts`, `task-graph/workflow-telemetry.ts`)
+
+Pure, browser- and server-safe algorithms for comparing ad-hoc runtime `TaskGraphSpec` executions against saved canonized Flow workflows (`MJ: AI Agents` where `Type = 'Flow'`) and monitoring saved workflows for usage decay, exception spikes, outcome drift, and shadow bypasses. See the **[Canon-First Methodology & Semantic Graphs Guide](../../../guides/CANON_AND_SEMANTIC_GRAPHS_GUIDE.md)** for full details.
+
+| Export | Purpose |
+|---|---|
+| `CanonicalizeNodeSignature` | Normalizes any `TaskGraphSpecNode` (`Action`, `Agent`, `Prompt`, `Decision`, `ForEach`, `While`, `External`, `Human`) into a run-invariant operator token, optionally including sorted `inputPayload` keys |
+| `NormalizeEdgeConditionShape` | Normalizes dependency edge conditions into structural shape tokens (`unconditional`, `xor:cond(decisions)`, `cond(stepResult+payload)`) |
+| `ComputeDAGFingerprint` | Computes a `DAGFingerprint` with an isomorphism-invariant 64-bit hex `ExactStructureHash`, operator multiset, directed edge bigrams, 2-hop transitive reachability pairs (`opA ~> opB`), and 2-iteration Weisfeiler-Lehman (WL) bidirectional subtree features |
+| `CompareDAGFingerprints` / `ComputeDAGSimilarity` | Returns weighted `Overall`, `OperatorJaccard`, `EdgeBigramJaccard`, `TransitivePairJaccard`, `WLSubtreeCosine`, and `IsExactStructuralMatch` |
+| `DiffDAGFingerprints` | Computes `SharedOperators`, `AddedOperators`, `RemovedOperators`, `AddedEdges`, and `RemovedEdges` between a baseline and candidate DAG |
+| `DiscoverWorkflowPromotionCandidates` | Complete-linkage agglomerative clustering over executed ad-hoc task graphs, classifying each cluster against saved workflows as `PromoteToWorkflow`, `EvolveExistingWorkflow`, `ExistingWorkflowDiscoveryGap`, or `BelowPromotionThreshold` |
+| `EvaluateWorkflowCanonHealth` | Evaluates saved Flow workflows across trailing vs. baseline execution windows and ad-hoc clusters, surfacing `Dormant`, `UsageDecay` (with `DomainAdjustedVelocityRatio` to separate true abandonment from seasonal domain slowdowns), `ExceptionSpike` (with node-level `HotspotNodes`), `OutcomeDrift`, and `ShadowBypassed` |
 
 ## Usage
 
@@ -301,6 +319,42 @@ Provider mappings:
 - **Anthropic**: Thinking mode with 25K-2M token budgets
 - **Groq**: Experimental reasoning_effort parameter
 - **Gemini**: Reasoning mode intensity
+
+## Agent Configuration (`IAgentConfiguration`), Instances & Policy Ceiling Inheritance
+
+`@memberjunction/ai-core-plus` defines the unified 3-table **`IAgentConfiguration`** contract, bidirectional legacy-column sync helpers, per-agent `helperPlugins` security guards, instantiation schema helpers, strictest-wins chain policy intersection, and ancestor-clamped run-limit resolution used across server engines and Angular UI studios.
+
+### Unified 3-Table `IAgentConfiguration` (`agent-configuration.ts`)
+
+`IAgentConfiguration` is defined canonically in `metadata/entities/JSONType-interfaces/IAgentConfiguration.ts`, auto-copied into `packages/AI/CorePlus/src/JSONType-interfaces/IAgentConfiguration.ts` during `prebuild` (`npm run sync:json-types`), and re-exported from `agent-configuration.ts`. It powers the 3-table cascade (`AIAgentType.DefaultAgentConfiguration` → `AIAgentCategory.DefaultConfiguration` → `AIAgent.Configuration`), absorbing 49 operational columns from `MJ: AI Agents` and 7 context-window columns from `MJ: AI Agent Types` (kept bidirectionally synchronized through `v6.x` and slated for column removal in `v7.0`):
+
+| Export | Purpose |
+| --- | --- |
+| `IAgentConfiguration` | Strongly-typed 14-section configuration bag (`execution`, `contextWindow`, `memory`, `payload`, `subAgentExecution`, `attachments`, `artifacts`, `scope`, `skills`, `clientTools`, `recording`, `helperPlugins`, `instantiation`, `promptDefaults`). |
+| `ParseAgentConfiguration` | Tolerant, non-throwing JSON parser validating section types (`IsPlainObject` / `Array.isArray`). |
+| `DeepMergeAgentConfigurations` | Non-mutating recursive deep merge across AgentType → Category chain → `BaseAgentID` chain → Agent instance. |
+| `BuildAgentConfigurationFromLegacyFields` / `BuildAgentTypeConfigurationFromLegacyFields` | Extracts an `IAgentConfiguration` snapshot from deprecated legacy columns for dual-read fallback. |
+| `SyncAgentLegacyColumnsAndConfiguration` / `SyncAgentTypeLegacyColumnsAndConfiguration` | Pure bidirectional dirty-field sync core invoked by `MJAIAgentEntityServer.Save()` and `MJAIAgentTypeEntityServer.Save()`. |
+| `LegacyAIAgentConfigColumns` / `LegacyAIAgentTypeConfigColumns` | Exact `Pick<>` types enumerating the 49 + 7 legacy columns kept in sync during `v6.x`. |
+
+### Instantiation, Per-Agent `helperPlugins` Security & Policy Inheritance
+
+| Export | Module | Purpose |
+| --- | --- | --- |
+| `AgentInstantiationMode`, `MAX_AGENT_INHERITANCE_DEPTH` (5) | `agent-instantiation.ts` | Strongly-typed instantiation mode derived from `MJAIAgentEntity['InstantiationMode']` and the maximum prototype chain depth constant. |
+| `IAgentInstantiationConfig`, `IAgentPersonalityPreset`, `ParseAgentInstantiationConfig` | `agent-instantiation.ts` | Typed parser for `Configuration.instantiation` / `TypeConfiguration.instantiation` onboarding hints (suggested names, default icons, personality presets, `maxInstancesPerUser`). |
+| `AgentHelperPluginEntry`, `ParseAgentHelperPlugins` | `agent-instantiation.ts` | Typed schema & tolerant parser for admin-authored per-agent `helperPlugins` overrides (`{ seam, driverClass, priority? }`). |
+| `FORBIDDEN_METADATA_HELPER_SEAMS`, `IsForbiddenMetadataHelperSeam` | `agent-instantiation.ts` | Shared security guard blocking metadata overrides of code-only seams (`limits`, `actionPolicy`, `policy`, `permissions`, `permission`) at both entity-save and runtime resolution. |
+| `DeepMergeAgentConfigObjects`, `ParseAgentConfigJsonObject` | `agent-instantiation.ts` | Deterministic root → leaf JSON object merge for `TypeConfiguration` and `AgentTypePromptParams` across `BaseAgentID` chains. |
+| `AgentUserPolicyEngine.GetEffectivePolicyForAgentChain` / `IntersectPolicies` | `AgentUserPolicyEngine.ts` | Intersects active user policies across `[root … leaf]` using strictest-wins ceiling semantics without mutating underlying entities. |
+| `ResolveAgentRunLimits` (`AncestorAgents`, `AncestorUserPolicies`) | `limits-diagnostics.ts` | Clamps derived agent cost, token, time, and iteration ceilings against every ancestor agent and ancestor policy in the chain. |
+
+Canonical guides:
+- [Agent Administrator Guide](../../../guides/AGENT_ADMINISTRATOR_GUIDE.md)
+- [Agent Builder & Extension Guide](../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md)
+- [Agent End-User Guide](../../../guides/AGENT_END_USER_GUIDE.md)
+- [BaseAgent Rebase Map](../../../guides/BASE_AGENT_REBASE_MAP.md)
+- [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md)
 
 ## Dependencies
 

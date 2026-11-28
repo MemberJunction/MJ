@@ -1,5 +1,5 @@
 /**
- * user-routines.checks.ts — the 'user-routines' bundle (UR1–UR16): live, deterministic integration
+ * user-routines.checks.ts — the 'user-routines' bundle (UR1–UR18): live, deterministic integration
  * checks for the User Routines feature (P1.5) — the entity servers + the UserRoutineDispatcherDriver,
  * end to end against the real DB. Graduated VERBATIM from integration-test-scripts/user-routines-tests.ts
  * (check bodies unchanged; the shared closure state moved onto ctx.UserRoutinesFixture and the
@@ -10,6 +10,7 @@
  * run + assert the due one, UR13 re-arms it (OnChange), UR14 deletes it. Teardown removes every routine /
  * recipient / run / notification / conversation the bundle created, in FK-safe order.
  */
+import { randomUUID } from 'node:crypto';
 import { RunView, BaseEntity, CompositeKey } from '@memberjunction/core';
 import type { UserInfo, DatabaseProviderBase } from '@memberjunction/core';
 import {
@@ -69,6 +70,40 @@ async function fetchById(entity: string, id: string, user: UserInfo): Promise<Ro
     Assert(result.Success, `RunView('${entity}') failed: ${result.ErrorMessage}`);
     Assert(result.Results.length === 1, `${entity} ${id} not found (got ${result.Results.length} rows)`);
     return result.Results[0] as Row;
+}
+
+/** A scheduled-job lock procedure call with positional parameters, as the scheduling engine makes it. */
+function lockProcedureCall(provider: DatabaseProviderBase, name: string, params: string[]): string {
+    const placeholders = provider.PlatformKey === 'postgresql' ? params.map((_p, i) => `$${i + 1}`) : params.map((p, i) => `@${p}=@p${i}`);
+    return provider.Dialect.ProcedureCallSyntax(provider.MJCoreSchemaName, name, placeholders);
+}
+
+/**
+ * Takes the "User Routine Dispatcher" job lock as the scheduler does for a sweep, waiting out a sweep in flight. The
+ * checks run the driver directly; a server's every-minute sweep of the same database would otherwise claim and run the
+ * bundle's due routine too. Returns null when the job does not exist.
+ */
+async function takeDispatcherLock(provider: DatabaseProviderBase, user: UserInfo): Promise<{ JobID: string; Token: string } | null> {
+    const jobs = await new RunView().RunView<{ ID: string }>({
+        EntityName: 'MJ: Scheduled Jobs', ExtraFilter: `Name='User Routine Dispatcher'`, Fields: ['ID'], ResultType: 'simple',
+    }, user);
+    const jobID = jobs.Results?.[0]?.ID;
+    if (!jobID) {
+        return null;
+    }
+    const token = randomUUID();
+    for (const deadline = Date.now() + 60_000; Date.now() < deadline; await new Promise((r) => setTimeout(r, 500))) {
+        const rows = await provider.ExecuteSQL<{ Acquired: number }>(
+            lockProcedureCall(provider, 'spAcquireScheduledJobLock', ['JobID', 'Token', 'Instance', 'ExpectedCompletionAt']),
+            [jobID, token, 'user-routines integration bundle', new Date(Date.now() + 10 * 60_000)],
+            { isMutation: true, description: 'user-routines: hold the dispatcher job lock' },
+            user
+        );
+        if (rows?.[0]?.Acquired === 1) {
+            return { JobID: jobID, Token: token };
+        }
+    }
+    throw new Error('user-routines: the User Routine Dispatcher job lock stayed taken for 60 s');
 }
 
 async function fetchRuns(routineId: string, user: UserInfo): Promise<Row[]> {
@@ -502,6 +537,55 @@ export const UserRoutinesChecks: NamedCheck[] = [
             const second = await driver.EnsureRoutineConversation(r, user);
             AssertEqual(String(second), String(first), 'second call must return the SAME conversation, not create another');
         }
+    },
+    // ── Manual run (Wake Now) — RunRoutineNow skips the claim, so the schedule survives ────
+    {
+        Id: 'user-routines.UR17',
+        Name: 'UR17: RunRoutineNow runs a one-shot with a future wake and leaves it Active with the same NextRunAt',
+        Fn: async (ctx) => {
+            const user = ctx.User;
+            const scheduledFor = new Date(Date.now() + 24 * 60 * 60 * 1000);
+            const r = await makeRoutine(ctx, 'Manual Run OneShot', (x) => {
+                x.Status = 'Active';
+                x.ScheduleMode = 'OneShot';
+                x.CronExpression = null;
+                x.NextRunAt = scheduledFor;
+                x.StartingPayload = JSON.stringify({ Expression: '6*7' });
+            });
+            const before = await fetchById('MJ: User Routines', r.ID, user);
+            const stored = new Date(String(before.NextRunAt)).getTime();
+
+            const summary = await new UserRoutineDispatcherDriver().RunRoutineNow(r, user);
+            AssertEqual(summary.RunStatus, 'Success', `manual run must succeed (got ${summary.RunStatus})`);
+
+            const after = await fetchById('MJ: User Routines', r.ID, user);
+            AssertEqual(String(after.Status), 'Active', 'a one-shot run early must stay Active');
+            Assert(after.NextRunAt != null, 'a one-shot run early must keep its NextRunAt');
+            AssertEqual(new Date(String(after.NextRunAt)).getTime(), stored, 'NextRunAt must be exactly the scheduled time');
+            AssertEqual((await fetchRuns(r.ID, user)).length, 1, 'the manual run must leave exactly one run row');
+        }
+    },
+    {
+        Id: 'user-routines.UR18',
+        Name: 'UR18: RunRoutineNow on a spent one-shot runs it once and leaves it spent (Disabled, no NextRunAt invented)',
+        Fn: async (ctx) => {
+            const user = ctx.User;
+            const r = await makeRoutine(ctx, 'Manual Run Spent', (x) => {
+                x.Status = 'Disabled';
+                x.ScheduleMode = 'OneShot';
+                x.CronExpression = null;
+                x.NextRunAt = null;
+                x.StartingPayload = JSON.stringify({ Expression: '6*7' });
+            });
+
+            const summary = await new UserRoutineDispatcherDriver().RunRoutineNow(r, user);
+            AssertEqual(summary.RunStatus, 'Success', `manual run must succeed (got ${summary.RunStatus})`);
+
+            const after = await fetchById('MJ: User Routines', r.ID, user);
+            AssertEqual(String(after.Status), 'Disabled', 'a spent one-shot stays Disabled');
+            Assert(after.NextRunAt == null, 'no NextRunAt may be invented for a spent one-shot');
+            AssertEqual((await fetchRuns(r.ID, user)).length, 1, 'the manual run must leave exactly one run row');
+        }
     }
 ];
 
@@ -527,6 +611,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('user-routines', {
             CreatedConversationIds: [],
             FirstRunId: null,
         };
+        ctx.UserRoutinesFixture.DispatcherLock = await takeDispatcherLock(prov(ctx), user);
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const f = ctx.UserRoutinesFixture;
@@ -589,6 +674,14 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('user-routines', {
         for (const id of f.CreatedRoutineIds) await del('MJ: User Routines', id);
         // Conversations AFTER routines — UserRoutine.ConversationID FK-references them.
         for (const id of f.CreatedConversationIds) await del('MJ: Conversations', id);
+        if (f.DispatcherLock) {
+            await provider.ExecuteSQL(
+                lockProcedureCall(provider, 'spReleaseScheduledJobLockIfTokenMatches', ['JobID', 'ExpectedToken']),
+                [f.DispatcherLock.JobID, f.DispatcherLock.Token],
+                { isMutation: true, description: 'user-routines: release the dispatcher job lock' },
+                user
+            );
+        }
         ctx.UserRoutinesFixture = undefined;
     }
 });

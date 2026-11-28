@@ -187,7 +187,7 @@ describe('WorkQueueHost reconcile', () => {
 });
 
 describe('WorkQueueHost sweeper and shutdown', () => {
-    it('runs the sweeper on its interval and survives a failing pass', async () => {
+    it('runs the sweeper on its interval and reports a failing pass as { Pass: -1 }', async () => {
         vi.useFakeTimers();
         const { Engine } = BuildHostScenario();
         const runOnce = vi.fn<HostSweeper['RunOnce']>()
@@ -199,7 +199,7 @@ describe('WorkQueueHost sweeper and shutdown', () => {
         expect(runOnce).toHaveBeenCalledTimes(1);
         await vi.advanceTimersByTimeAsync(1000);
         expect(runOnce).toHaveBeenCalledTimes(2);
-        await expect(Host.RunSweeperOnce()).resolves.toEqual({});
+        await expect(Host.RunSweeperOnce()).resolves.toEqual({ Pass: -1 });
     });
 
     it('shuts down once, stops every runtime, closes every consumer, clears Active and unregisters', async () => {

@@ -26,6 +26,7 @@ import { MjCollapsiblePanelComponent } from './panel/collapsible-panel.component
 import { FormNavigationEvent } from './types/navigation-events';
 import {
   FormContext,
+  FormModeSwitch,
   FormNotificationEvent,
   RecordSavedEvent,
   RecordRefreshedEvent,
@@ -43,6 +44,12 @@ import { FORM_PLACEMENT_PREVIEW } from './panel-slot/placement-preview';
 import { FormContextsEqual } from './base-form-component-internals';
 import { ContributionClaimedFieldNames, ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
 import { DuplicateEntryCheckController, type DuplicateEntryCheckValue } from './duplicate-entry-check/duplicate-entry-check';
+
+/** Options for {@link BaseFormComponent.RefreshRecord}. */
+export interface RefreshRecordOptions {
+  /** Show the "Record refreshed" notification after a successful reload. Default true. */
+  ShowSuccessNotification?: boolean;
+}
 
 /**
  * Abstract base class for all entity record forms in MemberJunction.
@@ -104,6 +111,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public OnVariantChanged: (variantID: string | null) => void = (_id) => {
     // host installs the real handler post-construction
   };
+
+  /**
+   * Callback supplied by `MjEntityFormHostComponent` when the entity has both a
+   * custom form and a CodeGen standard form, allowing the toolbar's phone View
+   * sheet to switch between them.
+   */
+  public FormModeSwitch: FormModeSwitch | null = null;
   public isHistoryDialogOpen: boolean = false;
   public IsTagsPanelOpen: boolean = false;
   public TagCount: number = 0;
@@ -313,6 +327,10 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   @Output() AskAIRequested = new EventEmitter<void>();
 
   private readonly _formPanels = new Set<BaseFormPanel>();
+  private readonly _subtypeValidators = new Set<{
+    Validate(): ValidationResult | Promise<ValidationResult>;
+    LastKnownValidation(): ValidationResult;
+  }>();
 
   /** Slot hosts register every mounted panel so validation can include panel-owned checks. */
   public RegisterFormPanel(panel: BaseFormPanel): void {
@@ -321,6 +339,21 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public UnregisterFormPanel(panel: BaseFormPanel): void {
     this._formPanels.delete(panel);
+  }
+
+  /** Folded subtype sections register custom UIDriver validators so SaveRecord awaits them. */
+  public RegisterSubtypeValidator(validator: {
+    Validate(): ValidationResult | Promise<ValidationResult>;
+    LastKnownValidation(): ValidationResult;
+  }): void {
+    this._subtypeValidators.add(validator);
+  }
+
+  public UnregisterSubtypeValidator(validator: {
+    Validate(): ValidationResult | Promise<ValidationResult>;
+    LastKnownValidation(): ValidationResult;
+  }): void {
+    this._subtypeValidators.delete(validator);
   }
 
   /**
@@ -430,8 +463,38 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * (the AI Agent form's "Remove action", added actions and prompts), and `CancelEdit` reverts
    * saves but leaves delete entries in the list, so outside edit mode they are stale.
    */
+  /**
+   * True when `SubtypeSelector.FoldIntoForm` is enabled and any folded `ISAChild` record
+   * holds dirty own-field edits.
+   */
+  public get IsFoldedSubtypeDirty(): boolean {
+    return this.FoldedSubtypeDirtyFieldNames.length > 0;
+  }
+
+  /**
+   * Dirty own-field names across any folded `ISAChild` chain when `FoldIntoForm` is enabled.
+   */
+  public get FoldedSubtypeDirtyFieldNames(): string[] {
+    if (!this.record || this.record.EntityInfo?.SubtypeSelectorConfig?.FoldIntoForm !== true) {
+      return [];
+    }
+    const dirtyNames: string[] = [];
+    let current = this.record.ISAChild;
+    while (current) {
+      const parentNames = current.EntityInfo.ParentEntityFieldNames;
+      for (const f of current.Fields) {
+        if (!f.EntityFieldInfo.IsPrimaryKey && !parentNames.has(f.Name) && f.Dirty) {
+          dirtyNames.push(f.Name);
+        }
+      }
+      current = current.EntityInfo.SubtypeSelectorConfig?.FoldIntoForm ? current.ISAChild : null;
+    }
+    return dirtyNames;
+  }
+
   public get HasUnsavedChangesBeyondRecord(): boolean {
     if (this.HasAdditionalUnsavedChanges) return true;
+    if (this.IsFoldedSubtypeDirty) return true;
     const isUnsaved = (p: PendingRecordItem): boolean => p.action === 'delete' || p.entityObject.Dirty;
     if (this.EditMode && this._pendingRecords.some(isUnsaved)) return true;
     const reported = this.RaiseEvent(BaseFormComponentEventCodes.POPULATE_PENDING_RECORDS).pendingChanges;
@@ -519,7 +582,10 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (this._omitLastKnownPanelValidation) {
       return valResults;
     }
-    return MergePanelValidation(valResults, [...this._formPanels].map((panel) => panel.LastKnownValidation()));
+    return MergePanelValidation(valResults, [
+      ...[...this._formPanels].map((panel) => panel.LastKnownValidation()),
+      ...[...this._subtypeValidators].map((v) => v.LastKnownValidation()),
+    ]);
   }
 
   /** True only while {@link ValidateAsync} calls {@link Validate}: the awaited panel results take the place of the last-known ones. */
@@ -545,12 +611,16 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     } finally {
       this._omitLastKnownPanelValidation = false;
     }
-    const panelResults = await Promise.all([...this._formPanels].map((panel) => panel.Validate()));
+    const panelResults = await Promise.all([
+      ...[...this._formPanels].map((panel) => panel.Validate()),
+      ...[...this._subtypeValidators].map((v) => v.Validate()),
+    ]);
     return MergePanelValidation(base, panelResults);
   }
 
   private validateRecordAndPending(): ValidationResult {
-    const valResults = (<BaseEntity>this.record).Validate();
+    const targetRecord = this.foldedValidationTarget(<BaseEntity>this.record);
+    const valResults = targetRecord.Validate();
     const pendingValResults = this.ValidatePendingRecords();
     for (let i = 0; i < pendingValResults.length; i++) {
       const pendingValResult = pendingValResults[i];
@@ -560,6 +630,14 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       }
     }
     return valResults;
+  }
+
+  private foldedValidationTarget(record: BaseEntity): BaseEntity {
+    let current = record;
+    while (current.EntityInfo?.SubtypeSelectorConfig?.FoldIntoForm === true && current.ISAChild) {
+      current = current.ISAChild;
+    }
+    return current;
   }
 
   protected RaiseEvent(eventCode: BaseFormComponentEventCodes) {
@@ -653,9 +731,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       // can tell the host to dismiss the form (there's nothing to view).
       const wasNeverSaved = !r.IsSaved;
 
-      if (r.Dirty || this.PendingRecordsDirty()) {
+      if (r.Dirty || this.IsFoldedSubtypeDirty || this.PendingRecordsDirty()) {
         // Revert is safe here — the toolbar's discard dialog already confirmed with the user
-        r.Revert();
+        const leaf = this.foldedValidationTarget(r);
+        leaf.Revert();
+        if (r.EntityInfo?.SubtypeSelectorConfig?.FoldIntoForm === true) {
+          void r.ReconcileISAChild();
+        }
 
         const pendingRecords = this.PendingRecords;
         if (pendingRecords && pendingRecords.length > 0) {
@@ -685,9 +767,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * record. Related-entity grids are notified via the form container's
    * {@link FormRecordRefreshCoordinator} after this emits {@link RecordRefreshed}.
    *
+   * @param options `ShowSuccessNotification: false` skips the "Record refreshed" notification;
+   *   failure notifications still show.
    * @returns true if the record was reloaded from the database.
    */
-  public async RefreshRecord(): Promise<boolean> {
+  public async RefreshRecord(options?: RefreshRecordOptions): Promise<boolean> {
     if (!this.canRefreshRecord()) {
       return false;
     }
@@ -696,7 +780,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     this.cdr.markForCheck();
 
     try {
-      return await this.executeRecordRefresh();
+      return await this.executeRecordRefresh(options?.ShowSuccessNotification ?? true);
     } finally {
       this.IsRefreshing = false;
       this.cdr.markForCheck();
@@ -707,7 +791,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return !!this.record && this.record.IsSaved && !this.EditMode;
   }
 
-  private async executeRecordRefresh(): Promise<boolean> {
+  private async executeRecordRefresh(showSuccessNotification: boolean): Promise<boolean> {
     const record = this.record;
     if (!record) {
       return false;
@@ -725,11 +809,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       }
 
       await this.reloadFavoriteStatusAfterRefresh(record);
-      this.Notification.emit({
-        Message: 'Record refreshed from database',
-        Type: 'info',
-        Duration: 2000,
-      });
+      if (showSuccessNotification) {
+        this.Notification.emit({
+          Message: 'Record refreshed from database',
+          Type: 'info',
+          Duration: 2000,
+        });
+      }
       this.RecordRefreshed.emit({
         EntityName: record.EntityInfo.Name,
         Record: record,
@@ -1354,9 +1440,16 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * matches an empty Source) but still belong in the toast.
    */
   private fieldSourcedServerErrors(): ValidationErrorInfo[] {
-    const errors = DeserializeValidationErrors(this.record?.LatestResult?.Errors);
-    if (errors.length === 0) return [];
+    const target = this.record ? this.foldedValidationTarget(this.record) : null;
+    const rawErrors = target?.LatestResult?.Errors?.length ? target.LatestResult.Errors : this.record?.LatestResult?.Errors;
+    const errors = DeserializeValidationErrors(rawErrors);
+    if (errors.length === 0 || !this.record) return [];
     const fieldNames = new Set(this.record.EntityInfo.Fields.map(f => f.Name));
+    if (target && target !== this.record) {
+      for (const f of target.EntityInfo.Fields) {
+        fieldNames.add(f.Name);
+      }
+    }
     return errors.some(e => e.Source.length > 0 && fieldNames.has(e.Source)) ? errors : [];
   }
 

@@ -3,13 +3,15 @@ import { AppContext } from '../types.js';
 import { RunViewByIDInput } from '../generic/RunViewResolver.js';
 import { Message } from '@memberjunction/communication-types';
 import { EntityCommunicationsEngine } from '@memberjunction/entity-communications-server';
-import { DatabaseProviderBase, IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import { CompositeKey, DatabaseProviderBase, IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
 import { z } from 'zod';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { RefuseImpersonationSessions, RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { AssertNotImpersonationSession } from '../auth/impersonationGuard.js';
 import { GetReadOnlyProvider } from '../util.js';
 
 @InputType()
@@ -168,6 +170,7 @@ export class RunEntityCommunicationResultType {
   public Results?: any;
 }
 
+@RefuseScopeLimitedPrincipals()
 @Resolver(RunEntityCommunicationResultType)
 export class ReportResolver extends ResolverBase {
   /**
@@ -175,6 +178,7 @@ export class ReportResolver extends ResolverBase {
    * run as the authenticated user, so a preview returns and a send merges only rows and fields that
    * user may read. The view's client-supplied clauses get the same screen as a RunView request.
    */
+  @RefuseImpersonationSessions()
   @Query(() => RunEntityCommunicationResultType)
   async RunEntityCommunicationByViewID(
     @Arg('entityID', () => String) entityID: string,
@@ -186,6 +190,7 @@ export class ReportResolver extends ResolverBase {
     @Arg('includeProcessedMessages', () => Boolean) includeProcessedMessages: boolean,
     @Ctx() { userPayload, providers }: AppContext
   ): Promise<RunEntityCommunicationResultType> {
+    AssertNotImpersonationSession(userPayload, 'RunEntityCommunicationByViewID');
     // Check API key scope authorization for communication send
     await this.CheckAPIKeyScopeAuthorization('communication:send', entityID, userPayload);
 
@@ -207,9 +212,24 @@ export class ReportResolver extends ResolverBase {
 
       await EntityCommunicationsEngine.Instance.Config(false, contextUser);
       const newMessage = await this.resolveMessageTemplates(message, contextUser);
+      const {
+        Filter: rawFilter,
+        ResultType: rawResultType,
+        AfterKey: rawAfterKey,
+        ...restRunViewInput
+      } = runViewByIDInput;
+      const runViewParams: RunViewParams = {
+        ...restRunViewInput,
+        AfterKey: rawAfterKey?.KeyValuePairs ? CompositeKey.FromKeyValuePairs(rawAfterKey.KeyValuePairs) : undefined,
+        ResultType:
+          rawResultType === 'entity_object' || rawResultType === 'count_only' || rawResultType === 'simple'
+            ? rawResultType
+            : undefined,
+        Filter: this.parseStructuredRunViewFilter(rawFilter),
+      };
       const params: EntityCommunicationParams = {
         EntityID: entityID,
-        RunViewParams: <RunViewParams>runViewByIDInput,
+        RunViewParams: runViewParams,
         ProviderName: providerName,
         ProviderMessageTypeName: providerMessageTypeName,
         Message: newMessage,

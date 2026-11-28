@@ -71,7 +71,10 @@ const { mockTryGetCachedRecords, mockActionEngineBaseConfig, actionEngineBaseSta
     actionEngineBaseState: { actions: [] as any[] },
 }));
 
-vi.mock('@memberjunction/core', () => ({
+vi.mock('@memberjunction/core', async () => ({
+    // The real SharedLoad, so Config's load sharing runs as it does in production. Imported from its
+    // own module: the whole of @memberjunction/core would load the @memberjunction/global mocked here.
+    SharedLoad: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core/dist/generic/sharedLoad.js')).SharedLoad,
     BaseEntity: class BaseEntity {
         // Matches the real BaseEntity.BaseEventCode static used by the catalog listener
         // to distinguish BaseEntity events from other ComponentEvents on the global bus.
@@ -121,7 +124,7 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
-    const { ToEpochMs, Float32VectorToBase64, Base64ToFloat32Vector } = await importOriginal<typeof import('@memberjunction/global')>();
+    const { ToEpochMs, Float32VectorToBase64, Base64ToFloat32Vector, UUIDSet } = await importOriginal<typeof import('@memberjunction/global')>();
     // Minimal in-memory LRU stand-in — the real MJLruCache is in @memberjunction/global
     // but the mock above replaces the entire module export, so we re-implement just
     // the surface AIEngine uses.
@@ -169,6 +172,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
                         ChatCompletions: vi.fn(),
                         EmbedText: vi.fn(),
                     }),
+                    GetRegistration: vi.fn().mockReturnValue(null),
                 },
                 GetEventListener: vi.fn().mockReturnValue(eventListener),
             }
@@ -196,6 +200,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
         // nothing, and a hand-rolled copy would drift from the contract MJGlobal's own
         // util.toEpochMs.test.ts pins. importOriginal only evaluates the module; the
         // singletons this mock replaces are created lazily, so none are instantiated.
+        UUIDSet,
         ToEpochMs,
         // Real binary-vector codecs — the stored-vector tests encode with one and
         // ReadStoredVector (real, below) decodes with the other.
@@ -203,6 +208,10 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
         Base64ToFloat32Vector,
     };
 });
+
+vi.mock('@memberjunction/dynamic-packages', () => ({
+    ImportFromHost: vi.fn().mockResolvedValue({}),
+}));
 
 vi.mock('@memberjunction/core-entities', () => ({
     // Real behaviour, mirroring INJECTABLE_NOTE_STATUSES — the fallback-cache note filter calls
@@ -309,6 +318,7 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
 // on what RefreshNoteEmbeddings / RefreshExampleEmbeddings handed to LoadVectors.
 const { createdVectorServices } = vi.hoisted(() => ({
     createdVectorServices: [] as Array<{
+        options: unknown;
         LoadVectors: ReturnType<typeof vi.fn>;
         AddOrUpdateVector: ReturnType<typeof vi.fn>;
         RemoveVector: ReturnType<typeof vi.fn>;
@@ -322,6 +332,7 @@ vi.mock('@memberjunction/ai-vectors-memory', async (importOriginal) => {
     return {
         ReadStoredVector,
         SimpleVectorService: class SimpleVectorService<T = unknown> {
+            options: unknown;
             LoadVectors = vi.fn();
             AddOrUpdateVector = vi.fn();
             RemoveVector = vi.fn().mockReturnValue(true);
@@ -329,7 +340,10 @@ vi.mock('@memberjunction/ai-vectors-memory', async (importOriginal) => {
             FindSimilar = vi.fn().mockReturnValue([]);
             Similarity = vi.fn().mockReturnValue(0);
             Has = vi.fn().mockReturnValue(false);
-            constructor() { createdVectorServices.push(this); }
+            constructor(options?: unknown) {
+                this.options = options;
+                createdVectorServices.push(this);
+            }
         },
         VectorEntry: class VectorEntry {},
     };
@@ -358,6 +372,7 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 
 import { AIEngine, AIActionParams, EntityAIActionParams } from '../AIEngine';
 import { MJGlobal, Float32VectorToBase64 } from '@memberjunction/global';
+import { ImportFromHost } from '@memberjunction/dynamic-packages';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { LogError, LogWarning } from '@memberjunction/core';
 import type { ChatMessageContent } from '@memberjunction/ai';
@@ -565,10 +580,11 @@ describe('AIEngine', () => {
         }
 
         const invalidatingEntities = [
-            'AI Agents',
+            'MJ: AI Agents',
             'MJ: AI Agent Actions',
             'MJ: AI Agent Relationships',
             'MJ: AI Agent Types',
+            'MJ: AI Agent Configurations',
         ];
         const invalidatingEventTypes: Array<'save' | 'delete' | 'remote-invalidate'> = [
             'save', 'delete', 'remote-invalidate',
@@ -591,7 +607,7 @@ describe('AIEngine', () => {
 
         it('is case-insensitive on the entity name (lowercased comparison)', () => {
             const e = primeEngineWithCatalog();
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'ai AGENTS' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'mj: ai AGENTS' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toBeUndefined();
         });
 
@@ -618,21 +634,21 @@ describe('AIEngine', () => {
             // e.g. a 'new_record' / 'transaction_complete' event must be ignored — only
             // save/delete/remote-invalidate trigger a wipe.
             const e = primeEngineWithCatalog();
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'new_record', entityName: 'AI Agents' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'new_record', entityName: 'MJ: AI Agents' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toEqual({ v: 1 });
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'transaction_complete', entityName: 'AI Agents' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'transaction_complete', entityName: 'MJ: AI Agents' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toEqual({ v: 1 });
         });
 
         it('ignores non-BaseEntity ComponentEvents (wrong eventCode)', () => {
             const e = primeEngineWithCatalog();
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'AI Agents', eventCode: 'SomeOtherCode' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'MJ: AI Agents', eventCode: 'SomeOtherCode' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toEqual({ v: 1 });
         });
 
         it('ignores events whose event type is not ComponentEvent', () => {
             const e = primeEngineWithCatalog();
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'AI Agents', event: 'LoggingEnabledChanged' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'MJ: AI Agents', event: 'LoggingEnabledChanged' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toEqual({ v: 1 });
         });
 
@@ -646,7 +662,7 @@ describe('AIEngine', () => {
 
         it('a fresh catalog set after a wipe survives until the next invalidating event', () => {
             const e = primeEngineWithCatalog();
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'delete', entityName: 'AI Agents' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'delete', entityName: 'MJ: AI Agents' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toBeUndefined();
 
             e.SetAgentBaseCatalog('agent-3', { v: 3 });
@@ -1094,6 +1110,32 @@ describe('AIEngine', () => {
     // GetStringOutputFromActionResults (protected)
     // ======================================================================
 
+    describe('getDriver', () => {
+        type DriverModel = { DriverClass: string; DriverImportPath: string | null };
+        function callGetDriver(model: DriverModel): Promise<unknown> {
+            return (engine as unknown as { getDriver(m: DriverModel, key: string): Promise<unknown> }).getDriver(model, 'key');
+        }
+
+        it('loads DriverImportPath from the host when the driver class is not registered (#3741)', async () => {
+            await callGetDriver({ DriverClass: 'CustomLLM', DriverImportPath: '@acme/custom-llm' });
+            expect(ImportFromHost).toHaveBeenCalledWith('@acme/custom-llm');
+            expect(MJGlobal.Instance.ClassFactory.CreateInstance).toHaveBeenCalled();
+        });
+
+        it('skips the import when the driver class is already registered', async () => {
+            vi.mocked(MJGlobal.Instance.ClassFactory.GetRegistration).mockReturnValueOnce({} as ReturnType<typeof MJGlobal.Instance.ClassFactory.GetRegistration>);
+            await callGetDriver({ DriverClass: 'OpenAILLM', DriverImportPath: '@memberjunction/ai-openai' });
+            expect(ImportFromHost).not.toHaveBeenCalled();
+            expect(MJGlobal.Instance.ClassFactory.CreateInstance).toHaveBeenCalled();
+        });
+
+        it('wraps an import failure with the driver names', async () => {
+            vi.mocked(ImportFromHost).mockRejectedValueOnce(new Error("Cannot find package '@acme/missing'"));
+            await expect(callGetDriver({ DriverClass: 'MissingLLM', DriverImportPath: '@acme/missing' }))
+                .rejects.toThrow("Error loading driver '@acme/missing' / 'MissingLLM' : Cannot find package '@acme/missing'");
+        });
+    });
+
     describe('GetStringOutputFromActionResults', () => {
         function callGetStringOutput(actionName: string, result: Record<string, unknown>): string {
             const action = { Name: actionName };
@@ -1384,6 +1426,48 @@ describe('AIEngine', () => {
     // ======================================================================
     // Loaded property
     // ======================================================================
+
+    describe('Config load sharing', () => {
+        /** Replaces the load with one that records its forceRefresh and lands when the test releases it. */
+        function gateLoads(): { Calls: Array<boolean | undefined>; Release: () => void } {
+            const calls: Array<boolean | undefined> = [];
+            const pending: Array<() => void> = [];
+            (engine as unknown as { innerLoad: (forceRefresh?: boolean) => Promise<void> }).innerLoad = (forceRefresh) => {
+                calls.push(forceRefresh);
+                return new Promise<void>((resolve) => pending.push(resolve));
+            };
+            (engine as unknown as Record<string, unknown>)['_loaded'] = false;
+            return { Calls: calls, Release: () => pending.shift()!() };
+        }
+
+        const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+        it('REGRESSION: a forced Config during a running load runs another load after it', async () => {
+            const loads = gateLoads();
+            const running = engine.Config(false, {} as never);
+            const forced = engine.Config(true, {} as never);
+            expect(loads.Calls).toEqual([false]);
+
+            loads.Release();
+            await running;
+            await settle();
+            expect(loads.Calls).toEqual([false, true]);
+
+            loads.Release();
+            await forced;
+        });
+
+        it('a Config without forceRefresh joins the running load', async () => {
+            const loads = gateLoads();
+            const running = engine.Config(true, {} as never);
+            const joined = engine.Config(false, {} as never);
+
+            loads.Release();
+            await Promise.all([running, joined]);
+            await settle();
+            expect(loads.Calls).toEqual([true]);
+        });
+    });
 
     describe('Loaded', () => {
         it('should return false when engine is not loaded', () => {
@@ -1907,6 +1991,53 @@ describe('AIEngine', () => {
     });
 
     // ======================================================================
+    // FindActiveAgentConfigurationPreset
+    // ======================================================================
+    describe('FindActiveAgentConfigurationPreset', () => {
+        it('matches Name before DisplayName, trims and compares case-insensitively, and excludes inactive presets', () => {
+            const activePresets = [
+                {
+                    ID: 'p-1',
+                    AgentID: 'agent-1',
+                    Name: 'Standard',
+                    DisplayName: 'Draft',
+                    Status: 'Active',
+                },
+                {
+                    ID: 'p-2',
+                    AgentID: 'agent-1',
+                    Name: 'Draft',
+                    DisplayName: 'Draft Mode (Fast)',
+                    Status: 'Active',
+                },
+            ];
+            mockBaseInstance.GetAgentConfigurationPresets.mockImplementation((agentId: string, activeOnly = true) => {
+                if (agentId !== 'agent-1') return [];
+                const all = [
+                    ...activePresets,
+                    {
+                        ID: 'p-inactive',
+                        AgentID: 'agent-1',
+                        Name: 'Retired',
+                        DisplayName: 'Retired Mode',
+                        Status: 'Inactive',
+                    },
+                ];
+                return activeOnly ? all.filter((p) => p.Status === 'Active') : all;
+            });
+
+            // Name beats DisplayName when another preset has DisplayName='Draft'
+            expect(engine.FindActiveAgentConfigurationPreset('agent-1', '  draft  ')?.ID).toBe('p-2');
+            // Falls back to DisplayName when no Name matches, trimmed and case-insensitive
+            expect(engine.FindActiveAgentConfigurationPreset('agent-1', '  DRAFT MODE (FAST) ')?.ID).toBe('p-2');
+            // Excludes inactive presets because GetAgentConfigurationPresets(agentId, true) is used
+            expect(engine.FindActiveAgentConfigurationPreset('agent-1', 'Retired')).toBeUndefined();
+            // Blank presetName returns undefined
+            expect(engine.FindActiveAgentConfigurationPreset('agent-1', '   ')).toBeUndefined();
+        });
+    });
+
+    // ======================================================================
     // Startup Registration & delayed startup
     // ======================================================================
     describe('default local embedding model and model-aware loading', () => {
@@ -2046,6 +2177,39 @@ describe('AIEngine', () => {
             expect(embedLocal).toHaveBeenCalledWith('what charts does the user like?', { inputType: 'query' });
         });
 
+        it('skips query embedding in FindSimilarAgentNotes and FindSimilarAgentExamples when no vector candidate matches filter', async () => {
+            const engine2 = TestableAIEngine.CreateForTest();
+            const findNearestNotes = vi.fn().mockResolvedValue([]);
+            const findNearestExamples = vi.fn().mockResolvedValue([]);
+            const hasMatchingNotes = vi.fn().mockReturnValue(false);
+            const hasMatchingExamples = vi.fn().mockReturnValue(false);
+            engine2.setNoteVectorServiceForTest({
+                RemoveVector: vi.fn(),
+                AddOrUpdateVector: vi.fn(),
+                FindNearestAsync: findNearestNotes,
+                HasMatching: hasMatchingNotes,
+            } as never);
+            engine2.setExampleVectorServiceForTest({
+                RemoveVector: vi.fn(),
+                AddOrUpdateVector: vi.fn(),
+                FindNearestAsync: findNearestExamples,
+                HasMatching: hasMatchingExamples,
+            } as never);
+            const embedLocal = vi.spyOn(engine2, 'EmbedTextLocal');
+            vi.spyOn(engine2 as unknown as { ensureEmbeddingsGenerated: () => Promise<void> }, 'ensureEmbeddingsGenerated').mockResolvedValue();
+
+            const notes = await engine2.FindSimilarAgentNotes('what charts?', 'agent-empty');
+            const examples = await engine2.FindSimilarAgentExamples('how to query?', 'agent-empty');
+
+            expect(notes).toEqual([]);
+            expect(examples).toEqual([]);
+            expect(hasMatchingNotes).toHaveBeenCalledTimes(1);
+            expect(hasMatchingExamples).toHaveBeenCalledTimes(1);
+            expect(embedLocal).not.toHaveBeenCalled();
+            expect(findNearestNotes).not.toHaveBeenCalled();
+            expect(findNearestExamples).not.toHaveBeenCalled();
+        });
+
         it('loads only notes embedded by the default model, and warns with the count left out', () => {
             const vec = JSON.stringify([1, 0]);
             const note = (id: string, modelID: string | null, json: string | null = vec) => ({
@@ -2060,6 +2224,17 @@ describe('AIEngine', () => {
                 expect(loaded.map(e => e.key)).toEqual(['current']);
                 expect(vi.mocked(LogWarning)).toHaveBeenCalledWith(expect.stringContaining('left out 2 agent note(s)'));
             });
+        });
+
+        it('constructs both _noteVectorService and _exampleVectorService with Precision: float32', async () => {
+            createdVectorServices.length = 0;
+            base.AgentNotes = [];
+            base.AgentExamples = [];
+            await engine.RefreshNoteEmbeddings();
+            await engine.RefreshExampleEmbeddings();
+            expect(createdVectorServices).toHaveLength(2);
+            expect(createdVectorServices[0].options).toEqual({ Precision: 'float32' });
+            expect(createdVectorServices[1].options).toEqual({ Precision: 'float32' });
         });
 
         it('drops a saved note embedded by another model instead of adding it to the index', () => {

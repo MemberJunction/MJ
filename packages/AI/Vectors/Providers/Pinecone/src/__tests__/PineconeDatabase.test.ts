@@ -121,6 +121,12 @@ describe('PineconeDatabase', () => {
       expect(result.success).toBe(true);
       expect(mockIndex).toHaveBeenCalledWith('test-default-index');
     });
+
+    it('should create the SDK Index object once per index name', () => {
+      db.GetIndex({ id: 'my-index' } as never);
+      db.GetIndex({ id: 'my-index' } as never);
+      expect(mockIndex).toHaveBeenCalledTimes(1);
+    });
   });
 
   /* ---- ListIndexes ---- */
@@ -251,6 +257,12 @@ describe('PineconeDatabase', () => {
       expect(result.success).toBe(true);
       expect(mockIndexInstance.namespace).toHaveBeenCalledWith('my-namespace');
       expect(mockNsDeleteAll).toHaveBeenCalled();
+    });
+
+    it('should create the SDK namespace object once per namespace', async () => {
+      await db.DeleteAllRecords('mj-knowledge-index', 'my-namespace');
+      await db.DeleteAllRecords('mj-knowledge-index', 'my-namespace');
+      expect(mockIndexInstance.namespace).toHaveBeenCalledTimes(1);
     });
 
     it('should return failure on error', async () => {

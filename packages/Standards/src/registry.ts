@@ -14,6 +14,10 @@ import { NamingConventionsCheck } from './checks/naming-conventions.js';
 import { PolymorphicFKCheck } from './checks/polymorphic-fk.js';
 import { MigrationExistenceGuardsCheck } from './checks/migration-existence-guards.js';
 import { ReadableStatusValuesCheck } from './checks/readable-status-values.js';
+import { MigrationStringCollationCheck } from './checks/migration-string-collation.js';
+import { AgentSkillGovernanceCheck } from './checks/agent-skill-governance.js';
+import { LimitsLiteralsCheck } from './checks/limits-literals.js';
+import { FileLineLimitCheck } from './checks/file-line-limit.js';
 
 /**
  * Every registered standard.
@@ -32,6 +36,10 @@ export const STANDARD_CHECKS: readonly StandardCheck[] = [
     PolymorphicFKCheck,
     MigrationExistenceGuardsCheck,
     ReadableStatusValuesCheck,
+    MigrationStringCollationCheck,
+    AgentSkillGovernanceCheck,
+    LimitsLiteralsCheck,
+    FileLineLimitCheck,
 ];
 
 /** Look up a check by its config key. */

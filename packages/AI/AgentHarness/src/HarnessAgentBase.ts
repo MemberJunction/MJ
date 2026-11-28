@@ -1,24 +1,63 @@
-import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { AIPromptParams, AIPromptRunResult, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
+import {
+    AIPromptParams,
+    AIPromptRunResult,
+    BaseAgentNextStep,
+    ChildPromptParam,
+    ExecuteAgentParams,
+    MJAIPromptRunEntityExtended,
+    ResolvePromptRunUserID,
+} from '@memberjunction/ai-core-plus';
 import { ChatResult, ModelUsage } from '@memberjunction/ai';
 import {
+    MJAIAgentTypeEntity,
     MJAIAgentHarnessEntity,
     MJAIAgentCredentialEntity,
     MJCredentialEntity,
 } from '@memberjunction/core-entities';
 import { BaseHarnessAdapter } from './adapters/BaseHarnessAdapter.js';
-import { ISandboxProvider, SandboxHandle, WorkspaceKey } from './sandbox/ISandboxProvider.js';
+import {
+    ApplyGitHubEnvironmentConventions,
+    ExtractHarnessCredentialSecret,
+    GetLocalCliLoginCommand,
+    IsHarnessApiKeyEnvVar,
+    NormalizeAntigravityEnvironment,
+    ResolveDriverVendorFallbackEnvironment,
+    ResolveEffectiveHarnessAuthMode,
+    ScrubHarnessSecrets,
+    StripHarnessApiKeyEnvironment,
+} from './HarnessCredentialResolver.js';
+import {
+    DriverClassToHarnessPoolVendor,
+    HarnessAccountLease,
+    HarnessAccountPoolOptions,
+    HarnessAccountPoolService,
+} from './HarnessAccountPoolService.js';
+import { ClassifyHarnessQuotaError } from './HarnessQuotaClassifier.js';
+import { ISandboxProvider, SandboxHandle, SandboxWorkspaceOptions, WorkspaceKey } from './sandbox/ISandboxProvider.js';
 import { LocalDirectorySandboxProvider } from './sandbox/LocalDirectorySandboxProvider.js';
 import { DockerSandboxProvider } from './sandbox/DockerSandboxProvider.js';
+import { CloudSandboxProvider } from './sandbox/CloudSandboxProvider.js';
 import {
+    CloudSandboxOptions,
+    HarnessAccountPoolExecutionOptions,
+    HarnessActivityHeartbeatCallback,
+    HarnessActivityHeartbeatInfo,
+    HarnessAuthMode,
+    HarnessPoolVendor,
+    HarnessRunConfig,
+    HarnessSessionConfig,
+    HarnessTurnEvent,
+    HarnessTurnLimits,
     HarnessTurnResult,
     HarnessWorkspaceScope,
     HarnessNetworkPolicy,
     HarnessPosture,
     HarnessPermissionPolicy,
+    HarnessSandboxProviderType,
 } from './types.js';
 
 /**
@@ -30,8 +69,12 @@ import {
  */
 const HARNESS_CREDENTIAL_ENV_VARS: Record<string, string> = {
     ClaudeCodeCliAdapter: 'ANTHROPIC_API_KEY',
+    ClaudeCodeCloudAdapter: 'ANTHROPIC_API_KEY',
     CodexAdapter: 'OPENAI_API_KEY',
+    CodexCloudAdapter: 'OPENAI_API_KEY',
     GeminiCliAdapter: 'GEMINI_API_KEY',
+    AntigravityCliAdapter: 'GEMINI_API_KEY',
+    AntigravityCloudAdapter: 'GEMINI_API_KEY',
 };
 
 /**
@@ -50,18 +93,146 @@ const TURN_END_CONTRACT = [
     'INSIDE the JSON. If you cannot proceed, say that inside the JSON too.',
 ].join('\n');
 
+/** Reasoning effort level passed to harnesses that support `--effort` (e.g. Antigravity CLI). */
+export type HarnessReasoningEffort = 'low' | 'medium' | 'high';
+
+interface EffortConfigurableHarnessAdapter {
+    SetEffort(effort: HarnessReasoningEffort): void;
+}
+
+function isEffortConfigurableAdapter(
+    adapter: BaseHarnessAdapter,
+): adapter is BaseHarnessAdapter & EffortConfigurableHarnessAdapter {
+    const candidate = adapter as Partial<EffortConfigurableHarnessAdapter>;
+    return typeof candidate.SetEffort === 'function';
+}
+
+function normalizeHarnessEffort(value: string | number | null | undefined): HarnessReasoningEffort | undefined {
+    if (value == null) {
+        return undefined;
+    }
+    if (typeof value === 'number') {
+        if (!Number.isFinite(value) || value <= 0) {
+            return undefined;
+        }
+        if (value <= 33) return 'low';
+        if (value <= 66) return 'medium';
+        return 'high';
+    }
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+        return undefined;
+    }
+    if (normalized === 'low' || normalized === 'medium' || normalized === 'high') {
+        return normalized;
+    }
+    if (normalized === 'xhigh' || normalized === 'max') {
+        return 'high';
+    }
+    const numeric = Number(normalized);
+    if (Number.isFinite(numeric)) {
+        return normalizeHarnessEffort(numeric);
+    }
+    return undefined;
+}
+
+function toPersistedEffortNumber(value: string | number | null | undefined): number | undefined {
+    if (value == null) {
+        return undefined;
+    }
+    const rawNum = typeof value === 'number' ? value : Number(String(value).trim());
+    if (typeof value !== 'boolean' && String(value).trim() !== '' && Number.isFinite(rawNum)) {
+        return rawNum >= 1 && rawNum <= 100 ? Math.round(rawNum) : undefined;
+    }
+    const tier = normalizeHarnessEffort(value);
+    if (tier === 'low') return 25;
+    if (tier === 'medium') return 50;
+    if (tier === 'high') return 100;
+    return undefined;
+}
+
 /** Shape of the harness block inside `AIAgent.TypeConfiguration`. */
-interface HarnessAgentConfig {
+export interface HarnessAgentConfig {
     harnessName?: string;
+    model?: string;
+    effort?: HarnessReasoningEffort;
+    authMode?: HarnessAuthMode;
     sandbox?: {
-        provider?: 'local' | 'docker';
+        provider?: HarnessSandboxProviderType;
         image?: string;
         workspaceScope?: HarnessWorkspaceScope;
         networkPolicy?: HarnessNetworkPolicy;
+        cloud?: CloudSandboxOptions;
+        workspace?: SandboxWorkspaceOptions;
     };
+    mcpServerUrl?: string;
+    mcpCredential?: string;
     posture?: HarnessPosture;
     permissions?: { allowedTools?: string[]; disallowedTools?: string[] };
-    limits?: { maxWallClockSeconds?: number };
+    limits?: HarnessTurnLimits;
+    accountPool?: HarnessAccountPoolExecutionOptions;
+    cloudSandboxDefaults?: Record<string, unknown>;
+    cloudHarnessTargets?: unknown[];
+}
+
+const KNOWN_HARNESS_CONFIG_KEYS: ReadonlySet<string> = new Set([
+    'harnessName',
+    'model',
+    'effort',
+    'authMode',
+    'sandbox',
+    'mcpServerUrl',
+    'mcpCredential',
+    'posture',
+    'permissions',
+    'limits',
+    'accountPool',
+    'cloudSandboxDefaults',
+    'cloudHarnessTargets',
+]);
+
+/** Default maximum automatic cross-account failovers permitted within a single harness run. */
+export const DEFAULT_MAX_ACCOUNT_SWITCHES_PER_RUN = 3;
+
+/** Structured continuity details prepended when a run switches CLI accounts mid-run after quota exhaustion. */
+export interface CrossAccountHandoffContext {
+    previousSlotId: string;
+    previousSlotLabel?: string;
+    nextSlotId: string;
+    nextSlotLabel?: string;
+    reason: string;
+    originalObjective: string;
+    turnsCompleted: number;
+    recentAssistantSummary: string;
+}
+
+/**
+ * Formats the concise `[Cross-Account Continuity Handoff]` preamble prepended to the retry prompt
+ * after a mid-run quota failover so the newly leased CLI account resumes cleanly without a vendor
+ * `--resume` / `--conversation` session ID.
+ */
+export function BuildCrossAccountContinuityHandoff(context: CrossAccountHandoffContext): string {
+    const prevDisplay = context.previousSlotLabel
+        ? `${context.previousSlotLabel} (${context.previousSlotId})`
+        : context.previousSlotId;
+    const nextDisplay = context.nextSlotLabel
+        ? `${context.nextSlotLabel} (${context.nextSlotId})`
+        : context.nextSlotId;
+    const objective = context.originalObjective.trim() || '(see conversation below)';
+    const progress =
+        context.recentAssistantSummary.trim() ||
+        'No assistant text was recorded before the account switch.';
+
+    return [
+        '[Cross-Account Continuity Handoff]',
+        `Account switch: ${prevDisplay} -> ${nextDisplay} (reason: ${context.reason}).`,
+        'Previous vendor CLI session ID was intentionally cleared because sessions are account-scoped.',
+        `Original objective: ${objective}`,
+        `Turns completed before failover: ${context.turnsCompleted}`,
+        `Recent assistant progress summary: ${progress}`,
+        'IMPORTANT: Before making further changes, inspect `git status` and `git diff` in the shared working tree so you continue from already-completed edits without duplicating or undoing work.',
+        '[/Cross-Account Continuity Handoff]',
+    ].join('\n');
 }
 
 /**
@@ -91,11 +262,50 @@ interface HarnessAgentConfig {
  */
 @RegisterClass(BaseAgent, 'HarnessAgentType')
 export class HarnessAgentBase extends BaseAgent {
-    private adapter: BaseHarnessAdapter | null = null;
-    private sandboxProvider: ISandboxProvider | null = null;
-    private sandboxHandle: SandboxHandle | null = null;
-    private harnessRow: MJAIAgentHarnessEntity | null = null;
-    private turnIndex = 0;
+    protected adapter: BaseHarnessAdapter | null = null;
+    protected sandboxProvider: ISandboxProvider | null = null;
+    protected sandboxHandle: SandboxHandle | null = null;
+    protected harnessRow: MJAIAgentHarnessEntity | null = null;
+    protected sessionEnvironment: Record<string, string> = {};
+    protected baseSessionEnvironment: Record<string, string> = {};
+    protected effectiveAuthMode: 'cli-login' | 'api-key' = 'api-key';
+    protected configuredModel: string | undefined = undefined;
+    protected configuredEffort: HarnessReasoningEffort | undefined = undefined;
+    protected persistedEffortLevel: number | undefined = undefined;
+    protected turnIndex = 0;
+    protected activityHeartbeatCallback: HarnessActivityHeartbeatCallback | undefined = undefined;
+    protected accountPoolOptionsOverride: HarnessAccountPoolExecutionOptions | undefined = undefined;
+    protected activeAccountLease: HarnessAccountLease | null = null;
+    protected activePoolVendor: HarnessPoolVendor | null = null;
+    protected activePoolServiceOptions: HarnessAccountPoolOptions | undefined = undefined;
+    protected triedAccountSlotIds: Set<string> = new Set();
+    protected accountSwitchesThisRun = 0;
+    protected lastSessionStartBaseConfig: Omit<HarnessSessionConfig, 'Environment' | 'ResumeSessionId'> | null = null;
+    protected lastPermissionPolicy: HarnessPermissionPolicy | undefined = undefined;
+    protected lastSystemPrompt: string | undefined = undefined;
+    protected originalRunObjective: string | undefined = undefined;
+    protected recentAssistantProgress: string[] = [];
+
+    /**
+     * Registers an optional callback invoked periodically while a harness turn emits live
+     * activity, allowing callers to renew external run leases without polling.
+     */
+    public SetActivityHeartbeatCallback(callback: HarnessActivityHeartbeatCallback | undefined): void {
+        this.activityHeartbeatCallback = callback;
+    }
+
+    /**
+     * Configures per-run multi-account CLI subscription pool options (strategy, pinned slot,
+     * max failover switches, or pool directory override).
+     */
+    public SetAccountPoolOptions(options: HarnessAccountPoolExecutionOptions | undefined): void {
+        this.accountPoolOptionsOverride = options;
+    }
+
+    /** Returns the currently leased CLI subscription account slot, or `null` when pooling is inactive. */
+    public get ActiveAccountLease(): HarnessAccountLease | null {
+        return this.activeAccountLease;
+    }
 
     /**
      * Substitutes a harness turn for the prompt call a Loop agent would make.
@@ -107,16 +317,84 @@ export class HarnessAgentBase extends BaseAgent {
     protected override async executePrompt(promptParams: AIPromptParams): Promise<AIPromptRunResult> {
         const startTime = new Date();
         try {
-            if (this.turnIndex === 0) {
+            const config = this.readHarnessConfig();
+            if (this.turnIndex === 0 || !this.adapter) {
                 await this.startHarnessSession(promptParams);
             }
             this.turnIndex++;
 
+            if (!this.originalRunObjective) {
+                this.originalRunObjective = extractOriginalObjective(promptParams);
+            }
+
             const isFirstTurn = this.turnIndex === 1;
-            const input = await this.buildTurnInput(promptParams, isFirstTurn);
-            const turn = await this.runTurn(input);
+            const poolOpts = this.resolveAccountPoolOptions(config);
+            const poolServiceOpts = this.buildPoolServiceOptions(poolOpts);
+            const maxSwitches = resolveMaxAccountSwitches(poolOpts?.maxAccountSwitchesPerRun);
+
+            let input = await this.buildTurnInput(promptParams, isFirstTurn);
+            let turn: HarnessTurnResult;
+
+            while (true) {
+                const baseHeartbeat = this.buildCombinedActivityHeartbeat(poolOpts, poolServiceOpts);
+                const turnWaitId = `harness-turn:${this.turnIndex}`;
+                this.suspendLivenessWatchdog(turnWaitId, 'harness-turn');
+                try {
+                    turn = await this.runTurn(input, {
+                        limits: config.limits,
+                        onActivityHeartbeat: async (info) => {
+                            this.recordLivenessProgress('llm-stream-chunk', `harness-turn:${this.turnIndex}`);
+                            await baseHeartbeat?.(info);
+                        },
+                        accountPool: poolOpts,
+                    });
+                } finally {
+                    this.resumeLivenessWatchdog(turnWaitId);
+                }
+
+                const quotaCheck = turn.ErrorMessage ? ClassifyHarnessQuotaError(turn.ErrorMessage) : null;
+                if (
+                    quotaCheck?.isQuotaError &&
+                    this.activeAccountLease &&
+                    this.activePoolVendor &&
+                    this.accountSwitchesThisRun < maxSwitches
+                ) {
+                    const switched = await this.tryFailoverToNextAccountSlot(
+                        quotaCheck.reason,
+                        quotaCheck.cooldownUntilIso,
+                        promptParams,
+                        config,
+                        poolOpts,
+                        poolServiceOpts,
+                    );
+                    if (switched) {
+                        const rebuiltInput = await this.buildTurnInput(promptParams, true);
+                        const handoff = BuildCrossAccountContinuityHandoff({
+                            previousSlotId: switched.previousLease.slotId,
+                            previousSlotLabel: switched.previousLease.slot.label,
+                            nextSlotId: switched.nextLease.slotId,
+                            nextSlotLabel: switched.nextLease.slot.label,
+                            reason: quotaCheck.reason,
+                            originalObjective: this.originalRunObjective ?? '',
+                            turnsCompleted: Math.max(0, this.turnIndex - 1),
+                            recentAssistantSummary: this.buildRecentAssistantSummary(),
+                        });
+                        input = `${handoff}\n\n${rebuiltInput}`;
+                        continue;
+                    }
+                }
+                break;
+            }
+
+            if (!turn.ErrorMessage && turn.RawText.trim()) {
+                this.recordAssistantProgress(turn.RawText);
+            }
+
             const promptRun = await this.recordPromptRun(promptParams, turn, startTime, input);
             this.persistExternalSessionId(turn.SessionId);
+            if (turn.TimedOut || turn.Stalled) {
+                await this.EndHarnessSession('failure');
+            }
 
             return this.buildPromptResult(turn, promptRun, startTime);
         } catch (e) {
@@ -130,16 +408,25 @@ export class HarnessAgentBase extends BaseAgent {
         }
     }
 
-    /** Provisions the sandbox, resolves credentials and launches the harness session. */
+    /** Provisions the sandbox, resolves credentials, leases a CLI pool slot if applicable, and launches the session. */
     private async startHarnessSession(promptParams: AIPromptParams): Promise<void> {
         const contextUser = promptParams.contextUser;
         const config = this.readHarnessConfig();
         const harness = await this.loadHarnessRow(config.harnessName, contextUser);
         this.harnessRow = harness;
 
+        const networkPolicy = config.sandbox?.networkPolicy ?? 'mcp-only';
+        if (config.sandbox?.provider === 'docker' && networkPolicy === 'none' && isOutboundNetworkRequiredDriver(harness.DriverClass)) {
+            throw new Error(
+                `Harness '${harness.Name}' (${harness.DriverClass}) requires outbound API/network access and cannot run ` +
+                    `with sandbox.provider='docker' and networkPolicy='none'.`,
+            );
+        }
+
         this.adapter = this.resolveAdapter(harness);
         this.sandboxProvider = this.createSandboxProvider(config);
 
+        const resolvedWorkspacePath = this.resolveWorkspacePathFromConfig(config, promptParams);
         const key: WorkspaceKey = {
             Scope: config.sandbox?.workspaceScope ?? 'agent-user',
             AgentId: this._agentRunAgentId(),
@@ -147,33 +434,373 @@ export class HarnessAgentBase extends BaseAgent {
             RunId: this._agentRunId(),
         };
         this.sandboxHandle = await this.sandboxProvider.Provision(key, {
-            NetworkPolicy: config.sandbox?.networkPolicy ?? 'mcp-only',
+            provider: config.sandbox?.provider,
+            NetworkPolicy: networkPolicy,
             Image: config.sandbox?.image,
+            cloud: config.sandbox?.cloud,
+            workspace: config.sandbox?.workspace,
+            resolvedWorkspacePath,
+            resolvedAdditionalDirectories: config.sandbox?.workspace?.additionalDirectories,
         });
 
-        const environment = await this.resolveGrantedEnvironment(contextUser);
+        const baseEnvironment = await this.resolveGrantedEnvironment(contextUser, config);
+        this.baseSessionEnvironment = { ...baseEnvironment };
 
-        // Permissions are declared in agent metadata and applied BEFORE the session starts, so
-        // adapters can fold them into launch flags. Runtime overrides arrive through the same
-        // TypeConfiguration merge as every other harness setting, so a caller can loosen or tighten
-        // a single run without editing the agent.
-        const policy = this.resolvePermissionPolicy(config);
-        this.adapter.ApplyPermissionPolicy(policy);
-        this.warnOnUnenforceablePolicy(harness.Name, policy);
+        const poolOpts = this.resolveAccountPoolOptions(config);
+        const poolServiceOpts = this.buildPoolServiceOptions(poolOpts);
+        this.activePoolServiceOptions = poolServiceOpts;
+        const vendor = DriverClassToHarnessPoolVendor(harness.DriverClass);
+        const effectiveEnvironment = this.acquireInitialAccountLeaseIfApplicable(
+            vendor,
+            baseEnvironment,
+            poolOpts,
+            poolServiceOpts,
+        );
+        this.sessionEnvironment = effectiveEnvironment;
 
-        const resumeSessionId = await this.findResumableSession(harness, key.Scope, contextUser);
+        try {
+            // Permissions are declared in agent metadata and applied BEFORE the session starts, so
+            // adapters can fold them into launch flags. Runtime overrides arrive through the same
+            // TypeConfiguration merge as every other harness setting, so a caller can loosen or tighten
+            // a single run without editing the agent.
+            const policy = this.resolvePermissionPolicy(config);
+            this.lastPermissionPolicy = policy;
+            this.adapter.ApplyPermissionPolicy(policy);
+            this.warnOnUnenforceablePolicy(harness.Name, policy);
 
-        await this.adapter.StartSession({
-            ResumeSessionId: resumeSessionId,
-            PermissionPolicy: policy,
-            Executor: this.sandboxHandle.Executor,
-            WorkspacePath: this.sandboxHandle.WorkspacePath,
-            Environment: environment,
-            Model: harness.DefaultModel ?? undefined,
-            CancellationToken: promptParams.cancellationToken,
-        });
+            const resumeSessionId = await this.findResumableSession(harness, key.Scope, contextUser);
+            const mcpBinding = this.resolveMcpSessionEndpoint(config);
+            const resolvedModel =
+                config.model?.trim() ||
+                harness.DefaultModel?.trim() ||
+                undefined;
+            const resolvedEffort =
+                normalizeHarnessEffort(config.effort) ??
+                normalizeHarnessEffort(promptParams.effortLevel) ??
+                normalizeHarnessEffort(promptParams.prompt?.EffortLevel);
+            this.configuredModel = resolvedModel;
+            this.configuredEffort = resolvedEffort;
+            this.persistedEffortLevel =
+                toPersistedEffortNumber(config.effort) ??
+                toPersistedEffortNumber(promptParams.effortLevel) ??
+                toPersistedEffortNumber(promptParams.prompt?.EffortLevel);
 
-        LogStatus(`Harness session started for '${harness.Name}' (${harness.DriverClass})`);
+            if (resolvedEffort && isEffortConfigurableAdapter(this.adapter)) {
+                this.adapter.SetEffort(resolvedEffort);
+            }
+
+            const baseStartConfig: Omit<HarnessSessionConfig, 'Environment' | 'ResumeSessionId'> = {
+                PermissionPolicy: policy,
+                Executor: this.sandboxHandle.Executor,
+                WorkspacePath: this.sandboxHandle.WorkspacePath,
+                AdditionalDirectories:
+                    this.sandboxHandle.AdditionalDirectories ?? config.sandbox?.workspace?.additionalDirectories,
+                AuthMode: this.effectiveAuthMode,
+                McpServerUrl: mcpBinding.mcpServerUrl,
+                McpCredential: mcpBinding.mcpCredential,
+                Model: resolvedModel,
+                CancellationToken: promptParams.cancellationToken,
+                CloudOptions: config.sandbox?.cloud,
+                SandboxMetadata: this.sandboxHandle.Metadata,
+            };
+            this.lastSessionStartBaseConfig = baseStartConfig;
+
+            await this.adapter.StartSession({
+                ...baseStartConfig,
+                ResumeSessionId: resumeSessionId,
+                Environment: effectiveEnvironment,
+            });
+        } catch (err) {
+            this.releaseActiveAccountLease();
+            throw err;
+        }
+
+        const authModeLabel =
+            this.effectiveAuthMode === 'cli-login' ? 'cli-login (subscription)' : 'api-key';
+        const slotSummary = this.activeAccountLease
+            ? ` accountSlot=${this.activeAccountLease.slotId} (${this.activeAccountLease.strategyUsed})`
+            : '';
+        LogStatus(
+            `Harness session started for '${harness.Name}' (${harness.DriverClass}) ` +
+                `authMode=${authModeLabel}${slotSummary}` +
+                `${this.configuredModel ? ` model=${this.configuredModel}` : ''}` +
+                `${this.configuredEffort ? ` effort=${this.configuredEffort}` : ''}`,
+        );
+    }
+
+    /**
+     * Acquires an account pool lease when running in `cli-login` mode on a pooled CLI vendor and
+     * merges `lease.envOverrides` into the spawn environment while preserving API-key stripping.
+     */
+    private acquireInitialAccountLeaseIfApplicable(
+        vendor: HarnessPoolVendor | null,
+        baseEnvironment: Record<string, string>,
+        poolOpts: HarnessAccountPoolExecutionOptions | undefined,
+        poolServiceOpts: HarnessAccountPoolOptions | undefined,
+    ): Record<string, string> {
+        if (this.effectiveAuthMode !== 'cli-login' || !vendor || poolOpts?.enabled === false) {
+            return { ...baseEnvironment };
+        }
+
+        const poolService = HarnessAccountPoolService.Instance;
+        const lease = poolService.AcquireSlotLease(
+            {
+                vendor,
+                strategy: poolOpts?.strategy,
+                slotId: poolOpts?.slotId,
+                ownerLabel: this.buildLeaseOwnerLabel(),
+                ttlMs: poolOpts?.leaseTtlMs,
+                excludeSlotIds: [...this.triedAccountSlotIds],
+            },
+            poolServiceOpts,
+        );
+
+        if (!lease) {
+            if (poolOpts?.slotId) {
+                throw new Error(
+                    `Requested CLI account slot '${poolOpts.slotId}' for vendor '${vendor}' is unavailable ` +
+                        `(missing, disabled, unauthenticated, or in cooldown).`,
+                );
+            }
+            const vendorSlots = poolService.ListSlots({ vendor }, poolServiceOpts);
+            const authenticatedEnabled = vendorSlots.filter((s) => s.enabled && s.authenticated);
+            if (authenticatedEnabled.length > 0 && authenticatedEnabled.every((s) => s.inCooldown)) {
+                const soonest = authenticatedEnabled
+                    .map((s) => s.cooldownUntilIso)
+                    .filter((v): v is string => typeof v === 'string')
+                    .sort()[0];
+                throw new Error(
+                    `All ${authenticatedEnabled.length} CLI subscription account slot(s) for '${vendor}' ` +
+                        `are currently in quota cooldown${soonest ? ` (earliest reset: ${soonest})` : ''}.`,
+                );
+            }
+            return { ...baseEnvironment };
+        }
+
+        this.activeAccountLease = lease;
+        this.activePoolVendor = vendor;
+        this.triedAccountSlotIds.add(lease.slotId);
+
+        const mergedEnv: Record<string, string> = {
+            ...baseEnvironment,
+            ...lease.envOverrides,
+        };
+        StripHarnessApiKeyEnvironment(mergedEnv);
+        return mergedEnv;
+    }
+
+    /**
+     * Marks the exhausted account slot in cooldown, releases its lease, acquires the next healthy
+     * slot for the same vendor, clears `ExternalSessionID`, and restarts the adapter session cleanly.
+     */
+    protected async tryFailoverToNextAccountSlot(
+        reason: string,
+        cooldownUntilIso: string | undefined,
+        _promptParams: AIPromptParams,
+        config: HarnessAgentConfig,
+        poolOpts: HarnessAccountPoolExecutionOptions | undefined,
+        poolServiceOpts: HarnessAccountPoolOptions | undefined,
+    ): Promise<{ previousLease: HarnessAccountLease; nextLease: HarnessAccountLease } | null> {
+        const previousLease = this.activeAccountLease;
+        const vendor = this.activePoolVendor;
+        if (!previousLease || !vendor) {
+            return null;
+        }
+
+        const poolService = HarnessAccountPoolService.Instance;
+        poolService.MarkSlotCooldown(previousLease.slotId, reason, cooldownUntilIso, poolServiceOpts);
+        poolService.ReleaseSlotLease(previousLease.leaseId, poolServiceOpts);
+        this.activeAccountLease = null;
+
+        const nextLease = poolService.AcquireSlotLease(
+            {
+                vendor,
+                strategy: poolOpts?.strategy,
+                ownerLabel: this.buildLeaseOwnerLabel(),
+                ttlMs: poolOpts?.leaseTtlMs,
+                excludeSlotIds: [...this.triedAccountSlotIds],
+            },
+            poolServiceOpts,
+        );
+
+        if (!nextLease) {
+            LogStatus(
+                `CLI account slot '${previousLease.slotId}' (${vendor}) entered cooldown (${reason}); ` +
+                    `no additional healthy slots are available for failover.`,
+            );
+            return null;
+        }
+
+        this.accountSwitchesThisRun++;
+        this.activeAccountLease = nextLease;
+        this.triedAccountSlotIds.add(nextLease.slotId);
+
+        // CRITICAL: Vendor CLI --resume / --conversation IDs are bound to the previous account's
+        // config dir / server session and must be cleared before starting on the new account.
+        this.clearExternalSessionId();
+
+        await this.restartAdapterForAccountSwitch(nextLease, config);
+
+        LogStatus(
+            `Cross-account failover (${this.accountSwitchesThisRun}): switched '${vendor}' ` +
+                `from '${previousLease.slotId}' -> '${nextLease.slotId}' after quota/rate-limit error (${reason}).`,
+        );
+
+        return { previousLease, nextLease };
+    }
+
+    /**
+     * Tears down the previous account's adapter session and starts a clean session on the newly
+     * leased account slot with `ResumeSessionId: undefined` and stripped API keys.
+     */
+    protected async restartAdapterForAccountSwitch(
+        nextLease: HarnessAccountLease,
+        _config: HarnessAgentConfig,
+    ): Promise<void> {
+        try {
+            await this.adapter?.EndSession();
+        } catch (err) {
+            LogError(`Failed ending adapter session prior to account failover: ${describeError(err)}`);
+        }
+
+        const nextEnv: Record<string, string> = {
+            ...this.baseSessionEnvironment,
+            ...nextLease.envOverrides,
+        };
+        StripHarnessApiKeyEnvironment(nextEnv);
+        this.sessionEnvironment = nextEnv;
+
+        if (!this.adapter && this.harnessRow) {
+            this.adapter = this.resolveAdapter(this.harnessRow);
+        } else if (this.harnessRow) {
+            try {
+                this.adapter = this.resolveAdapter(this.harnessRow);
+            } catch {
+                // Keep existing adapter instance (e.g., when injected directly by a unit test)
+            }
+        }
+
+        if (!this.adapter) {
+            return;
+        }
+
+        if (this.lastPermissionPolicy) {
+            this.adapter.ApplyPermissionPolicy(this.lastPermissionPolicy);
+        }
+        if (this.configuredEffort && isEffortConfigurableAdapter(this.adapter)) {
+            this.adapter.SetEffort(this.configuredEffort);
+        }
+        if (this.lastSystemPrompt) {
+            this.adapter.SetSystemPrompt(this.lastSystemPrompt);
+        }
+
+        const baseConfig = this.lastSessionStartBaseConfig;
+        if (baseConfig) {
+            await this.adapter.StartSession({
+                ...baseConfig,
+                ResumeSessionId: undefined,
+                Environment: nextEnv,
+            });
+        }
+    }
+
+    private buildCombinedActivityHeartbeat(
+        poolOpts: HarnessAccountPoolExecutionOptions | undefined,
+        poolServiceOpts: HarnessAccountPoolOptions | undefined,
+    ): HarnessActivityHeartbeatCallback | undefined {
+        const callerHeartbeat = this.resolveActivityHeartbeatCallback();
+        if (!this.activeAccountLease && !callerHeartbeat) {
+            return undefined;
+        }
+        return async (info: HarnessActivityHeartbeatInfo): Promise<void> => {
+            if (this.activeAccountLease) {
+                HarnessAccountPoolService.Instance.RenewSlotLease(
+                    this.activeAccountLease.leaseId,
+                    poolOpts?.leaseTtlMs,
+                    poolServiceOpts,
+                );
+            }
+            if (callerHeartbeat) {
+                await callerHeartbeat(info);
+            }
+        };
+    }
+
+    private resolveAccountPoolOptions(
+        config?: HarnessAgentConfig,
+    ): HarnessAccountPoolExecutionOptions | undefined {
+        const ctxCandidate = this._executeAgentParams()?.context?.accountPool;
+        const fromContext =
+            ctxCandidate && typeof ctxCandidate === 'object' && !Array.isArray(ctxCandidate)
+                ? (ctxCandidate as HarnessAccountPoolExecutionOptions)
+                : undefined;
+        const fromConfig = config?.accountPool;
+        const fromSetter = this.accountPoolOptionsOverride;
+        if (!fromConfig && !fromContext && !fromSetter) {
+            return undefined;
+        }
+        return {
+            ...(fromConfig ?? {}),
+            ...(fromContext ?? {}),
+            ...(fromSetter ?? {}),
+        };
+    }
+
+    private buildPoolServiceOptions(
+        poolOpts: HarnessAccountPoolExecutionOptions | undefined,
+    ): HarnessAccountPoolOptions | undefined {
+        if (!poolOpts?.poolDir) {
+            return undefined;
+        }
+        return { poolDir: poolOpts.poolDir };
+    }
+
+    private buildLeaseOwnerLabel(): string {
+        const agentName = this.AgentRun?.Agent?.trim();
+        const runId = this._agentRunId();
+        return agentName ? `${agentName}:${runId}` : `harness-run:${runId}`;
+    }
+
+    private releaseActiveAccountLease(): void {
+        const lease = this.activeAccountLease;
+        if (!lease) {
+            return;
+        }
+        this.activeAccountLease = null;
+        try {
+            HarnessAccountPoolService.Instance.ReleaseSlotLease(
+                lease.leaseId,
+                this.activePoolServiceOptions,
+            );
+        } catch (err) {
+            LogError(`Failed releasing CLI account lease '${lease.leaseId}': ${describeError(err)}`);
+        }
+    }
+
+    private recordAssistantProgress(text: string): void {
+        const cleaned = text.replace(/\s+/g, ' ').trim();
+        if (!cleaned) {
+            return;
+        }
+        const clipped = cleaned.length > 320 ? `${cleaned.slice(0, 317)}...` : cleaned;
+        this.recentAssistantProgress.push(clipped);
+        while (this.recentAssistantProgress.length > 5) {
+            this.recentAssistantProgress.shift();
+        }
+    }
+
+    private buildRecentAssistantSummary(): string {
+        if (this.recentAssistantProgress.length === 0) {
+            return '';
+        }
+        const joined = this.recentAssistantProgress.join(' | ');
+        return joined.length > 900 ? `...${joined.slice(joined.length - 897)}` : joined;
+    }
+
+    protected clearExternalSessionId(): void {
+        if (this.AgentRun) {
+            this.AgentRun.ExternalSessionID = null;
+        }
     }
 
     /**
@@ -264,7 +891,16 @@ export class HarnessAgentBase extends BaseAgent {
         if (!this.adapter?.Capabilities?.SessionResume) {
             return undefined;
         }
-        if (scope === 'run') {
+        // When AgentWake resumes an existing run with ExternalSessionID already populated on _agentRun,
+        // prefer that exact session ID directly before querying conversation history.
+        const currentRunSessionId = this._agentRunExternalSessionId();
+        if (currentRunSessionId) {
+            LogStatus(`Resuming in-flight harness session ${currentRunSessionId} for '${harness.Name}'.`);
+            return currentRunSessionId;
+        }
+        // Local CLI harnesses key their session store by directory path, so 'run' scope cannot resume;
+        // cloud harnesses store sessions remotely by ID and can resume regardless of workspace scope.
+        if (scope === 'run' && !this.adapter.Capabilities.SupportsCloudExecution) {
             return undefined;
         }
         const conversationId = this._agentRunConversationId();
@@ -282,6 +918,7 @@ export class HarnessAgentBase extends BaseAgent {
                         `AND ExternalSessionID IS NOT NULL`,
                     OrderBy: '__mj_CreatedAt DESC',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                 },
                 contextUser,
@@ -301,37 +938,262 @@ export class HarnessAgentBase extends BaseAgent {
         }
     }
 
-    /** Accumulates one turn's event stream into a single result. */
-    private async runTurn(input: string): Promise<HarnessTurnResult> {
+    /**
+     * Accumulates one turn's event stream into a single result, enforcing optional wall-clock
+     * bounds, rolling inactivity watchdogs, repeated tool-call loop detection, and live activity
+     * heartbeat callbacks.
+     */
+    protected async runTurn(
+        input: string,
+        configOrMaxWallClock?: number | HarnessRunConfig,
+    ): Promise<HarnessTurnResult> {
         const adapter = this.adapter!;
         const turn: HarnessTurnResult = { RawText: '', InputTokens: 0, OutputTokens: 0 };
 
-        for await (const event of adapter.RunTurn(input)) {
-            switch (event.Type) {
-                case 'usage':
-                    // Summed rather than replaced: a harness may report usage more than once per
-                    // turn, and undercounting here silently weakens the cost guardrail.
-                    turn.InputTokens += event.InputTokens;
-                    turn.OutputTokens += event.OutputTokens;
-                    turn.CostUsd = (turn.CostUsd ?? 0) + (event.CostUsd ?? 0);
+        const runConfig: HarnessRunConfig =
+            typeof configOrMaxWallClock === 'number'
+                ? { limits: { maxWallClockSeconds: configOrMaxWallClock } }
+                : (configOrMaxWallClock ?? {});
+        const limits = runConfig.limits;
+        const maxWallClockSeconds = limits?.maxWallClockSeconds;
+        const maxIdleSeconds = limits?.maxIdleSeconds;
+        const maxConsecutiveIdenticalToolCalls = limits?.maxConsecutiveIdenticalToolCalls;
+        const heartbeatIntervalMs = resolveHeartbeatIntervalMs(limits?.heartbeatIntervalSeconds);
+        const onActivityHeartbeat = runConfig.onActivityHeartbeat ?? this.resolveActivityHeartbeatCallback();
+
+        let aborted = false;
+        let timedOut = false;
+        let stalled = false;
+        let stallReason: string | undefined;
+        let lastEventType: string | undefined;
+        let wallClockHandle: ReturnType<typeof setTimeout> | undefined;
+        let idleHandle: ReturnType<typeof setTimeout> | undefined;
+        let endSessionPromise: Promise<void> | undefined;
+        let resolveAbort: ((signal: TurnAbortSignal) => void) | null = null;
+        const abortPromise = new Promise<TurnAbortSignal>((resolve) => {
+            resolveAbort = resolve;
+        });
+
+        const clearTimers = (): void => {
+            if (wallClockHandle !== undefined) {
+                clearTimeout(wallClockHandle);
+                wallClockHandle = undefined;
+            }
+            if (idleHandle !== undefined) {
+                clearTimeout(idleHandle);
+                idleHandle = undefined;
+            }
+        };
+
+        const triggerAbort = (reasonLabel: string): void => {
+            if (aborted) {
+                return;
+            }
+            aborted = true;
+            clearTimers();
+            endSessionPromise = adapter.EndSession().catch((err) => {
+                LogError(`Failed terminating ${reasonLabel} harness session: ${describeError(err)}`);
+            });
+            if (resolveAbort) {
+                const resolve = resolveAbort;
+                resolveAbort = null;
+                resolve(ABORT_SENTINEL);
+            }
+        };
+
+        if (
+            typeof maxWallClockSeconds === 'number' &&
+            Number.isFinite(maxWallClockSeconds) &&
+            maxWallClockSeconds > 0
+        ) {
+            wallClockHandle = setTimeout(() => {
+                if (aborted) {
+                    return;
+                }
+                timedOut = true;
+                triggerAbort('timed-out');
+            }, maxWallClockSeconds * 1000);
+        }
+
+        const hasIdleLimit =
+            typeof maxIdleSeconds === 'number' &&
+            Number.isFinite(maxIdleSeconds) &&
+            maxIdleSeconds > 0;
+
+        const resetIdleTimer = (): void => {
+            if (idleHandle !== undefined) {
+                clearTimeout(idleHandle);
+                idleHandle = undefined;
+            }
+            if (aborted || !hasIdleLimit) {
+                return;
+            }
+            idleHandle = setTimeout(() => {
+                if (aborted) {
+                    return;
+                }
+                stalled = true;
+                stallReason = buildIdleStallReason(
+                    maxIdleSeconds,
+                    lastEventType,
+                    adapter.RecentOutputLines,
+                );
+                triggerAbort('stalled');
+            }, maxIdleSeconds * 1000);
+        };
+
+        resetIdleTimer();
+
+        const hasToolLoopLimit =
+            typeof maxConsecutiveIdenticalToolCalls === 'number' &&
+            Number.isFinite(maxConsecutiveIdenticalToolCalls) &&
+            maxConsecutiveIdenticalToolCalls >= 1;
+        let lastToolSignature: string | null = null;
+        let consecutiveToolCount = 0;
+
+        const turnStartMs = Date.now();
+        let lastHeartbeatCallbackAt = 0;
+
+        const iterator = adapter.RunTurn(input)[Symbol.asyncIterator]();
+        let iteratorCompleted = false;
+
+        try {
+            while (!aborted) {
+                const nextPromise = iterator.next();
+                const nextResult = await Promise.race([nextPromise, abortPromise]);
+                if (isAbortSentinel(nextResult)) {
+                    void nextPromise.catch(() => undefined);
                     break;
-                case 'turn-complete':
-                    turn.RawText = event.RawText;
+                }
+                if (nextResult.done) {
+                    iteratorCompleted = true;
                     break;
-                case 'session-error':
-                    turn.ErrorMessage = event.Error;
+                }
+                if (aborted) {
                     break;
-                default:
-                    // assistant-text and sandbox-activity are live-view only. They are deliberately
-                    // NOT persisted as run steps — the audit boundary is the turn, and widening it
-                    // to in-sandbox activity is a documented non-goal, not an oversight.
-                    break;
+                }
+
+                const event = nextResult.value;
+                lastEventType = event.Type;
+                const isTerminal = event.Type === 'turn-complete' || event.Type === 'session-error';
+
+                if (isTerminal) {
+                    if (idleHandle !== undefined) {
+                        clearTimeout(idleHandle);
+                        idleHandle = undefined;
+                    }
+                } else {
+                    resetIdleTimer();
+                    if (onActivityHeartbeat) {
+                        const now = Date.now();
+                        if (
+                            lastHeartbeatCallbackAt === 0 ||
+                            now - lastHeartbeatCallbackAt >= heartbeatIntervalMs
+                        ) {
+                            lastHeartbeatCallbackAt = now;
+                            invokeActivityHeartbeat(onActivityHeartbeat, {
+                                ElapsedMs: Math.max(0, now - turnStartMs),
+                                LastEventType: event.Type,
+                            });
+                        }
+                    }
+                }
+
+                switch (event.Type) {
+                    case 'tool-use-start': {
+                        if (hasToolLoopLimit) {
+                            const signature = buildToolCallSignature(event.ToolName, event.ArgumentsJson);
+                            if (signature === lastToolSignature) {
+                                consecutiveToolCount++;
+                            } else {
+                                lastToolSignature = signature;
+                                consecutiveToolCount = 1;
+                            }
+                            if (consecutiveToolCount >= maxConsecutiveIdenticalToolCalls) {
+                                stalled = true;
+                                stallReason = buildToolLoopStallReason(
+                                    event.ToolName,
+                                    consecutiveToolCount,
+                                    maxConsecutiveIdenticalToolCalls,
+                                    adapter.RecentOutputLines,
+                                );
+                                triggerAbort('stalled');
+                            }
+                        }
+                        break;
+                    }
+                    case 'usage':
+                        // Summed rather than replaced: a harness may report usage more than once per
+                        // turn, and undercounting here silently weakens the cost guardrail.
+                        turn.InputTokens += event.InputTokens;
+                        turn.OutputTokens += event.OutputTokens;
+                        if (event.ThinkingTokens !== undefined) {
+                            turn.ThinkingTokens = (turn.ThinkingTokens ?? 0) + event.ThinkingTokens;
+                        }
+                        turn.CostUsd = (turn.CostUsd ?? 0) + (event.CostUsd ?? 0);
+                        break;
+                    case 'turn-complete':
+                        turn.RawText = event.RawText;
+                        turn.CloudExecutionState = event.CloudExecutionState;
+                        turn.AsyncWakePending = event.AsyncWakePending;
+                        turn.ArtifactUrls = event.ArtifactUrls;
+                        turn.PullRequestUrl = event.PullRequestUrl;
+                        break;
+                    case 'assistant-text':
+                        if (event.Text.trim()) {
+                            this.recordAssistantProgress(event.Text);
+                        }
+                        break;
+                    case 'session-error':
+                        turn.ErrorMessage = event.Error;
+                        turn.CloudExecutionState = event.CloudExecutionState;
+                        break;
+                    default:
+                        // thinking-delta, tool-result, sandbox-activity, and
+                        // liveness-heartbeat are live-view / liveness signals only. They reset the
+                        // idle watchdog above and are deliberately NOT persisted as run steps.
+                        break;
+                }
+            }
+        } finally {
+            clearTimers();
+            if (!iteratorCompleted && typeof iterator.return === 'function') {
+                void Promise.resolve(iterator.return()).catch(() => undefined);
+            }
+            if (endSessionPromise) {
+                await endSessionPromise;
             }
         }
 
+        if (timedOut) {
+            const timeoutMsg = `Harness turn exceeded configured limits.maxWallClockSeconds (${maxWallClockSeconds}s).`;
+            turn.ErrorMessage = turn.ErrorMessage ? `${timeoutMsg} (${turn.ErrorMessage})` : timeoutMsg;
+            turn.TimedOut = true;
+        } else if (stalled && stallReason) {
+            turn.Stalled = true;
+            turn.StallReason = ScrubHarnessSecrets(stallReason, this.sessionEnvironment);
+            turn.ErrorMessage = turn.ErrorMessage ? `${stallReason} (${turn.ErrorMessage})` : stallReason;
+        }
+
+        turn.RawText = ScrubHarnessSecrets(turn.RawText, this.sessionEnvironment);
+        if (turn.ErrorMessage) {
+            turn.ErrorMessage = ScrubHarnessSecrets(turn.ErrorMessage, this.sessionEnvironment);
+        }
         turn.SessionId = adapter.SessionId;
         turn.ReportedModel = adapter.ReportedModel;
         return turn;
+    }
+
+    /** Resolves an optional activity heartbeat hook from instance configuration or execution context. */
+    private resolveActivityHeartbeatCallback(): HarnessActivityHeartbeatCallback | undefined {
+        if (this.activityHeartbeatCallback) {
+            return this.activityHeartbeatCallback;
+        }
+        const ctxCandidate = this._executeAgentParams()?.context?.onActivityHeartbeat;
+        if (typeof ctxCandidate === 'function') {
+            return ctxCandidate as HarnessActivityHeartbeatCallback;
+        }
+        return undefined;
     }
 
     /**
@@ -340,7 +1202,7 @@ export class HarnessAgentBase extends BaseAgent {
      * Returns undefined only when the row could not be created, which is logged loudly rather than
      * swallowed: without it the run's cost and token totals stay at zero and its guardrails go blind.
      */
-    private async recordPromptRun(
+    protected async recordPromptRun(
         promptParams: AIPromptParams,
         turn: HarnessTurnResult,
         startTime: Date,
@@ -361,8 +1223,16 @@ export class HarnessAgentBase extends BaseAgent {
             const run = await md.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', promptParams.contextUser);
             run.NewRecord();
             run.PromptID = ids.PromptID;
-            run.ModelID = (await this.resolveReportedModelId(turn.ReportedModel, promptParams)) ?? ids.ModelID;
-            run.VendorID = ids.VendorID;
+            const reportedId = await this.resolveReportedModelId(turn.ReportedModel, promptParams);
+            const configuredId =
+                !reportedId && this.configuredModel && this.configuredModel !== turn.ReportedModel
+                    ? await this.resolveReportedModelId(this.configuredModel, promptParams)
+                    : null;
+            run.ModelID = promptParams.override?.modelId ?? reportedId ?? configuredId ?? ids.ModelID;
+            run.VendorID = promptParams.override?.vendorId ?? ids.VendorID;
+            if (this.persistedEffortLevel !== undefined) {
+                run.EffortLevel = this.persistedEffortLevel;
+            }
             run.AgentID = this._agentRunAgentId();
             run.UserID = ResolvePromptRunUserID({
                 UserID: promptParams.UserID,
@@ -505,9 +1375,9 @@ export class HarnessAgentBase extends BaseAgent {
      * deliberately stops. It was added, documented, and then never populated, so answering "did this
      * run resume its session?" meant reading the vendor's files off disk instead of the run record.
      */
-    private persistExternalSessionId(sessionId: string | undefined): void {
+    protected persistExternalSessionId(sessionId: string | undefined): void {
         const run = (this as unknown as { _agentRun?: { ExternalSessionID?: string | null } })._agentRun;
-        if (run && sessionId && !run.ExternalSessionID) {
+        if (run && sessionId && run.ExternalSessionID !== sessionId) {
             run.ExternalSessionID = sessionId;
         }
     }
@@ -539,8 +1409,12 @@ export class HarnessAgentBase extends BaseAgent {
      * dev and single-tenant installs, and the reason multi-tenant deployments should grant
      * explicitly. The distinction is logged, not silent.
      */
-    private async resolveGrantedEnvironment(contextUser?: UserInfo): Promise<Record<string, string>> {
+    protected async resolveGrantedEnvironment(
+        contextUser?: UserInfo,
+        config?: HarnessAgentConfig,
+    ): Promise<Record<string, string>> {
         const environment: Record<string, string> = {};
+        let hasExplicitApiKeyGrant = false;
         try {
             const rv = new RunView();
             const grants = await rv.RunView<MJAIAgentCredentialEntity>(
@@ -563,9 +1437,16 @@ export class HarnessAgentBase extends BaseAgent {
                     // inject generically.
                     continue;
                 }
-                const secret = await this.loadCredentialValue(grant.CredentialID, contextUser);
+                const secret = await this.loadCredentialValue(
+                    grant.CredentialID,
+                    contextUser,
+                    grant.EnvVariableName,
+                );
                 if (secret) {
                     environment[grant.EnvVariableName] = secret;
+                    if (IsHarnessApiKeyEnvVar(grant.EnvVariableName)) {
+                        hasExplicitApiKeyGrant = true;
+                    }
                     continue;
                 }
                 const fromEnv = process.env[grant.EnvVariableName];
@@ -575,16 +1456,150 @@ export class HarnessAgentBase extends BaseAgent {
                             'falling back to the server environment.',
                     );
                     environment[grant.EnvVariableName] = fromEnv;
+                    if (IsHarnessApiKeyEnvVar(grant.EnvVariableName)) {
+                        hasExplicitApiKeyGrant = true;
+                    }
+                }
+            }
+        } catch (e) {
+            LogError(`Failed to load harness credential grants: ${describeError(e)}`);
+        }
+
+        const driverClass = this.harnessRow?.DriverClass ?? '';
+        const authResolution = ResolveEffectiveHarnessAuthMode(driverClass, {
+            configuredAuthMode: config?.authMode,
+            harnessConfigurationJson: this.harnessRow?.CapabilitySettings,
+            hasExplicitApiKeyGrant,
+            env: process.env,
+        });
+
+        let hasLocalOrPoolLogin = authResolution.hasLocalLogin;
+        let resolvedAuthIndicator = authResolution.indicatorPath;
+        let effectiveMode: 'cli-login' | 'api-key' = authResolution.effectiveMode;
+
+        const poolOpts = this.resolveAccountPoolOptions(config);
+        const poolVendor = DriverClassToHarnessPoolVendor(driverClass);
+        if (
+            authResolution.isLocalCliDriver &&
+            !hasLocalOrPoolLogin &&
+            poolVendor !== null &&
+            poolOpts?.enabled !== false
+        ) {
+            const poolServiceOpts = this.buildPoolServiceOptions(poolOpts);
+            const poolSlots = HarnessAccountPoolService.Instance.ListSlots(
+                { vendor: poolVendor },
+                poolServiceOpts,
+            );
+            const authenticatedSlot = poolSlots.find((s) => s.enabled && s.authenticated);
+            if (authenticatedSlot) {
+                hasLocalOrPoolLogin = true;
+                resolvedAuthIndicator = authenticatedSlot.authIndicatorPath ?? `pool:${authenticatedSlot.slotId}`;
+                if (
+                    authResolution.requestedMode === 'cli-login' ||
+                    (authResolution.requestedMode === 'auto' &&
+                        !hasExplicitApiKeyGrant &&
+                        process.env.MJ_HARNESS_PREFER_CLI_LOGIN !== '0')
+                ) {
+                    effectiveMode = 'cli-login';
+                }
+            }
+        }
+
+        if (
+            authResolution.requestedMode === 'cli-login' &&
+            authResolution.isLocalCliDriver &&
+            !hasLocalOrPoolLogin
+        ) {
+            const loginCommand = GetLocalCliLoginCommand(driverClass);
+            throw new Error(
+                `Harness '${this.harnessRow?.Name ?? driverClass}' (${driverClass}) is configured with ` +
+                    `authMode='cli-login', but no local CLI login session was detected. ` +
+                    `Sign in with \`${loginCommand}\` to use your subscription plan, or switch ` +
+                    `authMode to 'api-key' (in AIAgent.TypeConfiguration, AIAgentHarness.CapabilitySettings, ` +
+                    `or MJ_HARNESS_AUTH_MODE=api-key).`,
+            );
+        }
+
+        this.effectiveAuthMode = effectiveMode;
+
+        if (effectiveMode === 'cli-login') {
+            StripHarnessApiKeyEnvironment(environment);
+            LogStatus(
+                `Harness '${this.harnessRow?.Name ?? driverClass}' (${driverClass}) resolved authMode=cli-login ` +
+                    `(subscription; indicator=${resolvedAuthIndicator ?? 'detected'}); ` +
+                    `skipping API-key fallback and stripping provider API-key env vars.`,
+            );
+        } else if (Object.keys(environment).length === 0) {
+            this.applyVendorKeyFallback(environment);
+        } else if (
+            driverClass === 'AntigravityCliAdapter' ||
+            driverClass === 'AntigravityCloudAdapter'
+        ) {
+            NormalizeAntigravityEnvironment(environment);
+        }
+
+        try {
+            const rv = new RunView();
+            // If no explicit GitHub credential grant resolved, check if the calling user has an active
+            // personal 3LO GitHub credential (UserOAuth3LO:GitHub:<userId>) scoped strictly to them.
+            let isUserDelegatedGitHub = false;
+            if (!environment.GH_TOKEN && !environment.GITHUB_TOKEN && contextUser?.ID) {
+                const delegatedToken = await this.resolveUserDelegatedGitHubToken(rv, contextUser);
+                if (delegatedToken) {
+                    environment.GH_TOKEN = delegatedToken;
+                    isUserDelegatedGitHub = true;
                 }
             }
 
-            if (Object.keys(environment).length === 0) {
-                this.applyVendorKeyFallback(environment);
-            }
+            ApplyGitHubEnvironmentConventions(
+                environment,
+                this.AgentRun?.Agent ?? undefined,
+                contextUser
+                    ? {
+                          IsUserDelegated: isUserDelegatedGitHub,
+                          UserName: contextUser.Name,
+                          UserEmail: contextUser.Email,
+                      }
+                    : undefined,
+            );
         } catch (e) {
-            LogError(`Failed to resolve harness environment: ${describeError(e)}`);
+            LogError(`Failed to resolve harness GitHub environment: ${describeError(e)}`);
         }
         return environment;
+    }
+
+    /**
+     * Resolves the calling user's personal 3LO GitHub token (`UserOAuth3LO:GitHub:<userId>`)
+     * when present and active, enforcing strict `ownerUserId === contextUser.ID` isolation.
+     */
+    private async resolveUserDelegatedGitHubToken(
+        rv: RunView,
+        contextUser: UserInfo,
+    ): Promise<string | null> {
+        if (!contextUser?.ID || !/^[0-9a-fA-F-]{36}$/.test(contextUser.ID.trim())) {
+            return null;
+        }
+        const credName = `UserOAuth3LO:GitHub:${contextUser.ID.trim().toLowerCase()}`;
+        const res = await rv.RunView<MJCredentialEntity>(
+            {
+                EntityName: 'MJ: Credentials',
+                ExtraFilter: `Name='${credName}' AND IsActive=1`,
+                MaxRows: 1,
+                ResultType: 'entity_object',
+            },
+            contextUser,
+        );
+        const cred = res.Success ? res.Results?.[0] : undefined;
+        if (!cred) {
+            return null;
+        }
+        if (cred.ExpiresAt && new Date(cred.ExpiresAt).getTime() <= Date.now()) {
+            return null;
+        }
+        return ExtractHarnessCredentialSecret(cred.Values, {
+            EnvVariableName: 'GH_TOKEN',
+            ContextUserId: contextUser.ID,
+        });
     }
 
     /**
@@ -600,41 +1615,55 @@ export class HarnessAgentBase extends BaseAgent {
         if (!harness?.DriverClass) {
             return;
         }
-        const envKey = `AI_VENDOR_API_KEY__${harness.DriverClass.toUpperCase()}`;
-        const value = process.env[envKey];
-        if (!value) {
+        const matchedSourceKey = ResolveDriverVendorFallbackEnvironment(
+            harness.DriverClass,
+            environment,
+        );
+        if (matchedSourceKey) {
+            LogStatus(
+                `Harness '${harness.Name}' using vendor key fallback from ${matchedSourceKey}.`,
+            );
             return;
         }
-        // The variable the harness itself expects. Kept as an explicit map rather than guessed,
-        // because writing a key into the wrong variable name is a silent no-op the harness reports
-        // only as an auth failure. A harness not listed here must be granted explicitly through
-        // MJ: AI Agent Credentials.
         const target = HARNESS_CREDENTIAL_ENV_VARS[harness.DriverClass];
         if (!target) {
             LogStatus(
                 `Harness '${harness.Name}' has no credential grants and no known env-var convention for ` +
                     `driver '${harness.DriverClass}'. Grant one via MJ: AI Agent Credentials.`,
             );
-            return;
         }
-        environment[target] = value;
-        LogStatus(`Harness '${harness.Name}' using vendor key fallback from ${envKey}.`);
     }
 
     /**
-     * Reads a credential's value.
+     * Reads a credential's value, extracts scalar secrets from JSON `Values`, or mints a short-lived
+     * GitHub App installation token when the credential is a `GitHub App`.
      *
      * Custody stays in `MJ: Credentials` — this only reads what the agent was granted, and does not
      * cache it beyond the session.
      */
-    private async loadCredentialValue(credentialId: string, contextUser?: UserInfo): Promise<string | null> {
+    private async loadCredentialValue(
+        credentialId: string,
+        contextUser?: UserInfo,
+        envVariableName?: string,
+    ): Promise<string | null> {
         try {
             const md = this.ProviderToUse;
             const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
             if (!(await credential.Load(credentialId))) {
                 return null;
             }
-            return credential.Values ?? null;
+            if (credential.IsActive === false) {
+                LogStatus(`Harness credential ${credentialId} is inactive; skipping.`);
+                return null;
+            }
+            if (credential.ExpiresAt && new Date(credential.ExpiresAt).getTime() <= Date.now()) {
+                LogStatus(`Harness credential ${credentialId} has expired; skipping.`);
+                return null;
+            }
+            return await ExtractHarnessCredentialSecret(credential.Values, {
+                EnvVariableName: envVariableName,
+                ContextUserId: contextUser?.ID,
+            });
         } catch (e) {
             LogError(`Failed to load credential ${credentialId}: ${describeError(e)}`);
             return null;
@@ -642,7 +1671,7 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     /** Loads the harness registry row this agent selected by name. */
-    private async loadHarnessRow(harnessName: string | undefined, contextUser?: UserInfo): Promise<MJAIAgentHarnessEntity> {
+    protected async loadHarnessRow(harnessName: string | undefined, contextUser?: UserInfo): Promise<MJAIAgentHarnessEntity> {
         if (!harnessName) {
             throw new Error(
                 "Agent is of type 'Harness' but its TypeConfiguration does not name a harness. " +
@@ -670,7 +1699,7 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     /** Resolves the adapter class named by the harness row. */
-    private resolveAdapter(harness: MJAIAgentHarnessEntity): BaseHarnessAdapter {
+    protected resolveAdapter(harness: MJAIAgentHarnessEntity): BaseHarnessAdapter {
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseHarnessAdapter>(
             BaseHarnessAdapter,
             harness.DriverClass,
@@ -688,10 +1717,62 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     /** Chooses a sandbox provider from the agent's configuration. */
-    private createSandboxProvider(config: HarnessAgentConfig): ISandboxProvider {
-        return config.sandbox?.provider === 'docker'
-            ? new DockerSandboxProvider({ defaultImage: config.sandbox?.image })
-            : new LocalDirectorySandboxProvider();
+    protected createSandboxProvider(config: HarnessAgentConfig): ISandboxProvider {
+        switch (config.sandbox?.provider) {
+            case 'cloud':
+                return new CloudSandboxProvider(config.sandbox.cloud);
+            case 'docker':
+                return new DockerSandboxProvider({ defaultImage: config.sandbox?.image });
+            case 'local':
+            default:
+                return new LocalDirectorySandboxProvider();
+        }
+    }
+
+    /**
+     * Resolves the MCP endpoint URL and credential handed to `StartSession`.
+     *
+     * When `sandbox.provider === 'cloud'` (or the adapter executes in a remote cloud), an external
+     * reachability URL (`sandbox.cloud.mcpExternalServerUrl` or a non-loopback `mcpServerUrl`) is
+     * required. A localhost ephemeral binding cannot be reached from a remote vendor cloud without a
+     * tunnel, so it is omitted cleanly with a status log rather than failing or passing a dead URL.
+     */
+    private resolveMcpSessionEndpoint(
+        config: HarnessAgentConfig,
+    ): { mcpServerUrl?: string; mcpCredential?: string } {
+        if (!this.adapter?.Capabilities?.McpClient) {
+            return {};
+        }
+
+        const isCloudRemote =
+            config.sandbox?.provider === 'cloud' ||
+            this.adapter.Capabilities.SupportsCloudExecution === true;
+
+        const externalTunnelUrl = config.sandbox?.cloud?.mcpExternalServerUrl?.trim();
+        if (externalTunnelUrl) {
+            return {
+                mcpServerUrl: externalTunnelUrl,
+                mcpCredential: config.mcpCredential,
+            };
+        }
+
+        const configuredUrl = config.mcpServerUrl?.trim();
+        if (!configuredUrl) {
+            return {};
+        }
+
+        if (isCloudRemote && isLoopbackMcpUrl(configuredUrl)) {
+            LogStatus(
+                `Harness MCP endpoint '${configuredUrl}' is a localhost loopback binding and ` +
+                    `sandbox.cloud.mcpExternalServerUrl is not set; skipping MCP binding for remote cloud session.`,
+            );
+            return {};
+        }
+
+        return {
+            mcpServerUrl: configuredUrl,
+            mcpCredential: config.mcpCredential,
+        };
     }
 
     /** Reads and parses the harness block from the agent's TypeConfiguration. */
@@ -701,11 +1782,39 @@ export class HarnessAgentBase extends BaseAgent {
             return {};
         }
         try {
-            return JSON.parse(raw) as HarnessAgentConfig;
+            const parsed = JSON.parse(raw) as HarnessAgentConfig & Record<string, unknown>;
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                const unknownKeys = Object.keys(parsed).filter((k) => !KNOWN_HARNESS_CONFIG_KEYS.has(k));
+                if (unknownKeys.length > 0) {
+                    LogError(
+                        `AIAgent.TypeConfiguration contains unrecognized top-level key(s) [${unknownKeys.join(', ')}]; they are ignored.`,
+                    );
+                }
+            }
+            return parsed;
         } catch (e) {
             LogError(`AIAgent.TypeConfiguration is not valid JSON: ${describeError(e)}`);
             return {};
         }
+    }
+
+    /** Resolves an attached workspace directory path from payload/data/context or explicit config. */
+    private resolveWorkspacePathFromConfig(config: HarnessAgentConfig, promptParams: AIPromptParams): string | undefined {
+        const ws = config.sandbox?.workspace;
+        if (!ws || ws.mode !== 'attach') {
+            return undefined;
+        }
+        if (ws.pathFromPayload?.trim()) {
+            const execParams = this._executeAgentParams();
+            const candidates: unknown[] = [promptParams.data, execParams?.payload, execParams?.data, execParams?.context];
+            for (const root of candidates) {
+                const resolved = readDottedStringPath(root, ws.pathFromPayload.trim());
+                if (resolved) {
+                    return resolved;
+                }
+            }
+        }
+        return ws.path?.trim() || undefined;
     }
 
     /**
@@ -728,7 +1837,7 @@ export class HarnessAgentBase extends BaseAgent {
      * Later turns send only the conversation: the harness has the contract from turn 1 and, where
      * `SessionResume` is true, still has it in session context.
      */
-    private async buildTurnInput(promptParams: AIPromptParams, isFirstTurn: boolean): Promise<string> {
+    protected async buildTurnInput(promptParams: AIPromptParams, isFirstTurn: boolean): Promise<string> {
         // When the adapter genuinely resumed, the harness already holds the conversation — send only
         // the newest message, exactly as a user typing the next line would. Replaying history on top
         // of a resumed session hands it everything twice. Keyed off DidResumeSession (what happened)
@@ -750,7 +1859,9 @@ export class HarnessAgentBase extends BaseAgent {
             // unaffected.
             const systemPrompt = await this.renderSystemPrompt(promptParams);
             if (systemPrompt.trim()) {
-                this.adapter?.SetSystemPrompt(`${systemPrompt}\n\n${contract}`);
+                const combined = `${systemPrompt}\n\n${contract}`;
+                this.lastSystemPrompt = combined;
+                this.adapter?.SetSystemPrompt(combined);
             }
         }
         return [conversation, contract].filter((p) => p.trim().length > 0).join('\n\n');
@@ -793,6 +1904,86 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     /**
+     * Renders each child prompt's template and collects non-empty outputs keyed by parentPlaceholder.
+     *
+     * Missing templates or render failures log a warning via LogError without throwing, so a failed
+     * child prompt does not abort parent prompt rendering.
+     */
+    protected async renderChildPrompts(
+        childPrompts: ChildPromptParam[],
+        fallbackContextUser?: UserInfo,
+    ): Promise<Record<string, string>> {
+        const renderedMap: Record<string, string> = {};
+        const templatesById = IndexByUUID(TemplateEngineServer.Instance.Templates ?? [], (t) => t.ID);
+        for (const childParam of childPrompts) {
+            if (!childParam) {
+                continue;
+            }
+            const placeholder = childParam.parentPlaceholder;
+            if (!placeholder) {
+                continue;
+            }
+            const childParams = childParam.childPrompt;
+            const childPrompt = childParams?.prompt;
+            if (!childPrompt) {
+                LogError(`Child prompt is missing for placeholder '${placeholder}'`);
+                continue;
+            }
+            if (!childPrompt.TemplateID) {
+                LogError(
+                    `Child prompt '${childPrompt.Name ?? 'unnamed'}' has no TemplateID for placeholder '${placeholder}'`,
+                );
+                continue;
+            }
+            try {
+                const childTemplate = templatesById.Get(childPrompt.TemplateID);
+                const childContent = childTemplate?.GetHighestPriorityContent();
+                if (childTemplate && childContent) {
+                    const nestedChildren =
+                        childParams.childPrompts && childParams.childPrompts.length > 0
+                            ? await this.renderChildPrompts(
+                                  childParams.childPrompts,
+                                  childParams.contextUser ?? fallbackContextUser,
+                              )
+                            : {};
+                    const childData = {
+                        ...(childParams.data ?? {}),
+                        ...(childParams.templateData ?? {}),
+                        ...nestedChildren,
+                    };
+                    const childRendered = await TemplateEngineServer.Instance.RenderTemplate(
+                        childTemplate,
+                        childContent,
+                        childData,
+                        true,
+                        true,
+                        { ContextUser: childParams.contextUser ?? fallbackContextUser },
+                    );
+                    if (childRendered.Success && childRendered.Output?.trim()) {
+                        renderedMap[placeholder] = childRendered.Output;
+                    } else {
+                        LogError(
+                            `Failed to render child prompt template for '${childPrompt.Name ?? 'unnamed'}' ` +
+                                `(placeholder '${placeholder}'): ${childRendered.Message ?? 'no output'}`,
+                        );
+                    }
+                } else {
+                    LogError(
+                        `Child prompt template not found for TemplateID '${childPrompt.TemplateID}' ` +
+                            `(prompt '${childPrompt.Name ?? 'unnamed'}', placeholder '${placeholder}').`,
+                    );
+                }
+            } catch (e) {
+                LogError(
+                    `Failed to render child prompt template for '${childPrompt.Name ?? 'unnamed'}' ` +
+                        `(placeholder '${placeholder}'): ${describeError(e)}`,
+                );
+            }
+        }
+        return renderedMap;
+    }
+
+    /**
      * Renders the agent type's system prompt through the same template engine AIPromptRunner uses,
      * so the harness receives exactly what a Loop model would — including the output example.
      *
@@ -800,25 +1991,34 @@ export class HarnessAgentBase extends BaseAgent {
      * carries the envelope shape and lets the run proceed; throwing here would fail a run over a
      * template warning, which is the worse trade.
      */
-    private async renderSystemPrompt(promptParams: AIPromptParams): Promise<string> {
+    protected async renderSystemPrompt(promptParams: AIPromptParams): Promise<string> {
         const prompt = promptParams.prompt;
         if (!prompt) {
             return '';
         }
         try {
             await TemplateEngineServer.Instance.Config(false, promptParams.contextUser);
+
+            const renderedChildPrompts: Record<string, string> = {
+                ...(promptParams.PreRenderedChildTemplates ?? {}),
+            };
+            if (promptParams.childPrompts && promptParams.childPrompts.length > 0) {
+                const childOutputs = await this.renderChildPrompts(promptParams.childPrompts, promptParams.contextUser);
+                Object.assign(renderedChildPrompts, childOutputs);
+            }
+
             // Look the template up by ID, not name. TemplateEngineBase.FindTemplate takes a NAME —
             // passing prompt.TemplateID matched nothing on every call, so every render fell through
             // to the fallback and the harness never received the agent's own instructions. It failed
             // quietly because a fallback existed, which is exactly what made it survive two rounds of
             // fixing this same symptom.
-            const template = TemplateEngineServer.Instance.Templates.find((t) => UUIDsEqual(t.ID, prompt.TemplateID));
+            const template = TemplateEngineServer.Instance.Templates?.find((t) => UUIDsEqual(t.ID, prompt.TemplateID));
             const content = template?.GetHighestPriorityContent();
             if (template && content) {
                 const rendered = await TemplateEngineServer.Instance.RenderTemplate(
                     template,
                     content,
-                    { ...(promptParams.data ?? {}), ...(promptParams.templateData ?? {}) },
+                    { ...(promptParams.data ?? {}), ...(promptParams.templateData ?? {}), ...renderedChildPrompts },
                     true,
                     true,
                     { ContextUser: promptParams.contextUser },
@@ -883,6 +2083,36 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     /**
+     * Terminates immediately when a harness turn hits its wall-clock cap, idle watchdog, or
+     * repeated tool-call loop threshold instead of letting `BaseAgent` burn retries against an
+     * ended session, allowing the parent orchestrator to inspect committed progress and re-slice
+     * work cleanly.
+     */
+    protected override async determineNextStep<P>(
+        params: ExecuteAgentParams,
+        agentType: MJAIAgentTypeEntity,
+        promptResult: AIPromptRunResult,
+        currentPayload: P,
+    ): Promise<BaseAgentNextStep<P>> {
+        const nextStep = await super.determineNextStep(params, agentType, promptResult, currentPayload);
+        if (
+            promptResult &&
+            !promptResult.success &&
+            (promptResult.errorMessage?.includes('limits.maxWallClockSeconds') ||
+                promptResult.errorMessage?.includes('limits.maxIdleSeconds') ||
+                promptResult.errorMessage?.includes('limits.maxConsecutiveIdenticalToolCalls'))
+        ) {
+            return {
+                ...nextStep,
+                step: 'Failed',
+                terminate: true,
+                errorMessage: promptResult.errorMessage,
+            };
+        }
+        return nextStep;
+    }
+
+    /**
      * Wires {@link EndHarnessSession} into `BaseAgent.Execute()`'s per-run teardown. `Execute()`
      * calls this exactly once per call, from its top-level `finally` block, regardless of outcome —
      * without it, `startHarnessSession()`'s provisioned sandbox (a live Docker container or a
@@ -906,21 +2136,38 @@ export class HarnessAgentBase extends BaseAgent {
         } catch (e) {
             LogError(`Harness sandbox finalize failed: ${describeError(e)}`);
         }
+        this.releaseActiveAccountLease();
         this.adapter = null;
         this.sandboxHandle = null;
         this.sandboxProvider = null;
+        this.harnessRow = null;
+        this.sessionEnvironment = {};
+        this.baseSessionEnvironment = {};
+        this.effectiveAuthMode = 'api-key';
+        this.configuredModel = undefined;
+        this.configuredEffort = undefined;
+        this.persistedEffortLevel = undefined;
         this.turnIndex = 0;
+        this.activePoolVendor = null;
+        this.activePoolServiceOptions = undefined;
+        this.triedAccountSlotIds.clear();
+        this.accountSwitchesThisRun = 0;
+        this.lastSessionStartBaseConfig = null;
+        this.lastPermissionPolicy = undefined;
+        this.lastSystemPrompt = undefined;
+        this.originalRunObjective = undefined;
+        this.recentAssistantProgress = [];
     }
 
     // ---- narrow accessors over BaseAgent internals -------------------------------------------
     // Kept as small named methods so the coupling to BaseAgent's private state is visible in one
     // place rather than scattered through the class.
 
-    private _agentRunId(): string {
+    protected _agentRunId(): string {
         return (this as unknown as { _agentRun?: { ID?: string } })._agentRun?.ID ?? 'unknown-run';
     }
 
-    private _agentRunAgentId(): string {
+    protected _agentRunAgentId(): string {
         return this._executeAgentParams()?.agent?.ID ?? '';
     }
 
@@ -932,21 +2179,224 @@ export class HarnessAgentBase extends BaseAgent {
      * reaching for `.agent` there silently yields undefined and every run fails with "does not name
      * a harness" no matter how it is configured.
      */
-    private _agentRunConversationId(): string | null {
+    protected _agentRunConversationId(): string | null {
         return (this as unknown as { _agentRun?: { ConversationID?: string | null } })._agentRun?.ConversationID ?? null;
     }
 
-    private _agentTypeConfiguration(): string | null {
+    protected _agentRunExternalSessionId(): string | undefined {
+        const current = this.AgentRun?.ExternalSessionID?.trim();
+        return current && current.length > 0 ? current : undefined;
+    }
+
+    protected _agentTypeConfiguration(): string | null {
         return this._executeAgentParams()?.agent?.TypeConfiguration ?? null;
     }
 
-    private _executeAgentParams(): { agent?: { ID?: string; TypeConfiguration?: string | null } } | undefined {
-        return (this as unknown as {
-            _executeParams?: { agent?: { ID?: string; TypeConfiguration?: string | null } };
-        })._executeParams;
+    private _executeAgentParams():
+        | {
+              agent?: { ID?: string; TypeConfiguration?: string | null };
+              payload?: unknown;
+              data?: Record<string, unknown>;
+              context?: Record<string, unknown>;
+          }
+        | undefined {
+        return (
+            this as unknown as {
+                _executeParams?: {
+                    agent?: { ID?: string; TypeConfiguration?: string | null };
+                    payload?: unknown;
+                    data?: Record<string, unknown>;
+                    context?: Record<string, unknown>;
+                };
+            }
+        )._executeParams;
+    }
+}
+
+function readDottedStringPath(root: unknown, dottedPath: string): string | undefined {
+    let cursor: unknown = root;
+    for (const segment of dottedPath.split('.')) {
+        if (cursor === null || typeof cursor !== 'object' || Array.isArray(cursor)) {
+            return undefined;
+        }
+        cursor = (cursor as Record<string, unknown>)[segment];
+    }
+    return typeof cursor === 'string' && cursor.trim().length > 0 ? cursor.trim() : undefined;
+}
+
+function isOutboundNetworkRequiredDriver(driverClass: string | null | undefined): boolean {
+    switch (driverClass) {
+        case 'ClaudeCodeCliAdapter':
+        case 'ClaudeCodeCloudAdapter':
+        case 'CodexAdapter':
+        case 'CodexCloudAdapter':
+        case 'AntigravityCliAdapter':
+        case 'AntigravityCloudAdapter':
+        case 'GeminiCliAdapter':
+        case 'OpenCodeAdapter':
+        case 'PiAdapter':
+            return true;
+        default:
+            return false;
     }
 }
 
 function describeError(e: unknown): string {
     return e instanceof Error ? e.message : String(e);
+}
+
+const DEFAULT_ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
+const MAX_STALL_TAIL_CHARS = 1500;
+
+interface TurnAbortSignal {
+    readonly kind: 'aborted';
+}
+
+const ABORT_SENTINEL: TurnAbortSignal = { kind: 'aborted' };
+
+function isAbortSentinel(
+    value: IteratorResult<HarnessTurnEvent> | TurnAbortSignal,
+): value is TurnAbortSignal {
+    return 'kind' in value && value.kind === 'aborted';
+}
+
+function resolveHeartbeatIntervalMs(seconds: number | undefined): number {
+    if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds >= 0) {
+        return seconds * 1000;
+    }
+    return DEFAULT_ACTIVITY_HEARTBEAT_INTERVAL_MS;
+}
+
+function invokeActivityHeartbeat(
+    callback: HarnessActivityHeartbeatCallback,
+    info: HarnessActivityHeartbeatInfo,
+): void {
+    try {
+        const result = callback(info);
+        if (result && typeof result.then === 'function') {
+            void result.catch((err) => {
+                LogError(`Harness onActivityHeartbeat callback rejected: ${describeError(err)}`);
+            });
+        }
+    } catch (err) {
+        LogError(`Harness onActivityHeartbeat callback threw: ${describeError(err)}`);
+    }
+}
+
+type CanonicalJsonValue =
+    | string
+    | number
+    | boolean
+    | null
+    | CanonicalJsonValue[]
+    | { [key: string]: CanonicalJsonValue };
+
+function canonicalizeJsonValue(value: CanonicalJsonValue): CanonicalJsonValue {
+    if (value === null || typeof value !== 'object') {
+        return value;
+    }
+    if (Array.isArray(value)) {
+        return value.map((item) => canonicalizeJsonValue(item));
+    }
+    const sorted: { [key: string]: CanonicalJsonValue } = {};
+    for (const key of Object.keys(value).sort()) {
+        sorted[key] = canonicalizeJsonValue(value[key]);
+    }
+    return sorted;
+}
+
+/**
+ * Produces a deterministic canonical representation of a tool call's serialized arguments by
+ * recursively sorting JSON object keys. Non-JSON strings fall back to their trimmed text.
+ */
+export function CanonicalizeToolInput(argumentsJson: string | undefined): string {
+    if (argumentsJson === undefined) {
+        return '';
+    }
+    const trimmed = argumentsJson.trim();
+    if (!trimmed) {
+        return '';
+    }
+    try {
+        const parsed = JSON.parse(trimmed) as CanonicalJsonValue;
+        return JSON.stringify(canonicalizeJsonValue(parsed));
+    } catch {
+        return trimmed;
+    }
+}
+
+function buildToolCallSignature(toolName: string, argumentsJson: string | undefined): string {
+    return `${toolName.trim()}\u0000${CanonicalizeToolInput(argumentsJson)}`;
+}
+
+function formatRecentOutputTail(recentOutputLines: readonly string[]): string {
+    if (recentOutputLines.length === 0) {
+        return '';
+    }
+    const joined = recentOutputLines.join('\n');
+    const clipped =
+        joined.length > MAX_STALL_TAIL_CHARS
+            ? `...${joined.slice(joined.length - MAX_STALL_TAIL_CHARS)}`
+            : joined;
+    return `\nRecent output tail:\n${clipped}`;
+}
+
+function buildIdleStallReason(
+    maxIdleSeconds: number,
+    lastEventType: string | undefined,
+    recentOutputLines: readonly string[],
+): string {
+    const base =
+        `Harness turn stalled: no stream activity for configured limits.maxIdleSeconds (${maxIdleSeconds}s) ` +
+        `(last event: ${lastEventType ?? 'none'}).`;
+    return `${base}${formatRecentOutputTail(recentOutputLines)}`;
+}
+
+function buildToolLoopStallReason(
+    toolName: string,
+    consecutiveCount: number,
+    threshold: number,
+    recentOutputLines: readonly string[],
+): string {
+    const base =
+        `Harness turn stalled: repeated identical tool call '${toolName}' ${consecutiveCount} consecutive times ` +
+        `(exceeded limits.maxConsecutiveIdenticalToolCalls=${threshold}).`;
+    return `${base}${formatRecentOutputTail(recentOutputLines)}`;
+}
+
+function isLoopbackMcpUrl(rawUrl: string): boolean {
+    try {
+        const parsed = new URL(rawUrl);
+        const host = parsed.hostname.toLowerCase();
+        return (
+            host === 'localhost' ||
+            host === '127.0.0.1' ||
+            host === '0.0.0.0' ||
+            host === '::1' ||
+            host === '[::1]'
+        );
+    } catch {
+        return false;
+    }
+}
+
+function resolveMaxAccountSwitches(configured: number | undefined): number {
+    if (typeof configured === 'number' && Number.isFinite(configured) && configured >= 0) {
+        return Math.floor(configured);
+    }
+    return DEFAULT_MAX_ACCOUNT_SWITCHES_PER_RUN;
+}
+
+function extractOriginalObjective(promptParams: AIPromptParams): string {
+    const messages = promptParams.conversationMessages ?? [];
+    const firstUser = messages.find((m) => m.role === 'user') ?? messages[0];
+    if (!firstUser) {
+        return '';
+    }
+    const raw =
+        typeof firstUser.content === 'string'
+            ? firstUser.content
+            : JSON.stringify(firstUser.content ?? '');
+    const normalized = raw.replace(/\s+/g, ' ').trim();
+    return normalized.length > 600 ? `${normalized.slice(0, 597)}...` : normalized;
 }

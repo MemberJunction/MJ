@@ -11,15 +11,20 @@
 import {
     DecisionReferencesIn,
     ResolveDecisionStepAnswers,
+    type BudgetCostEvent,
     type EdgeConditionOutcome,
+    type ForEachEnqueueOperation,
     type GraphDecisions,
     type HeldDecisionAnswer,
     type TaskGraphDecisionAnswer,
     type TaskGraphDecisionQuestion,
     type TaskGraphNodeConfigMap,
+    type TaskGraphNodeKind,
 } from '@memberjunction/ai-core-plus';
-import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
+import type { MJTaskEntity_ITaskLoopIteration, MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
+import type { LoopCursorSnapshot, LoopIterationOutcome } from './TaskLoopExecutor';
 import { ParseConditionOutput } from './condition-gate';
+import type { TaskCompensationStepMetadata } from './saga-compensation';
 
 /**
  * What a Decision step keeps in `Task.Configuration.decision`: its spec configuration, plus the name
@@ -35,6 +40,34 @@ export type TaskDecisionStepConfiguration = TaskGraphNodeConfigMap['Decision'] &
     nodeId: string;
 };
 
+/** Durable billing and run-reference record for one execution attempt of a task node. */
+export interface TaskRuntimeAttemptBilling {
+    /** Idempotent attempt identity (`${taskID}:${attemptIndex}`, disambiguated if a manual retry resets AttemptCount). */
+    attemptId: string;
+    /** Task `AttemptCount` value when this attempt executed (0 for first run, 1 for first retry, etc.). */
+    attemptIndex: number;
+    /** `MJ: AI Prompt Runs` ID produced by this attempt (Prompt or Decision node). */
+    promptRunID?: string;
+    /** `MJ: AI Agent Runs` ID produced by this attempt (Agent node). */
+    agentRunID?: string;
+    /** `MJ: Action Execution Logs` ID produced by this attempt (Action node). */
+    actionLogID?: string;
+    /** `MJ: AI Prompt Runs` IDs produced by loop iterations in this attempt. */
+    loopPromptRunIDs?: string[];
+    /** `MJ: AI Agent Runs` IDs produced by loop iterations in this attempt. */
+    loopAgentRunIDs?: string[];
+    /** Whether this attempt succeeded. */
+    success: boolean;
+    /** Resolved USD cost of this attempt. */
+    costUsd: number;
+    /** Resolved tokens used by this attempt. */
+    tokensUsed: number;
+    /** Epoch milliseconds when this attempt finished. */
+    recordedAtMs: number;
+    /** Timestamped USD spend events incurred during this attempt. */
+    costEvents?: BudgetCostEvent[];
+}
+
 /**
  * `Task.Configuration` as this package writes it: the generated bag, plus a Decision step's settings.
  *
@@ -43,8 +76,98 @@ export type TaskDecisionStepConfiguration = TaskGraphNodeConfigMap['Decision'] &
  * generated type unchanged.
  */
 export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
+    /** Pre-resolved ActionIDs by action name for multi-step loop bodies (`steps[]`), stamped at submit time. */
+    stepActionIds?: Record<string, string>;
+    /** The step's spec `tempId`: stable across runs of the same workflow, unlike the task ID (#3798). */
+    stepId?: string;
     /** Settings for a Decision step. The decision prompt itself is `Task.PromptID`. */
     decision?: TaskDecisionStepConfiguration;
+    /** Settings for an Agent step, extended with optional configuration preset name. */
+    agent?: NonNullable<MJTaskEntity_ITaskStepConfiguration['agent']> & {
+        presetName?: string;
+    };
+    /** ForEach step configuration extended with optional `enqueue` WorkQueue fan-out settings. */
+    forEach?: NonNullable<MJTaskEntity_ITaskStepConfiguration['forEach']> & {
+        enqueue?: ForEachEnqueueOperation;
+    };
+    /** Step discriminator override when DB StepType uses `'External'` for `Enqueue`. */
+    stepKind?: TaskGraphNodeKind;
+    /** Settings for an `Enqueue` step persisted with `StepType: 'External'`. */
+    enqueue?: TaskGraphNodeConfigMap['Enqueue'];
+    /** Optional saga compensation metadata for an Action step or synthesized compensation task. */
+    compensation?: TaskCompensationStepMetadata;
+    /**
+     * Runtime execution metadata, plus whether the node's output was tainted when it ran (its input
+     * taint OR its own untrusted output). Written for every node that ran, `false` included, so a node
+     * that never ran is told apart from one that ran clean (see `UpstreamCarriesTaint`).
+     */
+    runtime?: NonNullable<MJTaskEntity_ITaskStepConfiguration['runtime']> & {
+        isOutputTainted?: boolean;
+        /**
+         * Whether the payload a waiting step (External, Wait, provider-Human) was reached with was
+         * tainted, recorded when it is reached. Its output taint is decided from this when it
+         * completes; absent reads as tainted.
+         */
+        isInputTainted?: boolean;
+        /** Durable `Enqueue` waiting-state metadata and deduplicated processed correlation keys. */
+        enqueueState?: {
+            correlationKey: string;
+            topic: string;
+            publishedAt?: string;
+            settledAt?: string;
+            processedKeys?: string[];
+        };
+        /** Compact durable `ForEach` + `Enqueue` fan-out progress bitmap and retry ledger. */
+        enqueueFanOut?: {
+            correlationKey: string;
+            topic: string;
+            totalItems: number;
+            completedCount: number;
+            failedCount: number;
+            publishBatchCount: number;
+            peakPublishConcurrency: number;
+            completedBitmapHex: string;
+            failedBitmapHex: string;
+            failedDetails?: Array<{ itemIndex: number; errorMessage: string }>;
+            status: 'Publishing' | 'Waiting' | 'Complete' | 'Failed';
+            errorMessage?: string;
+            startedAt: string;
+            completedAt?: string;
+        };
+        /**
+         * The parameters an Action step's action was actually given: its input mapping resolved over
+         * the upstream outputs, with the envelope's bound parameters restored. `InputPayload` holds only
+         * the authored input, so this is what a compensation's `input.*` mapping reads.
+         */
+        actionInput?: Record<string, unknown>;
+        /** Who completed a Human step, recorded server-side (see `HumanReviewClearsTaint`). */
+        completedByUserID?: string;
+        /** Durable USD cost recorded at node settlement for governance budget reconstruction. */
+        governanceCostUsd?: number;
+        /** Durable token count recorded at node settlement for governance budget reconstruction. */
+        governanceTokensUsed?: number;
+        /** Timestamped USD spend deltas recorded at node/iteration settlement for cross-day accounting. */
+        governanceCostEvents?: BudgetCostEvent[];
+        /** Durable per-attempt billing ledger retained across retryable failures and governance pauses. */
+        attempts?: TaskRuntimeAttemptBilling[];
+        /** Retained PromptRunIDs across prior failed/retried attempts for durable billing recovery. */
+        priorPromptRunIDs?: string[];
+        /** Retained AgentRunIDs across prior failed/retried attempts for durable billing recovery. */
+        priorAgentRunIDs?: string[];
+        /** Durable loop cursor state persisted on the Task row when a loop pauses mid-execution under governance. */
+        loopCursor?: {
+            Cursor: LoopCursorSnapshot;
+            LivePayload: Record<string, LoopIterationOutcome['Output']>;
+            IterationTrace: MJTaskEntity_ITaskLoopIteration[];
+            AccumulatedCostUsd: number;
+            AccumulatedTokensUsed: number;
+            IsOutputTainted: boolean;
+            /** Timestamped USD spend deltas incurred across loop iterations before pause. */
+            CostEvents?: BudgetCostEvent[];
+            /** Epoch ms when the loop cursor was last persisted/updated. */
+            UpdatedAtMs?: number;
+        };
+    };
 };
 
 /** The Task columns the decision readers use. Structural, so `MJTaskEntity` satisfies it as-is. */

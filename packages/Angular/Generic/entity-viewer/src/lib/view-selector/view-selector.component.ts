@@ -73,6 +73,13 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   @Input() ViewModified: boolean = false;
 
   /**
+   * Whether to render the Export icon button in the selector bar. Defaults to `true` for standalone
+   * usage; `mj-view-workspace` sets this to `false` when the active view type (such as Grid) already
+   * provides an Export button in its own toolbar.
+   */
+  @Input() ShowExportButton: boolean = true;
+
+  /**
    * Emitted when a view is selected
    */
   @Output() ViewSelected = new EventEmitter<ViewSelectedEvent>();

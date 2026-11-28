@@ -149,6 +149,7 @@ export class DatabaseNaturalKeyReader implements NaturalKeyReader {
         ExtraFilter: filter,
         Fields: info.PrimaryKeys.map((pk) => pk.Name),
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
       },
       this.contextUser

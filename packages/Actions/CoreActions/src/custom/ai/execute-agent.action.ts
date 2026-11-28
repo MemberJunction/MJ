@@ -183,12 +183,13 @@ export class ExecuteAgentAction extends BaseAction {
      */
     private callerRunBounds(
         params: RunActionParams
-    ): Pick<ExecuteAgentParams, 'PrimaryScopeEntityName' | 'PrimaryScopeRecordID' | 'SecondaryScopes' | 'Audience'> {
+    ): Pick<ExecuteAgentParams, 'PrimaryScopeEntityName' | 'PrimaryScopeRecordID' | 'SecondaryScopes' | 'SearchScopeIDs' | 'Audience'> {
         const scope = params.RunScope;
         return {
             PrimaryScopeEntityName: scope?.PrimaryScopeEntityName ?? undefined,
             PrimaryScopeRecordID: scope?.PrimaryScopeRecordID ?? undefined,
             SecondaryScopes: scope?.SecondaryScopes ?? undefined,
+            SearchScopeIDs: scope?.SearchScopeIDs ?? undefined,
             Audience: this.nestedRunAudience(params.Audience),
         };
     }

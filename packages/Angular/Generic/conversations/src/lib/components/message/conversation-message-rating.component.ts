@@ -1,7 +1,12 @@
 import { Component, Input, OnInit, ChangeDetectorRef } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BaseEntity, CompositeKey, RunView, UserInfo } from '@memberjunction/core';
-import { RatingJSON, UserInfoEngine } from '@memberjunction/core-entities';
+import {
+  MJConversationDetailEntity,
+  MJResourcePermissionEntity,
+  RatingJSON,
+  UserInfoEngine,
+} from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 
 const FEEDBACK_CONSENT_KEY = 'agent-feedback-share-consent';
@@ -11,13 +16,13 @@ const FEEDBACK_ROLE_IDS = [
   'dfafccec-6a37-ef11-86d4-000d3a4e707e'  // Integration
 ];
 
-/** Minimal shape we use against the loaded entity. All MJ entity subclasses
- *  implement `Load(ID)` via codegen but the base `BaseEntity<unknown>` type
- *  doesn't expose it, so we narrow here to keep the call generic across
- *  entity names without resorting to `any`. */
-type LoadableEntity = BaseEntity<unknown> & {
+/** Structural interface for conversation-detail entities supporting rating persistence without weak `.Get()`/`.Set()`. */
+interface LoadableRatingEntity extends BaseEntity {
   Load(KeyValuePairs: CompositeKey | string, EntityRelationshipsToLoad?: string[]): Promise<boolean>;
-};
+  ConversationID?: string | null;
+  UserRating?: number | null;
+  UserFeedback?: string | null;
+}
 
 /**
  * Single-rating-per-message rating UI for an AI conversation response.
@@ -314,31 +319,32 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
     try {
       const md = this.ProviderToUse;
       const rv = RunView.FromMetadataProvider(md);
-      const existing = await rv.RunView({
+      const existing = await rv.RunView<MJResourcePermissionEntity>({
         EntityName: 'MJ: Resource Permissions',
         ExtraFilter:
           `ResourceTypeID='${CONVERSATIONS_RESOURCE_TYPE_ID}' AND ` +
           `ResourceRecordID='${conversationID}' AND Type='Role' AND ` +
-          `RoleID IN ('${FEEDBACK_ROLE_IDS.join("','")}')`
+          `RoleID IN ('${FEEDBACK_ROLE_IDS.join("','")}')`,
+        ResultType: 'entity_object'
       });
 
       const granted = new Set<string>(
-        (existing.Results || []).map((r: any) => (r.RoleID || '').toLowerCase())
+        (existing.Results || []).map((r) => (r.RoleID || '').toLowerCase())
       );
 
       for (const roleID of FEEDBACK_ROLE_IDS) {
         if (granted.has(roleID.toLowerCase())) continue;
-        const perm = await md.GetEntityObject('MJ: Resource Permissions');
+        const perm = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
         perm.NewRecord();
-        perm.Set('ResourceTypeID', CONVERSATIONS_RESOURCE_TYPE_ID);
-        perm.Set('ResourceRecordID', conversationID);
-        perm.Set('Type', 'Role');
-        perm.Set('RoleID', roleID);
-        perm.Set('PermissionLevel', 'View');
-        perm.Set('Status', 'Approved');
+        perm.ResourceTypeID = CONVERSATIONS_RESOURCE_TYPE_ID;
+        perm.ResourceRecordID = conversationID;
+        perm.Type = 'Role';
+        perm.RoleID = roleID;
+        perm.PermissionLevel = 'View';
+        perm.Status = 'Approved';
         const ok = await perm.Save();
         if (!ok) {
-          console.warn('[Rating] Failed to create ResourcePermission for role', roleID, (perm as any).LatestResult);
+          console.warn('[Rating] Failed to create ResourcePermission for role', roleID, perm.LatestResult);
         }
       }
     } catch (e) {
@@ -350,12 +356,20 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
     if (!this.ConversationDetailId) return;
     try {
       const md = this.ProviderToUse;
-      const entity = (await md.GetEntityObject(this.RatingEntityName)) as LoadableEntity;
+      const user = this.CurrentUser ?? md.CurrentUser;
+      const entities = md.Entities;
+      if (Array.isArray(entities) && entities.length > 0 && user) {
+        const ratingEntity = entities.find((e) => e.Name === this.RatingEntityName);
+        if (!ratingEntity?.GetUserPermisions(user)?.CanRead) {
+          return;
+        }
+      }
+      const entity = await md.GetEntityObject<LoadableRatingEntity>(this.RatingEntityName);
       const loaded = await entity.Load(this.ConversationDetailId);
       if (loaded) {
-        const rating = entity.Get(this.RatingField);
+        const rating = this.readEntityRating(entity);
         this.CurrentUserRating = rating != null ? Number(rating) : null;
-        this.CurrentUserComments = (entity.Get(this.RatingCommentField) ?? '') as string;
+        this.CurrentUserComments = this.readEntityComment(entity) ?? '';
         this.cdr.detectChanges();
       }
     } catch (error) {
@@ -379,18 +393,18 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
 
     try {
       const md = this.ProviderToUse;
-      const entity = (await md.GetEntityObject(this.RatingEntityName)) as LoadableEntity;
+      const entity = await md.GetEntityObject<LoadableRatingEntity>(this.RatingEntityName);
       const loaded = await entity.Load(this.ConversationDetailId);
       if (!loaded) {
         throw new Error(`ConversationDetail ${this.ConversationDetailId} not found in ${this.RatingEntityName}`);
       }
-      entity.Set(this.RatingField, rating);
-      entity.Set(this.RatingCommentField, comments || null);
+      this.writeEntityRating(entity, rating);
+      this.writeEntityComment(entity, comments || null);
       const saveResult = await entity.Save();
       if (!saveResult) {
-        throw new Error(`Save failed: ${(entity as any).LatestResult?.Message ?? 'unknown'}`);
+        throw new Error(`Save failed: ${entity.LatestResult?.Message ?? 'unknown'}`);
       }
-      const conversationID = entity.Get('ConversationID');
+      const conversationID = this.readEntityConversationId(entity);
       return typeof conversationID === 'string' ? conversationID : null;
     } catch (error) {
       console.error('[Rating] save failed:', error);
@@ -402,5 +416,65 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
       this.IsSaving = false;
       this.cdr.detectChanges();
     }
+  }
+
+  private readEntityRating(entity: LoadableRatingEntity): number | null {
+    if (this.RatingField === 'UserRating' && entity instanceof MJConversationDetailEntity) {
+      return entity.UserRating;
+    }
+    const field = entity.Fields.find((f) => f.Name === this.RatingField);
+    if (field && typeof field.Value === 'number') {
+      return field.Value;
+    }
+    if (field && typeof field.Value === 'string' && field.Value.trim() !== '') {
+      const parsed = Number(field.Value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return entity.UserRating ?? null;
+  }
+
+  private readEntityComment(entity: LoadableRatingEntity): string | null {
+    if (this.RatingCommentField === 'UserFeedback' && entity instanceof MJConversationDetailEntity) {
+      return entity.UserFeedback;
+    }
+    const field = entity.Fields.find((f) => f.Name === this.RatingCommentField);
+    if (field && typeof field.Value === 'string') {
+      return field.Value;
+    }
+    return entity.UserFeedback ?? null;
+  }
+
+  private writeEntityRating(entity: LoadableRatingEntity, rating: number): void {
+    if (this.RatingField === 'UserRating' && entity instanceof MJConversationDetailEntity) {
+      entity.UserRating = rating;
+      return;
+    }
+    const field = entity.Fields.find((f) => f.Name === this.RatingField);
+    if (field) {
+      field.Value = rating;
+      return;
+    }
+    entity.UserRating = rating;
+  }
+
+  private writeEntityComment(entity: LoadableRatingEntity, comment: string | null): void {
+    if (this.RatingCommentField === 'UserFeedback' && entity instanceof MJConversationDetailEntity) {
+      entity.UserFeedback = comment;
+      return;
+    }
+    const field = entity.Fields.find((f) => f.Name === this.RatingCommentField);
+    if (field) {
+      field.Value = comment;
+      return;
+    }
+    entity.UserFeedback = comment;
+  }
+
+  private readEntityConversationId(entity: LoadableRatingEntity): string | null {
+    if (typeof entity.ConversationID === 'string') {
+      return entity.ConversationID;
+    }
+    const field = entity.Fields.find((f) => f.Name === 'ConversationID');
+    return field && typeof field.Value === 'string' ? field.Value : null;
   }
 }

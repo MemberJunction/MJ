@@ -420,7 +420,7 @@ function restPublish(user: UserInfo, topicName: string, apiKeyHash: string | und
 async function withRestServer<T>(payload: WorkQueueRequestPayload, work: (baseUrl: string) => Promise<T>): Promise<T> {
     const app = express();
     app.use((req: Request, _res: Response, next: NextFunction) => {
-        (req as Request & { userPayload?: WorkQueueRequestPayload }).userPayload = payload;
+        (req as Omit<Request, 'userPayload'> & { userPayload?: WorkQueueRequestPayload }).userPayload = payload;
         next();
     });
     app.use('/work-queue', CreateWorkQueuePublishRouter(restDependencies()));

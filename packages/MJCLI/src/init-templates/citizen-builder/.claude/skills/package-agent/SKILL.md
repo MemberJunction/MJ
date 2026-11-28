@@ -47,18 +47,28 @@ Create a clean manifest file documenting:
    - The verified test inputs and outputs from Step 2.
 
 ## Step 4: Bundle into Archive
-Create the `dist/` directory and package the agent's files:
+Create the `dist/` directory and package the agent's files (including `.mj-sync.json` files so `mj sync push --dir <extracted>/metadata` works out of the box):
 ```bash
 mkdir -p dist
 AGENT_SLUG="<agent-slug>"
 PACKAGE_NAME="${AGENT_SLUG}-package.zip"
 
-# Create archive containing the manifest, metadata files, and prompt templates
+ACTIONS_FILES=()
+if [ -d metadata/actions ]; then
+  [ -f metadata/actions/.mj-sync.json ] && ACTIONS_FILES+=(metadata/actions/.mj-sync.json)
+  ACTIONS_FILES+=(metadata/actions/.*"${AGENT_SLUG}"*.json)
+fi
+
+# Create archive containing the manifest, .mj-sync.json config, metadata files, and prompt templates
 zip -r "dist/${PACKAGE_NAME}" \
   AGENT_MANIFEST.md \
+  metadata/.mj-sync.json \
+  metadata/agents/.mj-sync.json \
   metadata/agents/.*"${AGENT_SLUG}"*.json \
+  metadata/prompts/.mj-sync.json \
   metadata/prompts/.*"${AGENT_SLUG}"*.json \
   metadata/prompts/templates/"${AGENT_SLUG}"*.md \
+  "${ACTIONS_FILES[@]}" \
   2>/dev/null || tar -czf "dist/${AGENT_SLUG}-package.tar.gz" AGENT_MANIFEST.md metadata/
 ```
 

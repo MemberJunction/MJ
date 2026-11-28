@@ -19,6 +19,7 @@ import {
 } from '@memberjunction/core';
 import type { MJRSUPendingWorkEntity } from '@memberjunction/core-entities';
 import { Octokit } from '@octokit/rest';
+import { MintInstallationToken, ReadGitHubAppCredentials } from './GitHubAppAuth.js';
 import { RSUMetrics } from './RSUMetrics.js';
 import { GetDialect } from './DDLGenerator.js';
 import type { DatabasePlatform } from './interfaces.js';
@@ -2006,20 +2007,24 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   }
 
   /**
-   * Execute the migration SQL against the database.
-   * Delegates CLI tool selection to the DBExecProvider abstraction.
+   * Resolve `${flyway:defaultSchema}` placeholders, split a migration script into dialect batches
+   * (e.g. standalone `GO` lines on SQL Server), and chunk any oversized batch (>32 KB) into groups
+   * of 25 top-level statements so bulk RSU migrations stay under client request timeouts without
+   * splitting inside string literals, quoted identifiers, comments, or dollar-quoted blocks.
    */
-  private async executeMigration(sql: string): Promise<boolean> {
-    const defaultSchema = rsuConfig.DefaultSchema;
+  public static SplitMigrationBatches(
+    sql: string,
+    platform: DatabasePlatform,
+    defaultSchema: string = rsuConfig.DefaultSchema,
+    log?: (message: string) => void,
+  ): string[] {
     const resolvedSQL = sql.replace(/\$\{flyway:defaultSchema\}/g, defaultSchema);
 
-    // Primary split: GO batch separators (SQL Server SSMS convention, not
-    // valid T-SQL). Many CodeGen-generated migrations include them between
-    // logical blocks and we want one ExecuteSQL call per block.
-    const goBatches = resolvedSQL
-      .split(/^\s*GO\s*$/gim)
-      .map((b) => b.trim())
-      .filter((b) => b.length > 0);
+    // Primary split: standalone batch separator lines (SQL Server's `GO` SSMS convention;
+    // PostgreSQL has no batch separator). Dialect-owned so `GO` inside string literals,
+    // quoted identifiers, or comments never splits mid-token.
+    const dialect = GetDialect(platform);
+    const goBatches = dialect.SplitBatches(resolvedSQL);
 
     // Secondary chunking: bulk RSU migrations (e.g. Salesforce 1100+ tables)
     // can produce a single 1.7MB+ batch with ~17K ALTER TABLE statements
@@ -2042,17 +2047,28 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         finalBatches.push(batch);
         continue;
       }
-      // Split on statement-ending `;` (preserve the `;`) and re-group — but NEVER inside a
-      // PostgreSQL dollar-quoted block (DO $$…$$ / function bodies / the integration view-drop
-      // guard), whose body legitimately contains `;`+newline. A naive split tears those apart.
-      // The dialect owns this: PostgreSQLDialect.SplitStatements is dollar-quote-aware; the
-      // base SplitStatements (SQL Server) is the prior naive `;`+EOL split.
-      const statements = GetDialect(this.platform).SplitStatements(batch);
-      this.rsuLog(`  Oversized batch (${batch.length} chars, ${statements.length} statements) — chunking into groups of ${STATEMENTS_PER_CHUNK}`);
+      // Split on top-level statement-ending `;` + EOL while respecting string literals,
+      // quoted identifiers, comments, and PostgreSQL dollar-quoted blocks (`DO $$…$$` / `$mj_dropviews$`).
+      const statements = dialect.SplitStatements(batch);
+      log?.(`  Oversized batch (${batch.length} chars, ${statements.length} statements) — chunking into groups of ${STATEMENTS_PER_CHUNK}`);
       for (let i = 0; i < statements.length; i += STATEMENTS_PER_CHUNK) {
         finalBatches.push(statements.slice(i, i + STATEMENTS_PER_CHUNK).join('\n'));
       }
     }
+    return finalBatches;
+  }
+
+  /**
+   * Execute the migration SQL against the database.
+   * Delegates CLI tool selection to the DBExecProvider abstraction.
+   */
+  private async executeMigration(sql: string): Promise<boolean> {
+    const finalBatches = RuntimeSchemaManager.SplitMigrationBatches(
+      sql,
+      this.platform,
+      rsuConfig.DefaultSchema,
+      (msg) => this.rsuLog(msg),
+    );
 
     try {
       for (let i = 0; i < finalBatches.length; i++) {
@@ -2470,7 +2486,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * For Docker/CI environments without a local `.git` directory.
    */
   private async gitCommitAndPRViaAPI(migrationFilePaths: string[], affectedTables: string[], description: string): Promise<string> {
-    const octokit = this.createOctokit();
+    const octokit = await this.createOctokit();
     const { owner, repo } = this.resolveGitHubOwnerRepo();
     const branchName = this.generateBranchName(affectedTables);
     const baseBranch = rsuConfig.GitTargetBranch;
@@ -2714,13 +2730,30 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     ].join('\n');
   }
 
-  /** Create an authenticated Octokit instance from environment token. */
-  private createOctokit(): Octokit {
+  /**
+   * An authenticated Octokit instance: a plain token when one is set, otherwise a token minted from
+   * the GitHub App the process was deployed with (GITHUB_APP_ID / _INSTALLATION_ID / _PRIVATE_KEY —
+   * the same names the feedback resolver reads), scoped to the one repository this pipeline commits
+   * to. Until this fallback existed every App-deployed workspace ended this step with "GitHub token
+   * not found", and because the step is non-fatal the migration and generated code it had just
+   * produced lived only on the box, where the next deploy discarded them.
+   */
+  private async createOctokit(): Promise<Octokit> {
     const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
-    if (!token) {
-      throw new RSUError('GIT', 'GitHub token not found. Set GITHUB_TOKEN or GH_TOKEN environment variable for PR creation.');
+    if (token) {
+      return new Octokit({ auth: token });
     }
-    return new Octokit({ auth: token });
+    const app = ReadGitHubAppCredentials();
+    if (!app) {
+      throw new RSUError(
+        'GIT',
+        'GitHub credentials not found. Set GITHUB_TOKEN/GH_TOKEN, or GITHUB_APP_ID + GITHUB_APP_INSTALLATION_ID + GITHUB_APP_PRIVATE_KEY (the App the deploy installs) for PR creation.',
+      );
+    }
+    const { repo } = this.resolveGitHubOwnerRepo();
+    const installationToken = await MintInstallationToken(new Octokit(), app, repo);
+    this.rsuLog(`GitHub App ${app.AppId}: minted an installation token scoped to "${repo}"`);
+    return new Octokit({ auth: installationToken });
   }
 
   /**

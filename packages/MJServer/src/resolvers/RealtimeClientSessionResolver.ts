@@ -24,6 +24,8 @@
  * - **Session `Config`**: the owner can edit it through the generic entity API, so nothing in it is
  *   trusted. Execute re-checks `CanRun` on its target, direct actions never come from it, and its
  *   run ids are used only when {@link SessionRunIDVerifier} finds them to be records of the session.
+ *   A credential refresh re-checks `CanRun` on the target recorded in the server-protected mint
+ *   snapshot instead, because it re-mints what was built for that agent.
  * - **Scope-limited callers** (anonymous and resource-scoped magic-link sessions, including public
  *   web-widget guests): no direct actions. Their scope exists only as row-level filters, which an
  *   action can read around, and a scoped anonymous caller's relay runs as the system user. They
@@ -34,8 +36,9 @@
 import { Resolver, Mutation, Arg, Ctx, Int, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { AuthorizationEvaluator, UserInfo, IMetadataProvider, DatabaseProviderBase, LogError, LogErrorEx, LogStatus, RunView, BaseEntity } from '@memberjunction/core';
-import { UUIDsEqual, IsValidUUID } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual, IsValidUUID, NormalizeUUID, MJLruCache, GetGlobalObjectStore } from '@memberjunction/global';
 import {
+    ArtifactPermissionEngine,
     MJAIAgentEntity,
     MJAIAgentSessionEntity,
     MJAIAgentSessionChannelEntity,
@@ -47,10 +50,12 @@ import {
     MJConversationDetailEntityExtended,
     MJConversationEntity,
 } from '@memberjunction/core-entities';
-import { AIEngine } from '@memberjunction/aiengine';
 import { AIAgentPermissionHelper, AIEngineBase, HasRealtimeUsage, ParseRealtimeUsageRecord, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import {
     RealtimeClientSessionService,
+    RealtimeMintSnapshotRegistry,
+    type ConversationArtifactSummary,
+    type PersistedRealtimeMintSnapshot,
     DelegatedRunArtifact,
     RealtimeChannelServerHost,
     RealtimeCoAgentConfig,
@@ -79,12 +84,18 @@ import {
     type RealtimeChannelCandidate,
     type RealtimeSessionClientPolicy
 } from '@memberjunction/ai-core-plus';
-import { ChatMessage, RealtimeToolDefinition } from '@memberjunction/ai';
+import {
+    ChatMessage,
+    ExtractRealtimeTimingConfig,
+    REALTIME_MAX_SOFT_WINDOW_DURATION_SHARE,
+    RealtimeToolDefinition,
+} from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
 import { SessionRunIDVerifier } from '../agentSessions/SessionRunIDVerifier.js';
+import { IsMaxSessionDeadlineElapsed, RemainingSessionSeconds } from '../agentSessions/sessionDeadline.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { ResolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser, ResolveRecordingStoreUser } from '../realtimeWidget/widgetGuestElevation.js';
 import { RunWithTrustedSessionConfigWrites } from '@memberjunction/core-entities-server';
@@ -111,8 +122,60 @@ const MAX_USAGE_DETAILS_JSON_LENGTH = 4096;
  * the id, many times per call, so the gap is logged once per session instead of once per relay. Bounded:
  * past {@link MAX_LOGGED_MISSING_PROMPT_RUN_SESSIONS} entries the oldest is dropped (a Set keeps insertion order).
  */
-const sessionsLoggedWithoutPromptRun = new Set<string>();
+interface RealtimeResolverSharedState {
+    SessionsLoggedWithoutPromptRun: Set<string>;
+    RefreshRateLimitBuckets: MJLruCache<string, RefreshRateLimitBucket>;
+}
+const REALTIME_RESOLVER_STATE_STORE_KEY = '___SINGLETON__MJ_REALTIME_RESOLVER_STATE';
 const MAX_LOGGED_MISSING_PROMPT_RUN_SESSIONS = 5000;
+const MAX_RECORDING_UPLOAD_BYTES = 100 * 1024 * 1024;
+const MAX_RECORDING_SEGMENT_BYTES = 10 * 1024 * 1024;
+const MAX_RECORDING_SEGMENT_INDEX = 10_000;
+const ALLOWED_RECORDING_MIME_TYPES = new Set<string>([
+    'audio/webm',
+    'audio/ogg',
+    'audio/mp4',
+    'audio/mpeg',
+    'audio/mp3',
+    'audio/wav',
+    'audio/x-wav',
+    'audio/wave',
+    'audio/pcm',
+    'audio/l16',
+    'audio/aac',
+    'audio/flac',
+    'video/webm',
+    'video/mp4',
+]);
+
+function normalizeAndValidateRecordingMimeType(rawMimeType: string): string | null {
+    const trimmed = rawMimeType.trim();
+    if (!trimmed) {
+        return null;
+    }
+    const baseMime = trimmed.split(';')[0]?.trim().toLowerCase() ?? '';
+    return ALLOWED_RECORDING_MIME_TYPES.has(baseMime) ? trimmed : null;
+}
+
+function getRealtimeResolverSharedState(): RealtimeResolverSharedState {
+    const store = GetGlobalObjectStore();
+    if (!store) {
+        throw new Error('RealtimeClientSessionResolver: GlobalObjectStore unavailable');
+    }
+    const existing = store[REALTIME_RESOLVER_STATE_STORE_KEY] as RealtimeResolverSharedState | undefined;
+    if (existing) {
+        return existing;
+    }
+    const created: RealtimeResolverSharedState = {
+        SessionsLoggedWithoutPromptRun: new Set<string>(),
+        RefreshRateLimitBuckets: new MJLruCache<string, RefreshRateLimitBucket>({
+            maxSize: 5000,
+            ttlMs: REFRESH_RATE_LIMIT_WINDOW_MS,
+        }),
+    };
+    store[REALTIME_RESOLVER_STATE_STORE_KEY] = created;
+    return created;
+}
 
 /** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const CO_AGENT_ENTITY = 'MJ: AI Agent Co Agents';
@@ -240,6 +303,13 @@ interface RealtimeSessionConfig {
      * (an unscoped session: a client that reported no channel candidates) ⇒ no channel check.
      */
     channels?: string[];
+    /**
+     * Server-authoritative mint snapshot persisted at session start for cross-instance credential
+     * refresh (`RefreshRealtimeClientSessionToken`), and the target agent a refresh re-authorizes.
+     * Protected from owner writes by `MJAIAgentSessionEntityServer` (`PROTECTED_SESSION_CONFIG_KEYS`),
+     * but readable by the owner, so it is the owner-safe copy (see `PersistedRealtimeMintSnapshot`).
+     */
+    realtimeMintSnapshot?: PersistedRealtimeMintSnapshot;
 }
 
 /**
@@ -365,6 +435,30 @@ export class StartRealtimeClientSessionResult {
      */
     @Field(() => String, { nullable: true })
     AvatarStatusJson?: string;
+
+    /**
+     * Seconds one provider connection lasts before the browser must reconnect: the catalog value
+     * (`ModelConfiguration.Realtime` on the model / model-vendor rows) narrowed to the driver's provider ceiling.
+     * Carried as its own field because the server keeps framework timing out of `SessionConfigJson` (that bag goes
+     * to the provider verbatim). Null when neither the catalog nor the driver knows one.
+     */
+    @Field(() => Int, { nullable: true })
+    ConnectionMaxSeconds?: number;
+
+    /** Credential / relay-ticket lifetime in seconds that the browser schedules its refresh by. Null when not configured. */
+    @Field(() => Int, { nullable: true })
+    SessionMaxSeconds?: number;
+
+    /** Seconds before {@link StartRealtimeClientSessionResult.ConnectionMaxSeconds} at which the browser reconnects. */
+    @Field(() => Int, { nullable: true })
+    ReconnectBufferSeconds?: number;
+
+    /**
+     * Whether the browser may resume with the provider's native resumption handle. Always `false` for a zero data
+     * retention session, whatever the driver's default.
+     */
+    @Field(() => Boolean, { nullable: true })
+    TrustNativeResumption?: boolean;
 }
 
 /**
@@ -443,6 +537,82 @@ export class UploadRealtimeRecordingResult {
     @Field(() => String, { nullable: true })
     FileID?: string;
 }
+
+/**
+ * Result of {@link RealtimeClientSessionResolver.RefreshRealtimeClientSessionToken} — a structured
+ * success/failure envelope returning freshly minted ephemeral credentials or an extended relay grant
+ * for an active client-direct session.
+ */
+@ObjectType()
+export class RefreshRealtimeClientSessionTokenResult {
+    @Field(() => Boolean)
+    Success: boolean;
+
+    /** Discriminator for the refreshed credential: `'token'` or `'relay'`. */
+    @Field(() => String, { nullable: true })
+    Kind?: 'token' | 'relay';
+
+    @Field(() => String, { nullable: true })
+    EphemeralToken?: string;
+
+    @Field(() => String, { nullable: true })
+    ExpiresAt?: string;
+
+    @Field(() => String, { nullable: true })
+    RelayUrl?: string;
+
+    @Field(() => String, { nullable: true })
+    SessionConfigJson?: string;
+
+    /** The re-stamped catalog timing (see {@link StartRealtimeClientSessionResult.ConnectionMaxSeconds}); null on an in-place relay extension. */
+    @Field(() => Int, { nullable: true })
+    ConnectionMaxSeconds?: number;
+
+    @Field(() => Int, { nullable: true })
+    SessionMaxSeconds?: number;
+
+    @Field(() => Int, { nullable: true })
+    ReconnectBufferSeconds?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    TrustNativeResumption?: boolean;
+
+    @Field(() => String, { nullable: true })
+    ErrorMessage?: string;
+}
+
+const REFRESH_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+/**
+ * Mints per window allowed on top of the planned connection moves: reconnects after a lost connection (OpenAI and xAI
+ * mint a fresh token on each), the proactive refresh before a credential expires, and slack. It covers one burst the
+ * client's rapid-reconnect breaker lets through (5) plus a few more drops, and still stops a client minting in a loop.
+ * It is also the whole limit when the session's connection length is unknown.
+ */
+const REFRESH_RATE_LIMIT_DROP_ALLOWANCE = 8;
+/**
+ * The shortest connection the mint limit is sized for. The limit grows as the connection shortens (a planned move per
+ * soft window), so without a floor a mis-entered catalog length (1 s) would allow over a thousand mints per window. The
+ * floor caps the limit at 40 planned moves plus {@link REFRESH_RATE_LIMIT_DROP_ALLOWANCE}; the shortest real provider
+ * connection is minutes long, and the 45 s test override stays above the floor.
+ */
+const REFRESH_RATE_LIMIT_MIN_CONNECTION_SECONDS = 30;
+/**
+ * Refresh calls per window allowed beyond the mint limit, so failed refreshes stay bounded too. A reconnect cycle can
+ * retry a failing refresh on every attempt: a planned move's recovery (about 85 s at one attempt per 5 s) makes about
+ * 17. This covers two such cycles plus slack. It is the server's own budget, kept apart from the client's per-cycle
+ * attempt cap so a client-side tuning change cannot widen what the server lets through.
+ */
+const REFRESH_RATE_LIMIT_FAILED_CALL_ALLOWANCE = 40;
+
+/** The refresh history of one session within the rate-limit window. */
+interface RefreshRateLimitBucket {
+    /** Every refresh call admitted, failed or not. */
+    Calls: number[];
+    /** Refreshes that minted a credential, plus those still in flight (released if they fail). */
+    Mints: number[];
+}
+
+
 
 /**
  * Resolver for the client-direct realtime voice topology. A single {@link SessionManager} and a
@@ -556,6 +726,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // (with the IsDefault row standing in when no runtime target was supplied); zero rows =
         // universal, today's behavior untouched. Resolves the AUTHORITATIVE target id.
         const effectiveTargetId = await this.resolveConstrainedTargetAgentID(coAgentID, targetAgentId, contextUser, provider);
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', effectiveTargetId, userPayload);
         await this.assertCanRunTarget(effectiveTargetId, contextUser, provider);
         // RUNTIME-OVERRIDE GATE: configOverridesJson and a DEVIATING explicit model both require
         // the 'Realtime: Advanced Session Controls' authorization (structured rejection, never a
@@ -585,7 +756,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 );
             }
         }
-        const sessionBranchId = await this.resolveSessionBranch(conversationId, conversationBranchId, contextUser, provider);
+        const verifiedConversationId = await this.assertConversationOwnershipForStart(
+            conversationId,
+            contextUser,
+            provider,
+        );
+        const sessionBranchId = await this.resolveSessionBranch(verifiedConversationId, conversationBranchId, contextUser, provider);
         if (sessionBranchId) {
             config.conversationBranchID = sessionBranchId;
         }
@@ -597,7 +773,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 {
                     agentID: coAgentID,
                     userID: contextUser.ID,
-                    conversationID: conversationId,
+                    conversationID: verifiedConversationId,
                     lastSessionID: lastSessionId,
                     config: JSON.stringify(config),
                 },
@@ -619,19 +795,203 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // mid-thread knows what was already typed. The legs above are excluded: they are already
         // framed as the resumed transcript, and injecting the same turns twice puts two accounts of
         // the same exchange in one prompt.
-        const conversationMessages = await this.loadConversationHistory(
-            conversationId, prior?.LegIDs ?? [], contextUser, provider, sessionBranchId,
-        );
+        const { Messages: conversationMessages, Artifacts: conversationArtifacts } =
+            await this.loadConversationHistoryAndArtifacts(
+                verifiedConversationId, prior?.LegIDs ?? [], contextUser, provider, sessionBranchId,
+            );
         const result = await this.prepareClientSessionOrClose(
             session, coAgentID, effectiveTargetId, contextUser, provider, preferredModelId, clientTools, prior?.Text,
             configOverridesJson, maxSessionSeconds, applicationId, this.parseAppContext(appContextJson), conversationMessages,
-            channelCandidates, showsAgentVideo,
+            channelCandidates, showsAgentVideo, conversationArtifacts,
         );
         await this.stampVerificationPolicy(session, result.EffectiveConfigJson, lastSessionId, contextUser, provider);
         // Best-effort restore of the PRIOR session's persisted channel states (e.g. the whiteboard
         // board). Strictly tolerant — any problem yields a null field, never a failed start.
         result.PriorChannelStatesJson = (await this.loadPriorChannelStatesJson(lastSessionId, contextUser, provider)) ?? undefined;
         return result;
+    }
+
+    /**
+     * Refresh the short-lived ephemeral credential (or extend the MJAPI relay ticket) for an
+     * already-running client-direct voice session without creating a new `AIAgentSession` row.
+     */
+    @Mutation(() => RefreshRealtimeClientSessionTokenResult)
+    async RefreshRealtimeClientSessionToken(
+        @Arg('agentSessionId', () => String) agentSessionId: string,
+        @Ctx() { userPayload, providers }: AppContext,
+        @Arg('allowFreshReopen', () => Boolean, { nullable: true }) allowFreshReopen?: boolean,
+    ): Promise<RefreshRealtimeClientSessionTokenResult> {
+        const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+        const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
+
+        if (IsMaxSessionDeadlineElapsed(session.Config_)) {
+            await this.sessionManager.CloseSession(session.ID, contextUser, provider, 'TimeLimit');
+            return {
+                Success: false,
+                ErrorMessage: 'Session time limit reached.',
+            };
+        }
+
+        const config = this.readSessionConfig(session);
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', this.mintedTargetAgentID(session.ID, config), userPayload);
+        const maxMints = this.resolveRefreshRateLimit(session.ID, config);
+        const reservedAtMs = this.reserveRefreshUnderRateLimit(session.ID, maxMints);
+        if (reservedAtMs === null) {
+            return {
+                Success: false,
+                ErrorMessage: 'Rate limit exceeded: too many token refreshes for this session.',
+            };
+        }
+
+        // A refresh that mints nothing gives its mint slot back: a reconnect retries a failing refresh on each attempt,
+        // and those failures must not use up the budget the call needs once the provider recovers.
+        let minted = false;
+        let refreshed: Awaited<ReturnType<RealtimeClientSessionService['RefreshClientSessionCredential']>>;
+        try {
+            await this.assertCanRunTarget(this.mintedTargetAgentID(session.ID, config), contextUser, provider);
+
+            const runUser = ResolveScopedAnonymousRunUser(contextUser);
+            const remainingSeconds = RemainingSessionSeconds(session.Config_);
+            refreshed = await this.clientSessionService.RefreshClientSessionCredential(
+                {
+                    AgentSessionID: session.ID,
+                    CoAgentID: session.AgentID,
+                    ...(config.realtimeMintSnapshot ? { PersistedMintSnapshot: config.realtimeMintSnapshot } : {}),
+                    RemainingSessionSeconds: remainingSeconds,
+                    ...(allowFreshReopen === true ? { AllowFreshReopen: true } : {}),
+                },
+                runUser,
+                provider,
+            );
+            minted = refreshed.Success;
+        } finally {
+            if (!minted) {
+                this.releaseRefreshMint(session.ID, reservedAtMs);
+            }
+        }
+
+        if (refreshed.Success) {
+            await this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
+        }
+
+        return {
+            Success: refreshed.Success,
+            ...(refreshed.Kind ? { Kind: refreshed.Kind } : {}),
+            ...(refreshed.EphemeralToken !== undefined ? { EphemeralToken: refreshed.EphemeralToken } : {}),
+            ...(refreshed.ExpiresAt !== undefined ? { ExpiresAt: refreshed.ExpiresAt } : {}),
+            ...(refreshed.RelayUrl !== undefined ? { RelayUrl: refreshed.RelayUrl } : {}),
+            ...(refreshed.SessionConfigJson !== undefined ? { SessionConfigJson: refreshed.SessionConfigJson } : {}),
+            ...(refreshed.ConnectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: refreshed.ConnectionMaxSeconds } : {}),
+            ...(refreshed.SessionMaxSeconds !== undefined ? { SessionMaxSeconds: refreshed.SessionMaxSeconds } : {}),
+            ...(refreshed.ReconnectBufferSeconds !== undefined ? { ReconnectBufferSeconds: refreshed.ReconnectBufferSeconds } : {}),
+            ...(refreshed.TrustNativeResumption !== undefined ? { TrustNativeResumption: refreshed.TrustNativeResumption } : {}),
+            ...(refreshed.ErrorMessage !== undefined ? { ErrorMessage: refreshed.ErrorMessage } : {}),
+        };
+    }
+
+    /**
+     * The agent the session was minted to voice, from the server-written mint snapshot: this instance's copy, else the
+     * protected `realtimeMintSnapshot` on the session row. Never `Config.targetAgentID`: the owner can rewrite it, and a
+     * refresh re-mints the snapshot built for the original agent, so pointing it at another agent the owner can run would
+     * keep the call minting after the owner lost `CanRun` on the original. Throws when neither copy names one, so the
+     * refresh is refused.
+     */
+    private mintedTargetAgentID(sessionID: string, config: RealtimeSessionConfig): string {
+        const target = RealtimeMintSnapshotRegistry.Instance.Get(sessionID)?.targetAgentID ?? config.realtimeMintSnapshot?.targetAgentID;
+        if (typeof target !== 'string' || target.length === 0) {
+            throw new Error(`Realtime session ${sessionID} has no server-recorded target agent, so its credential cannot be refreshed`);
+        }
+        return target;
+    }
+
+    /**
+     * The credential mints one session may make per rate-limit window. A connection with a known length is moved before
+     * it ends: at the earliest, once its soft window opens, which the client never lets start before
+     * `REALTIME_MAX_SOFT_WINDOW_DURATION_SHARE` of the connection has passed. So the planned moves per window are sized
+     * from that shortest cadence (a 45 s connection moves about every 29 s, not every 45 s), and
+     * {@link REFRESH_RATE_LIMIT_DROP_ALLOWANCE} is added for drops and proactive refreshes. A length below
+     * {@link REFRESH_RATE_LIMIT_MIN_CONNECTION_SECONDS} is sized as that floor, which caps the limit.
+     */
+    private resolveRefreshRateLimit(sessionID: string, config: RealtimeSessionConfig): number {
+        const snapshot = RealtimeMintSnapshotRegistry.Instance.Get(sessionID) ?? config.realtimeMintSnapshot;
+        const connectionMaxSeconds =
+            snapshot?.connectionMaxSeconds ??
+            ExtractRealtimeTimingConfig(snapshot?.sessionParams?.Config).ConnectionMaxSeconds;
+        if (!connectionMaxSeconds || connectionMaxSeconds <= 0) {
+            return REFRESH_RATE_LIMIT_DROP_ALLOWANCE;
+        }
+        const sizedConnectionSeconds = Math.max(connectionMaxSeconds, REFRESH_RATE_LIMIT_MIN_CONNECTION_SECONDS);
+        const shortestMoveSeconds = sizedConnectionSeconds * (1 - REALTIME_MAX_SOFT_WINDOW_DURATION_SHARE);
+        const plannedMoves = Math.ceil(REFRESH_RATE_LIMIT_WINDOW_MS / 1000 / shortestMoveSeconds);
+        return plannedMoves + REFRESH_RATE_LIMIT_DROP_ALLOWANCE;
+    }
+
+    /**
+     * Admits one refresh under the session's rolling-window limits and reserves a mint slot for it: at most `maxMints`
+     * mints (counting refreshes in flight), and at most `maxMints + REFRESH_RATE_LIMIT_FAILED_CALL_ALLOWANCE` calls in
+     * all, so a client whose refreshes keep failing is stopped too.
+     *
+     * @returns The reservation's timestamp, to pass to {@link releaseRefreshMint} if the refresh mints nothing; or
+     *   `null` when the refresh is refused.
+     */
+    private reserveRefreshUnderRateLimit(sessionID: string, maxMints: number, nowMs: number = Date.now()): number | null {
+        const key = NormalizeUUID(sessionID);
+        const cutoff = nowMs - REFRESH_RATE_LIMIT_WINDOW_MS;
+        const buckets = getRealtimeResolverSharedState().RefreshRateLimitBuckets;
+        const existing = buckets.Get(key);
+        const bucket: RefreshRateLimitBucket = {
+            Calls: (existing?.Calls ?? []).filter((ts) => ts > cutoff),
+            Mints: (existing?.Mints ?? []).filter((ts) => ts > cutoff),
+        };
+        const refused =
+            bucket.Mints.length >= maxMints || bucket.Calls.length >= maxMints + REFRESH_RATE_LIMIT_FAILED_CALL_ALLOWANCE;
+        if (!refused) {
+            bucket.Calls.push(nowMs);
+            bucket.Mints.push(nowMs);
+        }
+        buckets.Set(key, bucket);
+        return refused ? null : nowMs;
+    }
+
+    /** Gives back the mint slot {@link reserveRefreshUnderRateLimit} reserved for a refresh that minted nothing. */
+    private releaseRefreshMint(sessionID: string, reservedAtMs: number): void {
+        const bucket = getRealtimeResolverSharedState().RefreshRateLimitBuckets.Get(NormalizeUUID(sessionID));
+        const index = bucket?.Mints.indexOf(reservedAtMs) ?? -1;
+        if (bucket && index >= 0) {
+            bucket.Mints.splice(index, 1);
+        }
+    }
+
+    /**
+     * Verifies that a client-supplied `conversationId` is both readable by and owned by `contextUser`
+     * before binding a new session or hydrating conversation turns/artifacts (`P1-5` IDOR defense).
+     */
+    private async assertConversationOwnershipForStart(
+        conversationId: string | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | undefined> {
+        const trimmed = conversationId?.trim();
+        if (!trimmed) {
+            return undefined;
+        }
+        const conversation = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+        const loaded = await conversation.Load(trimmed);
+        if (!loaded) {
+            throw new Error('Not authorized to start a session on this conversation.');
+        }
+        const access = AuthorizeSessionAccess(
+            {
+                SessionUserID: conversation.UserID ?? '',
+                ConversationExternalID: conversation.ExternalID ?? null,
+                ConversationReadable: true,
+            },
+            contextUser,
+        );
+        if (!access.Allowed) {
+            throw new Error('Access denied: you do not have access to the requested conversation');
+        }
+        return trimmed;
     }
 
     /**
@@ -740,6 +1100,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
         const config = this.readSessionConfig(session);
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', config.targetAgentID, userPayload);
         await this.assertCanRunTarget(config.targetAgentID, contextUser, provider);
         if (toolName !== INVOKE_TARGET_AGENT_TOOL_NAME && IsScopeLimitedPrincipal(contextUser)) {
             return this.refuseDirectAction(agentSessionId, toolName);
@@ -922,6 +1283,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', session.AgentID, userPayload);
         const persistDetail =
             this.mapTranscriptRole(role) === 'User' || (await this.callerOwnsConversation(session, contextUser, provider));
         if (persistDetail) {
@@ -997,10 +1359,22 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     ): Promise<UploadRealtimeRecordingResult> {
         const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
         const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', session.AgentID, ctx.userPayload);
 
         // HARD consent gate — no audio is ever stored without an explicit grant.
         if (consent !== true) {
             return { Success: false, ErrorMessage: 'Recording consent was not granted.' };
+        }
+        if (!session.RecordingStartedAt) {
+            return { Success: false, ErrorMessage: 'Recording has not been started for this session.' };
+        }
+        const validatedMimeType = normalizeAndValidateRecordingMimeType(mimeType);
+        if (!validatedMimeType) {
+            return { Success: false, ErrorMessage: `Unsupported recording MIME type '${mimeType}'.` };
+        }
+        const maxBase64Chars = Math.ceil((MAX_RECORDING_UPLOAD_BYTES * 4) / 3) + Math.ceil(MAX_RECORDING_UPLOAD_BYTES * 0.05) + 16;
+        if (audioBase64.length > maxBase64Chars) {
+            return { Success: false, ErrorMessage: `Recording payload exceeds maximum allowed size (${MAX_RECORDING_UPLOAD_BYTES} bytes).` };
         }
 
         // ELEVATION (issue #3371, #5195): past the ownership + consent gates, the store is server-side
@@ -1023,12 +1397,15 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             if (buffer.length === 0) {
                 return { Success: false, ErrorMessage: 'The uploaded recording was empty.' };
             }
+            if (buffer.length > MAX_RECORDING_UPLOAD_BYTES) {
+                return { Success: false, ErrorMessage: `Recording size (${buffer.length} bytes) exceeds maximum allowed (${MAX_RECORDING_UPLOAD_BYTES} bytes).` };
+            }
 
             const stored = await storeRealtimeRecording({
                 Audio: buffer,
-                MimeType: mimeType,
+                MimeType: validatedMimeType,
                 Media: 'Audio',
-                StartedAt: session.RecordingStartedAt ?? new Date(),
+                StartedAt: session.RecordingStartedAt,
                 StorageAccountID: accountID,
                 SessionID: agentSessionId,
                 ContextUser: runUser,
@@ -1086,9 +1463,28 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('mimeType', () => String) mimeType: string,
         @Ctx() ctx: AppContext,
     ): Promise<boolean> {
+        const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
+        const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', session.AgentID, ctx.userPayload);
         try {
-            const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
-            const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
+            if (!session.RecordingStartedAt) {
+                LogStatus(`RealtimeClientSessionResolver.UploadRealtimeRecordingSegment: shard ${segmentIndex} for session ${agentSessionId} refused — recording has not started`);
+                return false;
+            }
+            if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex > MAX_RECORDING_SEGMENT_INDEX) {
+                LogStatus(`RealtimeClientSessionResolver.UploadRealtimeRecordingSegment: shard ${segmentIndex} for session ${agentSessionId} refused — invalid segmentIndex`);
+                return false;
+            }
+            const validatedMimeType = normalizeAndValidateRecordingMimeType(mimeType);
+            if (!validatedMimeType) {
+                LogStatus(`RealtimeClientSessionResolver.UploadRealtimeRecordingSegment: shard ${segmentIndex} for session ${agentSessionId} refused — unsupported MIME type '${mimeType}'`);
+                return false;
+            }
+            const maxBase64Chars = Math.ceil((MAX_RECORDING_SEGMENT_BYTES * 4) / 3) + Math.ceil(MAX_RECORDING_SEGMENT_BYTES * 0.05) + 16;
+            if (audioBase64.length > maxBase64Chars) {
+                LogStatus(`RealtimeClientSessionResolver.UploadRealtimeRecordingSegment: shard ${segmentIndex} for session ${agentSessionId} refused — payload exceeds byte cap`);
+                return false;
+            }
             // The consolidated recording already landed and its upload deleted the shards; a shard
             // arriving now (one still on the wire at hang-up) would be an orphan nothing deletes.
             if (session.RecordingFileID) {
@@ -1106,14 +1502,14 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 return false;
             }
             const buffer = Buffer.from(audioBase64, 'base64');
-            if (buffer.length === 0) {
+            if (buffer.length === 0 || buffer.length > MAX_RECORDING_SEGMENT_BYTES) {
                 return false;
             }
             return await writeRealtimeRecordingSegment({
                 SessionID: agentSessionId,
                 SegmentIndex: segmentIndex,
                 Audio: buffer,
-                MimeType: mimeType,
+                MimeType: validatedMimeType,
                 StorageAccountID: accountID,
                 ContextUser: runUser,
             });
@@ -1142,6 +1538,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', session.AgentID, userPayload);
 
         // Persist the tool turn facts into a hidden ConversationDetail turn so session review
         // can reconstruct the tool card dynamically on load (Option 1). Best-effort.
@@ -1211,7 +1608,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('callId', () => String, { nullable: true }) callId?: string,
     ): Promise<CancelRealtimeSessionToolResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-        await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
+        const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', session.AgentID, userPayload);
         try {
             const aborted = this.clientSessionService.CancelInFlightDelegations(agentSessionId, callId);
             return { AbortedCount: aborted, Success: true };
@@ -1259,6 +1657,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', session.AgentID, userPayload);
 
         const inputDelta = this.clampTokenDelta(inputTokens);
         const outputDelta = this.clampTokenDelta(outputTokens);
@@ -1360,14 +1759,15 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * logged when the session was prepared.
      */
     private logMissingPromptRunOnce(sessionID: string): void {
-        if (sessionsLoggedWithoutPromptRun.has(sessionID)) {
+        const logged = getRealtimeResolverSharedState().SessionsLoggedWithoutPromptRun;
+        if (logged.has(sessionID)) {
             return;
         }
-        sessionsLoggedWithoutPromptRun.add(sessionID);
-        if (sessionsLoggedWithoutPromptRun.size > MAX_LOGGED_MISSING_PROMPT_RUN_SESSIONS) {
-            const oldest = sessionsLoggedWithoutPromptRun.values().next().value;
+        logged.add(sessionID);
+        if (logged.size > MAX_LOGGED_MISSING_PROMPT_RUN_SESSIONS) {
+            const oldest = logged.values().next().value;
             if (oldest !== undefined) {
-                sessionsLoggedWithoutPromptRun.delete(oldest);
+                logged.delete(oldest);
             }
         }
         LogError(
@@ -1407,6 +1807,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', session.AgentID, userPayload);
 
         if (!this.isChannelInSessionScope(session, channelName)) {
             LogError(`SaveSessionChannelState: channel '${channelName}' is not in session ${agentSessionId}'s resolved scope — state not saved.`);
@@ -1487,9 +1888,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('name', () => String) name: string,
         @Arg('contentJson', () => String) contentJson: string,
         @Ctx() { userPayload, providers }: AppContext,
+        @Arg('artifactTypeName', () => String, { nullable: true }) artifactTypeName?: string,
     ): Promise<SaveSessionChannelArtifactResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', session.AgentID, userPayload);
+        await this.CheckAPIKeyScopeAuthorization('artifact:create', '*', userPayload);
 
         if (!this.isChannelInSessionScope(session, channelName)) {
             const message = `SaveSessionChannelArtifact: channel '${channelName}' is not in session ${agentSessionId}'s resolved scope — nothing saved.`;
@@ -1504,12 +1908,13 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return { Success: false, ErrorMessage: message, ConversationDetailLinked: false };
         }
 
-        const typeID = await this.resolveWhiteboardArtifactTypeID(contextUser, provider);
+        const resolvedTypeName = artifactTypeName?.trim() || WHITEBOARD_ARTIFACT_TYPE_NAME;
+        const typeID = await this.resolveArtifactTypeID(resolvedTypeName, contextUser, provider);
         if (!typeID) {
             return {
                 Success: false,
                 ErrorMessage:
-                    `The '${WHITEBOARD_ARTIFACT_TYPE_NAME}' artifact type is not configured in this deployment — ` +
+                    `The '${resolvedTypeName}' artifact type is not configured in this deployment — ` +
                     'sync the artifact-type seed metadata to enable saving channel artifacts.',
                 ConversationDetailLinked: false,
             };
@@ -1689,11 +2094,11 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             throw new Error('Invalid configOverridesJson: expected a JSON object.');
         }
 
-        const baseline = this.resolveBaselineEffectiveConfig(coAgentID);
+        const baseline = await this.resolveBaselineEffectiveConfig(coAgentID, contextUser, provider);
         const decision = EvaluateRuntimeOverrideAuthorization({
             HasConfigOverrides: !!configOverridesJson,
             RequestedModelID: preferredModelId ?? null,
-            MetadataPreferredModelID: this.resolveMetadataPreferredModelID(baseline),
+            MetadataPreferredModelID: await this.resolveMetadataPreferredModelID(baseline, contextUser, provider),
             AllowUserModelOverride: baseline.realtime?.allowUserModelOverride,
             CallerHasAdvancedControls: this.userHasAdvancedSessionControls(contextUser, provider),
         });
@@ -1724,12 +2129,17 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * `TypeConfiguration`, WITHOUT the runtime layer (this feeds the gate that decides whether
      * the runtime layer is even allowed). Tolerant of an unloaded metadata cache.
      */
-    private resolveBaselineEffectiveConfig(coAgentID: string): RealtimeCoAgentConfig {
+    private async resolveBaselineEffectiveConfig(
+        coAgentID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<RealtimeCoAgentConfig> {
         try {
-            const agent = (AIEngine.Instance.Agents ?? []).find((a) => UUIDsEqual(a.ID, coAgentID));
+            const engine = await this.configuredAIEngineBase(contextUser, provider);
+            const agent = (engine.Agents ?? []).find((a) => UUIDsEqual(a.ID, coAgentID));
             let typeDefault: string | null = null;
             if (agent?.TypeID) {
-                const type = (AIEngine.Instance.AgentTypes ?? []).find((t) => UUIDsEqual(t.ID, agent.TypeID!));
+                const type = (engine.AgentTypes ?? []).find((t) => UUIDsEqual(t.ID, agent.TypeID!));
                 typeDefault = type?.DefaultConfiguration ?? null;
             }
             return ResolveEffectiveRealtimeConfig(typeDefault, agent?.TypeConfiguration ?? null, null);
@@ -1747,13 +2157,18 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * match an id (and the gate treats the request as a deviation — the fail-safe direction).
      * `null` only when no preference is configured at all.
      */
-    private resolveMetadataPreferredModelID(baseline: RealtimeCoAgentConfig): string | null {
+    private async resolveMetadataPreferredModelID(
+        baseline: RealtimeCoAgentConfig,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | null> {
         const preference = baseline.realtime?.modelPreference;
         if (!preference) {
             return null;
         }
         try {
-            const models = AIEngine.Instance.Models ?? [];
+            const engine = await this.configuredAIEngineBase(contextUser, provider);
+            const models = engine.Models ?? [];
             const wanted = preference.trim().toLowerCase();
             const matched =
                 models.find((m) => UUIDsEqual(m.ID, preference)) ??
@@ -1822,6 +2237,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         conversationMessages?: ChatMessage[],
         channelCandidates?: RealtimeChannelCandidate[],
         showsAgentVideo?: boolean,
+        conversationArtifacts?: ConversationArtifactSummary[],
     ): Promise<StartRealtimeClientSessionResult> {
         const prep = await this.clientSessionService.PrepareClientSession(
             {
@@ -1834,8 +2250,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 MaxSessionSeconds: maxSessionSeconds,
                 // The TEXT conversation this call was started from, so the co-agent opens knowing
                 // what the user already typed rather than asking them to say it again. Hydrated by
-                // `loadConversationHistory`; empty when there is no conversation or the read failed.
+                // `loadConversationHistoryAndArtifacts`; empty when there is no conversation or the read failed.
                 ConversationMessages: conversationMessages ?? [],
+                ConversationArtifacts: conversationArtifacts ?? [],
                 UserID: contextUser.ID,
                 PreferredModelID: preferredModelId,
                 // Client-declared, CLIENT-EXECUTED UI tools (see the mutation's SECURITY NOTE) —
@@ -1879,6 +2296,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             prep.EffectiveConfig?.realtime?.directActions,
             prep.ClientPolicy?.Channels.map((c) => c.Key),
             appContext,
+            prep.MintSnapshot,
         );
         this.pruneExcludedServerChannels(session.ID, prep.ClientPolicy);
 
@@ -1900,6 +2318,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             EffectiveConfigJson: prep.EffectiveConfig ? JSON.stringify(prep.EffectiveConfig) : undefined,
             ClientPolicyJson: prep.ClientPolicy ? JSON.stringify(prep.ClientPolicy) : undefined,
             AvatarStatusJson: prep.AvatarStatus ? JSON.stringify(prep.AvatarStatus) : undefined,
+            ConnectionMaxSeconds: cfg.ConnectionMaxSeconds,
+            SessionMaxSeconds: cfg.SessionMaxSeconds,
+            ReconnectBufferSeconds: cfg.ReconnectBufferSeconds,
+            TrustNativeResumption: cfg.TrustNativeResumption,
         };
     }
 
@@ -1939,6 +2361,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         directActions?: RealtimeDirectActionsConfig,
         channels?: string[],
         appContext?: AppContextSnapshot,
+        realtimeMintSnapshot?: PersistedRealtimeMintSnapshot,
     ): Promise<void> {
         // Start from the RAW stored config so every key set at session start survives — the
         // server-authoritative voice deadline (`maxSessionDeadlineIso`) and the per-session media-kit
@@ -1954,6 +2377,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             allowedAgents: allowedAgents && allowedAgents.length > 0 ? allowedAgents : undefined,
             directActions,
             channels,
+            ...(realtimeMintSnapshot ? { realtimeMintSnapshot } : {}),
         };
         session.Config_ = JSON.stringify(config);
         // Every value written here is server-decided (run ids, the resolved target, the in-scope channel
@@ -2060,9 +2484,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const existing = await rv.RunView<MJAIAgentSessionChannelEntity>(
             {
                 EntityName: SESSION_CHANNEL_ENTITY,
-                ExtraFilter: `AgentSessionID='${agentSessionID}' AND ChannelID='${channelID}'`,
+                ExtraFilter: `AgentSessionID='${EscapeSQLString(agentSessionID)}' AND ChannelID='${EscapeSQLString(channelID)}'`,
                 ResultType: 'entity_object',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser,
         );
@@ -2111,30 +2536,21 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return null;
         }
         try {
-            const loaded = await LoadSessionForAccess(lastSessionId, contextUser, provider);
-            if (!loaded) {
-                LogError(`StartRealtimeClientSession: prior session ${lastSessionId} not found — skipping channel-state restore.`);
-                return null;
-            }
-            const access = AuthorizeSessionAccess(
-                { SessionUserID: loaded.Session.UserID, ConversationExternalID: loaded.ConversationExternalID, ConversationReadable: loaded.ConversationReadable },
-                contextUser,
-            );
-            if (!access.Allowed) {
-                LogError(
-                    `StartRealtimeClientSession: prior session ${lastSessionId} is not owned by user ${contextUser.ID} (${access.Reason}) — ` +
-                        'skipping channel-state restore.',
-                );
+            const legIDs = await this.collectOwnedPriorLegIDs(lastSessionId, contextUser, provider);
+            if (legIDs.length === 0) {
                 return null;
             }
 
-            const safeID = lastSessionId.replace(/'/g, "''");
             const rv = RunView.FromMetadataProvider(provider);
-            const result = await rv.RunView<{ Channel: string; Config: string | null }>(
+            const filter =
+                legIDs.length === 1
+                    ? `AgentSessionID='${EscapeSQLString(legIDs[0])}'`
+                    : `AgentSessionID IN (${legIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`;
+            const result = await rv.RunView<{ AgentSessionID?: string; Channel: string; Config: string | null }>(
                 {
                     EntityName: SESSION_CHANNEL_ENTITY,
-                    ExtraFilter: `AgentSessionID='${safeID}'`,
-                    Fields: ['Channel', 'Config'],
+                    ExtraFilter: filter,
+                    Fields: ['AgentSessionID', 'Channel', 'Config'],
                     ResultType: 'simple',
                 },
                 contextUser,
@@ -2144,10 +2560,86 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 return null;
             }
 
-            const states = this.collectChannelStates(result.Results ?? [], lastSessionId);
+            // Sort rows newest-leg-first using legIDs order (legIDs[0] is lastSessionId). Rows
+            // lacking AgentSessionID (e.g. minimal single-leg mocks) default to rank 0 (newest).
+            const legRank = new Map(legIDs.map((id, index) => [id.trim().toLowerCase(), index]));
+            const sortedRows = [...(result.Results ?? [])].sort((a, b) => {
+                const rankA = a.AgentSessionID ? (legRank.get(a.AgentSessionID.trim().toLowerCase()) ?? legIDs.length) : 0;
+                const rankB = b.AgentSessionID ? (legRank.get(b.AgentSessionID.trim().toLowerCase()) ?? legIDs.length) : 0;
+                return rankA - rankB;
+            });
+
+            const states = this.collectChannelStates(sortedRows, lastSessionId);
+            const hasWorkspaceState = Object.keys(states).some((k) => k.trim().toLowerCase() === 'artifactworkspace');
+            if (!hasWorkspaceState) {
+                const fallbackWorkspace = await this.loadPriorArtifactWorkspaceFallback(legIDs, contextUser, provider);
+                if (fallbackWorkspace) {
+                    const currentTotal = Object.values(states).reduce((sum, v) => sum + v.length, 0);
+                    if (currentTotal + fallbackWorkspace.length <= MAX_CHANNEL_STATE_CHARS) {
+                        states['ArtifactWorkspace'] = fallbackWorkspace;
+                    }
+                }
+            }
             return Object.keys(states).length > 0 ? JSON.stringify(states) : null;
         } catch (error) {
             LogError(`StartRealtimeClientSession: channel-state restore failed for prior session ${lastSessionId}: ${(error as Error).message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Backstop for sessions that created/edited collaborative artifacts via delegated runs
+     * (linked in `MJ: Conversation Detail Artifacts`) without a saved `ArtifactWorkspace`
+     * channel-state row — synthesizes `ArtifactWorkspace` restore JSON so resuming opens those
+     * workspace tabs immediately alongside the rest of the session's restored channels.
+     */
+    private async loadPriorArtifactWorkspaceFallback(
+        legIDs: string[],
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | null> {
+        if (legIDs.length === 0) {
+            return null;
+        }
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const idList = legIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+            const detailRes = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: CONVERSATION_DETAIL_ENTITY,
+                    ExtraFilter: `AgentSessionID IN (${idList})`,
+                    Fields: ['ID'],
+                    OrderBy: '__mj_CreatedAt ASC',
+                    MaxRows: 200,
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+            const detailIDs = (detailRes.Success ? (detailRes.Results ?? []) : [])
+                .map((r) => r.ID)
+                .filter((id) => typeof id === 'string' && id.length > 0);
+            if (detailIDs.length === 0) {
+                return null;
+            }
+            const artifacts = await this.loadConversationArtifacts(rv, detailIDs, contextUser, provider);
+            const collaborative = artifacts.filter(
+                (a) => (a.Type ?? '').trim().toLowerCase() !== 'component',
+            );
+            if (collaborative.length === 0) {
+                return null;
+            }
+            const instances = collaborative.map((a) => ({
+                ArtifactID: a.ArtifactID,
+                ...(a.LatestVersionID ? { ArtifactVersionID: a.LatestVersionID } : {}),
+                ...(typeof a.LatestVersionNumber === 'number' ? { VersionNumber: a.LatestVersionNumber } : {}),
+                Name: a.Name,
+                ...(a.Type ? { ArtifactTypeName: a.Type } : {}),
+            }));
+            return JSON.stringify({
+                activeArtifactId: instances[instances.length - 1].ArtifactID,
+                instances,
+            });
+        } catch {
             return null;
         }
     }
@@ -2239,8 +2731,30 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         provider: IMetadataProvider,
         branchId: string | null,
     ): Promise<ChatMessage[]> {
+        const { Messages } = await this.loadConversationHistoryAndArtifacts(
+            conversationId,
+            coveredSessionIDs,
+            contextUser,
+            provider,
+            branchId,
+        );
+        return Messages;
+    }
+
+    /**
+     * Loads both the branch-scoped conversation turn history AND deduplicated artifact summaries
+     * linked to details on that branch path (`MJ: Conversation Detail Artifacts`), so a voice call
+     * started mid-thread knows what messages were typed and what Docs/Sheets/Slides/Components already exist.
+     */
+    private async loadConversationHistoryAndArtifacts(
+        conversationId: string | undefined,
+        coveredSessionIDs: string[],
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+        branchId: string | null,
+    ): Promise<{ Messages: ChatMessage[]; Artifacts: ConversationArtifactSummary[] }> {
         if (!conversationId) {
-            return [];
+            return { Messages: [], Artifacts: [] };
         }
         const rv = RunView.FromMetadataProvider(provider);
         let pathFilter: string;
@@ -2250,10 +2764,11 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             LogError(
                 `StartRealtimeClientSession: could not build the path of the session's view for conversation ${conversationId}: ${(error as Error).message}`,
             );
-            return [];
+            return { Messages: [], Artifacts: [] };
         }
         try {
             const result = await rv.RunView<{
+                ID: string;
                 Role: string;
                 Message: string | null;
                 HiddenToUser: boolean;
@@ -2270,21 +2785,154 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             );
             if (!result.Success) {
                 LogError(`StartRealtimeClientSession: conversation-history query failed: ${result.ErrorMessage}`);
-                return [];
+                return { Messages: [], Artifacts: [] };
             }
+            const visibleRows = (result.Results ?? []).filter((row) => !row.HiddenToUser);
             const covered = new Set(coveredSessionIDs.map((id) => id.trim().toLowerCase()));
-            const turns = (result.Results ?? []).filter(
+            const turns = visibleRows.filter(
                 (row) =>
-                    !row.HiddenToUser &&
                     (row.Role === 'User' || row.Role === 'AI') &&
                     typeof row.Message === 'string' &&
                     row.Message.trim().length > 0 &&
                     !covered.has((row.AgentSessionID ?? '').trim().toLowerCase()),
             );
-            return this.capConversationHistory(turns);
+            const visibleDetailIDs = visibleRows.map((row) => row.ID).filter((id) => typeof id === 'string' && id.length > 0);
+            const artifacts = await this.loadConversationArtifacts(rv, visibleDetailIDs, contextUser, provider);
+            return { Messages: this.capConversationHistory(turns), Artifacts: artifacts };
         } catch (error) {
             LogError(
                 `StartRealtimeClientSession: conversation-history hydration failed for conversation ${conversationId}: ${(error as Error).message}`,
+            );
+            return { Messages: [], Artifacts: [] };
+        }
+    }
+
+    /**
+     * Loads deduplicated, permission-respecting artifact summaries attached to the conversation's
+     * visible detail rows, ordered most recently referenced first and capped at 15 entries.
+     */
+    private async loadConversationArtifacts(
+        rv: RunView,
+        detailIDs: string[],
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<ConversationArtifactSummary[]> {
+        if (detailIDs.length === 0) {
+            return [];
+        }
+        try {
+            const recentDetailIDs = detailIDs.slice(-200);
+            const detailIdList = recentDetailIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+            const junctionRes = await rv.RunView<{
+                ConversationDetailID: string;
+                ArtifactVersionID: string;
+            }>(
+                {
+                    EntityName: CONVERSATION_DETAIL_ARTIFACT_ENTITY,
+                    ExtraFilter: `ConversationDetailID IN (${detailIdList})`,
+                    Fields: ['ConversationDetailID', 'ArtifactVersionID', '__mj_CreatedAt'],
+                    OrderBy: '__mj_CreatedAt ASC',
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+            const junctionRows = junctionRes.Success ? (junctionRes.Results ?? []) : [];
+            const versionIDs = Array.from(
+                new Set(junctionRows.map((r) => r.ArtifactVersionID).filter((id) => typeof id === 'string' && id.length > 0)),
+            );
+            if (versionIDs.length === 0) {
+                return [];
+            }
+
+            const versionIdList = versionIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+            const verRes = await rv.RunView<{
+                ID: string;
+                ArtifactID: string;
+                VersionNumber: number;
+                Name: string | null;
+            }>(
+                {
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: `ID IN (${versionIdList})`,
+                    Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name'],
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+            const versionMap = new Map<string, { ID: string; ArtifactID: string; VersionNumber: number; Name: string | null }>();
+            for (const ver of verRes.Success ? (verRes.Results ?? []) : []) {
+                versionMap.set(ver.ID.toLowerCase(), ver);
+            }
+
+            const artifactIDs = Array.from(
+                new Set(Array.from(versionMap.values()).map((v) => v.ArtifactID).filter((id) => typeof id === 'string' && id.length > 0)),
+            );
+            if (artifactIDs.length === 0) {
+                return [];
+            }
+
+            const permChecks = await Promise.all(
+                artifactIDs.map(async (id) => {
+                    try {
+                        const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(provider, id, contextUser);
+                        return { id, canRead: perms.CanRead };
+                    } catch {
+                        return { id, canRead: false };
+                    }
+                }),
+            );
+            const readableArtifactIDs = permChecks.filter((p) => p.canRead).map((p) => p.id);
+            if (readableArtifactIDs.length === 0) {
+                return [];
+            }
+
+            const artifactIdList = readableArtifactIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+            const artRes = await rv.RunView<{
+                ID: string;
+                Name: string;
+                Type: string | null;
+            }>(
+                {
+                    EntityName: 'MJ: Artifacts',
+                    ExtraFilter: `ID IN (${artifactIdList})`,
+                    Fields: ['ID', 'Name', 'Type'],
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+            const artifactMap = new Map<string, { ID: string; Name: string; Type: string | null }>();
+            for (const art of artRes.Success ? (artRes.Results ?? []) : []) {
+                artifactMap.set(art.ID.toLowerCase(), art);
+            }
+
+            const byArtifact = new Map<string, ConversationArtifactSummary>();
+            for (const row of junctionRows) {
+                const ver = versionMap.get(row.ArtifactVersionID.toLowerCase());
+                if (!ver) {
+                    continue;
+                }
+                const art = artifactMap.get(ver.ArtifactID.toLowerCase());
+                if (!art) {
+                    continue;
+                }
+                const key = art.ID.toLowerCase();
+                const existing = byArtifact.get(key);
+                if (!existing || (existing.LatestVersionNumber ?? 0) <= ver.VersionNumber) {
+                    // Delete and re-insert so iteration order reflects the most recently touched artifacts.
+                    byArtifact.delete(key);
+                    byArtifact.set(key, {
+                        ArtifactID: art.ID,
+                        Name: art.Name || ver.Name || 'Artifact',
+                        Type: art.Type || undefined,
+                        LatestVersionID: ver.ID,
+                        LatestVersionNumber: ver.VersionNumber,
+                    });
+                }
+            }
+            return Array.from(byArtifact.values()).slice(-15);
+        } catch (error) {
+            LogError(
+                `StartRealtimeClientSession: conversation-artifact hydration failed: ${(error as Error).message}`,
             );
             return [];
         }
@@ -2416,9 +3064,16 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         lastSessionId: string,
     ): Record<string, string> {
         const states: Record<string, string> = {};
+        const seenChannels = new Set<string>();
         let totalChars = 0;
         for (const row of rows) {
             if (!row.Channel || !row.Config) {
+                continue;
+            }
+            // Rows arrive newest-leg-first; once a newer leg supplies valid non-empty state for a
+            // channel, older legs' entries for that channel are superseded.
+            const normalizedChannel = row.Channel.trim().toLowerCase();
+            if (seenChannels.has(normalizedChannel)) {
                 continue;
             }
             if (row.Config.length > MAX_CHANNEL_STATE_CHARS || totalChars + row.Config.length > MAX_CHANNEL_STATE_CHARS) {
@@ -2429,6 +3084,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 continue;
             }
             states[row.Channel] = row.Config;
+            seenChannels.add(normalizedChannel);
             totalChars += row.Config.length;
         }
         return states;
@@ -2439,7 +3095,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * (logged) when the type seed is absent or disabled — the artifact-type seed is deployed
      * separately, so its absence is a graceful structured failure, never a throw.
      */
-    private async resolveWhiteboardArtifactTypeID(
+    private async resolveArtifactTypeID(
+        artifactTypeName: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<string | null> {
@@ -2447,17 +3104,18 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const result = await rv.RunView<{ ID: string; IsEnabled: boolean }>(
             {
                 EntityName: ARTIFACT_TYPE_ENTITY,
-                ExtraFilter: `Name='${WHITEBOARD_ARTIFACT_TYPE_NAME}'`,
+                ExtraFilter: `Name='${EscapeSQLString(artifactTypeName)}'`,
                 Fields: ['ID', 'IsEnabled'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser,
         );
         const row = result.Success ? result.Results?.[0] : undefined;
         if (!row || !row.IsEnabled) {
             LogError(
-                `SaveSessionChannelArtifact: no enabled '${WHITEBOARD_ARTIFACT_TYPE_NAME}' artifact type found in ${ARTIFACT_TYPE_ENTITY} — ` +
+                `SaveSessionChannelArtifact: no enabled '${artifactTypeName}' artifact type found in ${ARTIFACT_TYPE_ENTITY} — ` +
                     'artifact not created (sync the artifact-type seed metadata to enable this).',
             );
             return null;
@@ -2502,7 +3160,20 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         if (!(await version.Save())) {
             const message = `SaveSessionChannelArtifact: artifact version save failed for session ${session.ID} (artifact ${artifact.ID}): ${this.describeSaveFailure(version)}`;
             LogError(message);
-            return { Success: false, ErrorMessage: message, ArtifactID: artifact.ID, ConversationDetailLinked: false };
+            let rolledBack = false;
+            try {
+                rolledBack = await artifact.Delete();
+            } catch (deleteError) {
+                LogError(
+                    `SaveSessionChannelArtifact: failed to delete orphaned artifact ${artifact.ID}: ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`,
+                );
+            }
+            return {
+                Success: false,
+                ErrorMessage: message,
+                ...(rolledBack ? {} : { ArtifactID: artifact.ID }),
+                ConversationDetailLinked: false,
+            };
         }
 
         const linked = await this.linkVersionToLatestSessionDetail(session, version.ID, contextUser, provider);
@@ -2613,6 +3284,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 OrderBy: '__mj_CreatedAt DESC',
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser,
         );
@@ -2701,9 +3373,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             const existing = await rv.RunView<MJAIAgentSessionChannelEntity>(
                 {
                     EntityName: SESSION_CHANNEL_ENTITY,
-                    ExtraFilter: `AgentSessionID='${agentSessionID}' AND ChannelID='${channelID}'`,
+                    ExtraFilter: `AgentSessionID='${EscapeSQLString(agentSessionID)}' AND ChannelID='${EscapeSQLString(channelID)}'`,
                     ResultType: 'entity_object',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                 },
                 contextUser,
             );
@@ -2865,6 +3538,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                         conversationBranchID: typeof parsed.conversationBranchID === 'string' ? parsed.conversationBranchID : undefined,
                         mediaCollectionID: typeof parsed.mediaCollectionID === 'string' ? parsed.mediaCollectionID : undefined,
                         channels: Array.isArray(parsed.channels) ? parsed.channels.filter((k): k is string => typeof k === 'string') : undefined,
+                        realtimeMintSnapshot:
+                            parsed.realtimeMintSnapshot &&
+                            typeof parsed.realtimeMintSnapshot === 'object' &&
+                            !Array.isArray(parsed.realtimeMintSnapshot)
+                                ? parsed.realtimeMintSnapshot
+                                : undefined,
                     };
                 }
             } catch {
@@ -3042,6 +3721,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 ExtraFilter: `AgentSessionID='${session.ID}' AND Role='${mappedRole}'`,
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             },
             writeUser,

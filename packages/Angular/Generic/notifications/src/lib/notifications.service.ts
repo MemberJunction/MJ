@@ -3,7 +3,7 @@ import { IMetadataProvider, LogError, Metadata, StartupManager } from '@memberju
 import { UserInfoEngine, MJUserNotificationEntity } from '@memberjunction/core-entities';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal, GetGlobalObjectStore } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
+import { BehaviorSubject, merge, Observable, Subject, Subscription } from 'rxjs';
 import { map, shareReplay } from 'rxjs/operators';
 
 /**
@@ -90,15 +90,18 @@ export class MJNotificationService {
     this.TabChange$ = value;
   }
 
+  private static readonly _manualNotify$ = new Subject<void>();
+
   /**
    * Observable stream of the current user's notifications, derived from
-   * UserInfoEngine.UserNotifications$. Emits immediately on subscribe (shareReplay
+   * UserInfoEngine.UserNotifications$ plus immediate local notifications via
+   * {@link UpdateNotificationObservables}. Emits immediately on subscribe (shareReplay
    * buffers the latest value) and re-emits whenever the engine's notifications
-   * cache is mutated — by save, delete, remote-invalidate, or refresh. Each
-   * emission re-runs the engine's per-user filter+sort.
+   * cache is mutated — by save, delete, remote-invalidate, refresh, or explicit
+   * optimistic UI updates. Each emission re-runs the engine's per-user filter+sort.
    */
   public static readonly Notifications$: Observable<MJUserNotificationEntity[]> =
-    UserInfoEngine.Instance.UserNotifications$.pipe(
+    merge(UserInfoEngine.Instance.UserNotifications$, MJNotificationService._manualNotify$).pipe(
       // ...IfPermitted, not UserNotifications: a permission-constrained session (an external
       // magic-link user) cannot read notifications, and the throwing getter errored this
       // stream at shell boot — an uncaught PermissionConstrainedError that also terminated
@@ -336,7 +339,7 @@ export class MJNotificationService {
    */
   public static async RefreshUserNotifications() {
     try {
-      await UserInfoEngine.Instance.RefreshItem('_UserNotifications');
+      await UserInfoEngine.Instance.RefreshItem('_userNotifications');
       MJNotificationService._loaded = true;
     }
     catch (e) {
@@ -345,12 +348,13 @@ export class MJNotificationService {
   }
 
   /**
-   * @deprecated Kept as a no-op for backward compatibility. Observable emissions are now
-   * driven by UserInfoEngine.UserNotifications$, which auto-emits on save/delete/
-   * remote-invalidate/refresh. External callers no longer need to manually push updates.
+   * Immediately re-emits the current notifications snapshot on {@link Notifications$}
+   * and {@link UnreadCount$}, giving optimistic UI state changes zero-latency feedback
+   * across the shell badge, popover, and full notifications view without waiting for
+   * BaseEngine's debounced refresh window.
    */
-  public static UpdateNotificationObservables() {
-    // No-op — see JSDoc above.
+  public static UpdateNotificationObservables(): void {
+    MJNotificationService._manualNotify$.next();
   }
 
   /**
@@ -560,7 +564,7 @@ export class MJNotificationService {
       container.id = 'mj-toast-container';
       container.style.cssText = `
         position: fixed;
-        top: 24px;
+        top: 72px;
         right: 24px;
         z-index: 100000;
         display: flex;

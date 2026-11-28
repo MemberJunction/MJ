@@ -21,7 +21,7 @@ import type { NavigationRequest } from '@memberjunction/ng-conversations';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { combineLatest, Subscription } from 'rxjs';
-import { skip } from 'rxjs/operators';
+import { skip, takeUntil } from 'rxjs/operators';
 import {
     buildCuratedFormSchema,
     buildDefaultFormScaffold,
@@ -562,7 +562,7 @@ export class FormBuilderResourceComponent
             this.engineSubscription = combineLatest([
                 InteractiveFormsEngine.Instance.Forms$,
                 InteractiveFormsEngine.Instance.Overrides$,
-            ]).pipe(skip(1)).subscribe(() => {
+            ]).pipe(skip(1), takeUntil(this.destroy$)).subscribe(() => {
                 void this.loadExistingForms();
                 if (this.SelectedFormName) void this.LoadVersionsForActiveForm();
             });
@@ -577,6 +577,7 @@ export class FormBuilderResourceComponent
             // cockpit-specific state lands inside AdditionalContext via
             // `SetAgentContext()` below.
             this.appContextSubscription = this.navigationService.AppContextSnapshot$
+                .pipe(takeUntil(this.destroy$))
                 .subscribe(snapshot => {
                     this.ChatAppContext = snapshot;
                     this.cdr.markForCheck();
@@ -591,6 +592,7 @@ export class FormBuilderResourceComponent
             // requiring a manual refresh. Scoped tightly to the active
             // form's lineage to avoid cross-cockpit churn.
             this.entityEventSubscription = MJGlobal.Instance.GetEventListener(false)
+                .pipe(takeUntil(this.destroy$))
                 .subscribe(mjEvent => this.handleEntityEvent(mjEvent));
         } catch (err) {
             LogError(`FormBuilderResource.ngAfterViewInit: ${err instanceof Error ? err.message : String(err)}`);
@@ -1305,6 +1307,7 @@ export class FormBuilderResourceComponent
             const result = await rv.RunView<BaseEntity>({
                 EntityName: this.TargetEntityName,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 OrderBy: orderBy,
                 ResultType: 'entity_object',
             }, user);
@@ -1582,10 +1585,30 @@ export class FormBuilderResourceComponent
      * (the cockpit is form-authoring focused, not the right surface to
      * render arbitrary artifacts inline).
      */
-    public OnChatArtifactLinkClicked(event: { type: 'conversation' | 'collection'; id: string }): void {
-        const navItemName = event.type === 'conversation' ? 'Conversations' : 'Collections';
-        const paramKey = event.type === 'conversation' ? 'conversationId' : 'collectionId';
-        void this.navigationService.OpenNavItemByName(navItemName, { [paramKey]: event.id });
+    public async OnChatArtifactLinkClicked(event: { type: 'conversation' | 'collection'; id: string }): Promise<void> {
+        if (event.type === 'conversation') {
+            await this.navigationService.OpenNavItemByName(
+                'Conversations',
+                { conversationId: event.id },
+                undefined,
+                { queryParams: { conversationId: event.id } }
+            );
+            return;
+        }
+        const opened = await this.navigationService.OpenNavItemByName(
+            'Library',
+            { collectionId: event.id },
+            undefined,
+            { queryParams: { collectionId: event.id } }
+        );
+        if (!opened) {
+            await this.navigationService.OpenNavItemByName(
+                'Collections',
+                { collectionId: event.id },
+                undefined,
+                { queryParams: { collectionId: event.id } }
+            );
+        }
     }
 
     /** Chat-area emitted `conversationRenamed` — purely informational for the cockpit (no convo list to animate). */
@@ -2012,6 +2035,7 @@ export class FormBuilderResourceComponent
                     ExtraFilter: `UserID='${this.CurrentUser.ID}' AND ComponentID='${version.ID}' AND Status='Pending'`,
                     Fields: ['ID'],
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                 }, this.CurrentUser);
                 const overrideID = pending.Results?.[0]?.ID;
@@ -2028,6 +2052,7 @@ export class FormBuilderResourceComponent
                     ExtraFilter: `UserID='${this.CurrentUser.ID}' AND ComponentID IN (${this.Versions.map(v => `'${v.ID}'`).join(',')}) AND Status='Active'`,
                     Fields: ['ID'],
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                 }, this.CurrentUser);
                 const overrideID = active.Results?.[0]?.ID;
@@ -2323,6 +2348,7 @@ export class FormBuilderResourceComponent
             ExtraFilter: `ComponentID='${componentID}'`,
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
             BypassCache: true,
         }, this.CurrentUser ?? undefined);
@@ -3023,6 +3049,7 @@ export class FormBuilderResourceComponent
                 EntityName: 'MJ: Entity Form Overrides',
                 ExtraFilter: `ComponentID='${componentID}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             }, user);
             if (result.Success && result.Results?.[0]) {

@@ -14,6 +14,7 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager, SessionAuthorizationError, type SessionCloseReason } from '../agentSessions/index.js';
@@ -23,8 +24,12 @@ import {
     RealtimeSessionOwnershipError,
 } from '../realtimeSessions/ownedRealtimeSession.js';
 
-/** The `CloseReason` values a client may stamp on its own session; `Janitor` and `Shutdown` are the server's. */
-const CLIENT_CLOSE_REASONS: readonly SessionCloseReason[] = ['Explicit', 'Error'];
+/**
+ * The `CloseReason` values a client may stamp on its own session; `Idle`, `Janitor` and `Shutdown` are the server's.
+ * `TimeLimit` is a claim: the browser's deadline alarm fired, and {@link SessionManager.CloseSession} verifies it
+ * against the session's stored deadline, recording `Explicit` instead when the deadline is not near.
+ */
+const CLIENT_CLOSE_REASONS: readonly SessionCloseReason[] = ['Explicit', 'Error', 'TimeLimit'];
 
 /** Reads the mutation's optional `closeReason`: absent means `Explicit`; a server-only or unknown value is refused. */
 function ParseClientCloseReason(closeReason: string | null | undefined): SessionCloseReason {
@@ -109,8 +114,9 @@ export class AgentSessionResolver extends ResolverBase {
     ): Promise<boolean> {
         const reason = ParseClientCloseReason(closeReason);
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-        await this.loadOwnedSession(agentSessionId, contextUser, provider);
-        return this.sessionManager.CloseSession(agentSessionId, contextUser, provider, reason);
+        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+        // The row's own ID, not the client's spelling of it: overlapping closes of one session share one close by ID.
+        return this.sessionManager.CloseSession(session.ID, contextUser, provider, reason);
     }
 
     /**
@@ -143,16 +149,16 @@ export class AgentSessionResolver extends ResolverBase {
 
     /**
      * Inbound ownership gate: delegates to {@link LoadOwnedRealtimeSession} (which enforces both
-     * `UserID === contextUser.ID` and `AuthorizeSessionAccess` scope/visitor binding) and maps its
-     * typed errors to this resolver's message format.
+     * `UserID === contextUser.ID` and `AuthorizeSessionAccess` scope/visitor binding), returns the
+     * loaded session, and maps its typed errors to this resolver's message format.
      */
     private async loadOwnedSession(
         agentSessionId: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-    ): Promise<void> {
+    ): Promise<MJAIAgentSessionEntity> {
         try {
-            await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
+            return await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
         } catch (err) {
             if (err instanceof RealtimeSessionNotFoundError) {
                 throw new Error(`Agent session ${agentSessionId} not found`);

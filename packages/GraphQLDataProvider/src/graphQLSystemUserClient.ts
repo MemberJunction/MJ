@@ -2076,6 +2076,11 @@ export interface RunViewSystemUserInput {
      */
     IncludeBinaryFields?: boolean;
     /**
+     * When true, no count runs to populate `TotalRowCount`, which comes back undefined.
+     * Ignored for `ResultType: 'count_only'`. (optional)
+     */
+    SkipTotalRowCount?: boolean;
+    /**
      * Optional source-of-truth selector ('Live' or 'Materialized').
      */
     DataSource?: 'Live' | 'Materialized';

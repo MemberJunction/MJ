@@ -189,6 +189,7 @@ vi.mock('@memberjunction/core', () => {
 });
 
 vi.mock('@memberjunction/ai-prompts', () => ({
+    EmbeddingCarrierPrompts: { VectorSync: 'Vector Sync Embedding', DuplicateDetection: 'Duplicate Detection Embedding', VectorSearch: 'Vector Search Embedding' },
     AIEmbeddingRunner: class {
         RunEmbedding = mockRunEmbeddingFn;
     },
@@ -535,6 +536,8 @@ describe('DuplicateRecordDetector', () => {
                 expect.objectContaining({
                     ModelID: 'model-1',
                     Description: expect.stringContaining('Duplicate detection batch'),
+                    // Booked under the duplicate detection carrier prompt (#4923).
+                    PromptName: 'Duplicate Detection Embedding',
                 })
             );
         });
@@ -566,6 +569,7 @@ describe('DuplicateRecordDetector', () => {
                 expect.objectContaining({
                     ModelID: 'model-1',
                     Description: expect.stringContaining('Duplicate detection single record'),
+                    PromptName: 'Duplicate Detection Embedding',
                 })
             );
         });

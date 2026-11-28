@@ -335,3 +335,79 @@
   .mj-accordion-body-outer { transition: none; }
   .mj-accordion-panel--fill.mj-accordion-panel--expanded > .mj-accordion-body-outer > .mj-accordion-body-clip > .mj-accordion-body { animation: none; }
 }
+
+/* ============================================================
+   FLAT — mj-accordion-sections on phones, or [Flat]="true".
+   section: the active top level; its chrome goes, the picker names it.
+   block:   a panel nested in a flat panel; a plain heading over open content.
+   ============================================================ */
+.mj-accordion-section-hidden {
+  display: none !important;
+}
+
+.mj-accordion-panel--flat-section,
+.mj-accordion-panel--flat-block {
+  border: 0;
+  border-radius: 0;
+  margin-bottom: 0;
+  overflow: visible;
+}
+
+.mj-accordion-panel--flat-section > .mj-accordion-header-row,
+.mj-accordion-panel--flat-block > .mj-accordion-header-row,
+.mj-accordion-panel--flat-section:not(.mj-accordion-panel--disabled) > .mj-accordion-header-row:hover,
+.mj-accordion-panel--flat-block:not(.mj-accordion-panel--disabled) > .mj-accordion-header-row:hover {
+  background: transparent;
+  border-bottom: 0;
+}
+
+/* A section keeps its header row only for its actions (Copy, Run, …), right-aligned. */
+.mj-accordion-panel--flat-section > .mj-accordion-header-row {
+  justify-content: flex-end;
+}
+.mj-accordion-panel--flat-section > .mj-accordion-header-row:not(:has(> .mj-accordion-actions)) {
+  display: none;
+}
+
+.mj-accordion-panel--flat-section > .mj-accordion-body-outer,
+.mj-accordion-panel--flat-block > .mj-accordion-body-outer {
+  grid-template-columns: minmax(0, 1fr);
+  transition: none;
+}
+
+/* Visible, so nothing in a flat section is clipped; min-width: 0, because a grid item whose
+   overflow is visible otherwise grows to its content and a wide table inside stops scrolling
+   in its own box (it pushes the whole section past the screen instead). */
+.mj-accordion-panel--flat-section > .mj-accordion-body-outer > .mj-accordion-body-clip,
+.mj-accordion-panel--flat-block > .mj-accordion-body-outer > .mj-accordion-body-clip {
+  overflow: visible;
+  min-width: 0;
+}
+
+.mj-accordion-panel--flat-section > .mj-accordion-body-outer > .mj-accordion-body-clip > .mj-accordion-body,
+.mj-accordion-panel--flat-block > .mj-accordion-body-outer > .mj-accordion-body-clip > .mj-accordion-body {
+  padding: 0;
+  background: transparent;
+}
+
+.mj-accordion-flat-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 14px 0 8px;
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-bold, 700);
+  color: var(--mj-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.mj-accordion-section-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

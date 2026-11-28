@@ -16,16 +16,17 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 25
+            "Priority": 25,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "8819D9A9-AEC7-49F7-992F-F6E3844D52AC"
           },
           "sync": {
-            "lastModified": "2026-09-13T20:06:56.257Z",
-            "checksum": "2051af758eea7c5f1dc11b915c84011686b4660d7bcb67cd883e4a1f48c309e0"
+            "lastModified": "2026-11-24T20:27:39.531Z",
+            "checksum": "f5f63320a1409813249807bee5335aad46f4290d7bb81f4037b07b29eb974b43"
           }
         },
         {
@@ -61,16 +62,17 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
-            "Priority": 24
+            "Priority": 24,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "E23DCB50-8D1F-4DF8-97BE-7CCD3987CA81"
           },
           "sync": {
-            "lastModified": "2026-09-13T20:06:56.291Z",
-            "checksum": "cad1f15e0b982c493d8d20414723d0f9a3e42eb63c9db51c23fa5e20279e6a65"
+            "lastModified": "2026-11-24T20:27:39.547Z",
+            "checksum": "a87b3adc36fc65193e8ea271dd30c0cd010c1b66bfa5203b74a4581a92b65e23"
           }
         }
       ]
@@ -79,8 +81,8 @@
       "ID": "6B5F08B2-BE23-4462-96DA-FC60B238FEF0"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:19:24.537Z",
-      "checksum": "30a1b5a6f9d94326b697896ce78081bdb509c3411867cd15f4e72b36e47caa4a"
+      "lastModified": "2026-11-24T20:27:39.516Z",
+      "checksum": "f261e9f2ea8f4b6988820578b9137d12a61e45aac4dc3d8bd903c6614bb110af"
     }
   }
 ]

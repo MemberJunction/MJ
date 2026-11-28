@@ -4,7 +4,11 @@ Two `BaseAgent`-framework capabilities that ship together (they share one migrat
 
 **Audience**: developers building/configuring agents, authoring skills, or wiring skills/plan-mode into a chat surface.
 
-Both are **agent-framework** features, not chat-widget features. They work for any agent invocation — the conversations UI, headless/scheduled runs, the API — because the logic lives in `BaseAgent` / `AIEngineBase`, and the chat surface is just one caller.
+Both are **agent-framework** features, not chat-widget features. They work for any agent invocation — the conversations UI, headless/scheduled runs, the API — because the logic lives in `BaseAgent` (`BaseAgentSkillsHelper` / `BaseAgentStepExecutionHelper` / `AgentStepTypeRegistry`) and `AIEngineBase`, and the chat surface is just one caller.
+
+**Canonical Guides:** [Agent Administrator Guide](AGENT_ADMINISTRATOR_GUIDE.md) · [Agent Builder & Extension Guide](AGENT_BUILDER_EXTENSION_GUIDE.md) · [Agent End-User Guide](AGENT_END_USER_GUIDE.md) · [BaseAgent Rebase Map](BASE_AGENT_REBASE_MAP.md).
+
+> **v6.x `IAgentConfiguration` Note:** `AIAgent.SkillActivationMode`, `AIAgent.SupportsPlanMode`, and `AIAgent.RequirePlanMode` now live canonically in `AIAgent.Configuration` (`skills.activationMode`, `execution.supportsPlanMode`, `execution.requirePlanMode`) with 3-table cascade support (`AIAgentType` → `AIAgentCategory` → `AIAgent`) and automatic bidirectional sync to the deprecated legacy columns throughout `v6.x` (removal slated for `v7.0`). See [Agent Administrator Guide §2–3](AGENT_ADMINISTRATOR_GUIDE.md#2-three-table-iagentconfiguration-cascade).
 
 ---
 
@@ -107,6 +111,7 @@ validateSkillNextStep  ── fuzzy-matches names vs GetSkillsForAgent; unknown/
         ▼
 executeSkillStep  ── for each newly-activated skill:
         ├─ recordSkillActivationStep()   → AIAgentRunStep (StepType='Skill')
+        ├─ resolveSkillInstructions()    → stored text, or rendered once if it's a template (§1.3b)
         ├─ buildSkillActivationMessage() → appends Instructions to conversationMessages
         └─ enableSkillCapabilities()     → pushes 'specific'-scoped add ActionChange/SubAgentChange
                                           (Actions: the skill's ExposeToModel rows only — GetSkillExposedActionIDs)
@@ -115,15 +120,15 @@ executeSkillStep  ── for each newly-activated skill:
 executePromptStep  ── loop continues; next turn's gatherPromptTemplateData picks up the widened tool surface
 ```
 
-Key implementation notes (all in [`base-agent.ts`](../packages/AI/Agents/src/base-agent.ts)):
+Key implementation notes (in [`helpers/skills/AgentSkillsHelper.ts`](../packages/AI/Agents/src/helpers/skills/AgentSkillsHelper.ts) and [`helpers/steps/BuiltInAgentStepHandlers.ts`](../packages/AI/Agents/src/helpers/steps/BuiltInAgentStepHandlers.ts), wired through `BaseAgent` and `AgentStepTypeRegistry`):
 
-- **`'Skill'` is a non-terminal step.** Like `'ClientTools'`, it is deliberately **not** part of the generated `AIAgentRun.FinalStep` union (that column is DB-CHECK-constrained to terminal outcomes). `BaseAgentNextStep.step` is typed off `FinalStep`, so the switch sites use an explicit `'Skill' as typeof …step` cast. It **is** in the `AIAgentRunStep.StepType` CHECK — that column records what executed, a different concern from a run's final outcome.
+- **`'Skill'` is a first-class registered step type (`SkillStepHandler`).** Like `'ClientTools'`, `'Skill'` is non-terminal (distinct from `AIAgentRun.FinalStep`) and is registered in `MJ: AI Agent Step Types` (`AgentStepTypeRegistry`) with `AllowedInUnapprovedPlanMode: true` and `CountsAgainstTreeBudget: true` — eliminating earlier `switch` type-assertion casts. It **is** in the `AIAgentRunStep.StepType` CHECK — that column records what executed, a different concern from a run's final outcome.
 - **`ExposeToModel` decides whether a bundled action joins the run at all** (v6.1.x, #4226). `enableSkillCapabilities` pushes `GetSkillExposedActionIDs(skill.ID)` — the rows with the flag set (default) — onto `params.actionChanges`. The run's effective action set is one list that is both the prompt's tool surface and the execution allow-list, so a row with the flag **off** is not described to the model *and* cannot be executed by the agent through any path (`Actions` step, a `PreProcessActionStep`, a loop's action lookup all resolve against that set and reject it). That is deliberate: hiding it from the prompt alone would still let the model call it by name the moment a skill's Instructions mention it. The row keeps the action associated with the skill for SKILL.md export and tooling; application code — a menu button in the skill's reply — invokes it directly through the Actions API, whose authorization is its own (bundling grants nothing there). Because the agent never runs such an action, skill attribution on the Actions step does not apply to it.
 - **Tool-surface widening uses `scope: 'specific'` targeting the activating agent's own ID** (`agentIds: [agent.ID]`), pushed onto `params.actionChanges` / `params.subAgentChanges`. This applies to the activating agent **at any depth** (a sub-agent that activates a skill still gets its tools — a `'root'` scope would only apply at depth 0) and never cascades to that agent's own sub-agents (via `filterActionChangesForSubAgent`). Because `params` is the same object for the whole run, every later turn's `gatherPromptTemplateData()` re-applies it automatically.
 - **Idempotent re-activation.** `_activatedSkillIDs` tracks what's already active; re-requesting an active skill is a harmless no-op (no duplicate instructions, no duplicate change entries).
 - **`_effectiveSubAgents`** mirrors `_effectiveActions` so a runtime-added sub-agent (from a skill) validates correctly in `validateSubAgentNextStep`. (This closed a pre-existing gap in the `subAgentChanges` mechanism that affected any consumer, not just Skills.)
 
-`executeSkillStep` is decomposed into `resolveSkillActivations` / `buildSkillActivationMessage` / `enableSkillCapabilities` / `recordSkillActivationStep`, all `protected` — override any one for fine-grained control (custom instruction formatting, a licensing check on activation, cascading grants via `'all-subagents'`, etc.) without re-implementing the step.
+`executeSkillStep` is decomposed into `resolveSkillActivations` / `resolveSkillInstructions` / `buildSkillActivationMessage` / `enableSkillCapabilities` / `recordSkillActivationStep`, all `protected` — override any one for fine-grained control (custom instruction formatting, a licensing check on activation, cascading grants via `'all-subagents'`, etc.) without re-implementing the step.
 
 ### 1.3a Observability — `AIAgentRunStep.Skills` (v5.45)
 
@@ -156,6 +161,44 @@ Population rules (all in `createStepEntity` + the activation paths):
 The runtime type twin is `AgentSkillInvocation` in `@memberjunction/ai-core-plus`; the CodeGen JSON-type interface lives at `metadata/entities/JSONType-interfaces/AgentSkillInvocation.ts` — keep them in sync.
 
 **UX**: the agent-run form renders this end to end — `Skill`/`Plan` step nodes get dedicated icons, any step with `Skills` shows per-skill chips (auto-activations get a warning accent — the agent expanded its own surface), and the step drill-in panel gains a **Skills tab** showing each invocation's activation type, provenance-of-authority grid, and reason.
+
+### 1.3b Templated instructions — `{# mj:template #}`
+
+A skill's `Instructions` can be a Nunjucks template that renders with the run's data when the skill activates — conditionals, loops over data, values from the payload — the same things an agent prompt can do. It is **opt-in**: start the instructions with the marker
+
+```
+{# mj:template #}
+```
+
+The marker is a Nunjucks comment, so it renders to nothing. Without it the text is used exactly as stored, which is why a skill that mentions `{{ }}` literally (the `{{query:"Category/Name"}}` composition syntax in *Data Analysis & Queries*) is never parsed. In code: `SKILL_INSTRUCTIONS_TEMPLATE_MARKER` / `IsTemplatedSkillInstructions()` from `@memberjunction/ai-agents`.
+
+**Data available to the template** (`buildSkillTemplateData`, protected — override to add values):
+
+| Variable | Value |
+|---|---|
+| system placeholders that need only the acting user | `_CURRENT_DATE`, `_CURRENT_TIME` and the other clock values, `_ENVIRONMENT`, `_USER_NAME`, `_USER_EMAIL`, `_USER_ID`. Placeholders that need a prompt or a prompt run (`_OUTPUT_EXAMPLE`, `_MODEL_ID`, …) are not available. Lowest priority: a `params.data` key of the same name wins, as in agent prompts |
+| every key of `params.data` | the caller's run data, as agent prompts get it |
+| `_CURRENT_PAYLOAD` | the payload at activation time |
+| `agentName`, `agentDescription` | the activating agent |
+
+```
+{# mj:template #}
+## Component design rules
+Brand color: {{ brandColor }}
+{% if _CURRENT_PAYLOAD.phase == "design" %}You are in the design phase: ...{% endif %}
+{% for e in entityCatalog %}- {{ e.Name }}: {{ e.Description }}
+{% endfor %}
+```
+
+Behavior to know:
+
+- **Rendered once, at activation.** The result is appended to the conversation once, like any activation message, and is not re-rendered on later turns, so the prompt cache is unaffected. A Conversation-scoped skill (§1.6c) is re-rendered when it re-activates at the start of each run.
+- **A template error never fails the run.** The stored text is used instead. The template engine logs the render error, and a `warning` naming the skill is logged as well (category `AgentSkills`).
+- **Values are HTML-escaped**, as in agent prompts (`&` → `&amp;`). Use `| safe` for a value that must stay as written.
+- **Composition:** `{% template "Template Name" %}` embeds a stored MJ template. `{% include %}` does not resolve stored templates. `{% AIPrompt %}` works, but it makes an LLM call during activation. The call runs as the user whose run activates the skill and uses the server's API key for the model. It is not an AI Prompt Run: it is not recorded on the agent run and does not count against the run's budget.
+- **Payload timing:** a skill pre-activated from `requestedSkillIDs` or the conversation (§1.6a, §1.6c) sees the run's starting payload; a skill the model activates sees the payload from that decision.
+- **Inspection:** `Get Skill Details` returns the template source unrendered, with `InstructionsAreTemplate: true`, since the action has no run data to render it with.
+- **SKILL.md:** the marker is ordinary body text, so it survives export and import (§1.7).
 
 ### 1.4 Realtime and proxy agents
 
@@ -258,7 +301,8 @@ subAgents:
   - Report Formatter Agent
 ---
 
-Instructions body — plain markdown, appended to an accepting agent's system
+Instructions body — plain markdown (or a template, when it starts with
+{# mj:template #} — see §1.3b), appended to an accepting agent's system
 prompt when the skill is activated.
 ```
 
@@ -274,6 +318,55 @@ Two layers, in `@memberjunction/ai-agents`:
 - **`SkillImportExportService`** — orchestrates against the DB: `Config()`s the AI + Action engines (idempotent) for name↔ID resolution, creates/updates the `MJ: AI Skills` row, and resyncs the two junction sets. `AISkillAction.ExposeToModel` round-trips through the optional `codeOnlyActions` frontmatter list (names, a subset of `actions`): export writes it only when the skill has rows with the flag off, so older files are byte-identical; import applies it when present. A file without the key expresses no opinion, and the resync — which is delete-and-recreate — then carries each surviving row's flag across, so re-saving a skill's SKILL.md never turns a code-only action model-callable; only a genuinely new row takes the column default.
 
 Both are exposed as typed, provider-routed **Remote Operations** — `AISkill.ExportMarkdown` / `AISkill.ImportMarkdown` (see [REMOTE_OPERATIONS_GUIDE](REMOTE_OPERATIONS_GUIDE.md)) — so the browser calls `new AISkillExportMarkdownOperation().Execute(input, { provider })` with no bespoke resolver/GraphQL client.
+
+### 1.8 Scaling to Hundreds or Thousands of Skills — Semantic Discovery & Hybrid Prioritization
+
+When an instance grows to hundreds or thousands of skills, injecting every available skill (`AcceptsSkills = 'All'`) into the system prompt wastes context tokens and degrades attention. MemberJunction solves this with a three-layer architecture (full design in [`plans/skill-scaling-and-semantic-discovery.md`](../plans/skill-scaling-and-semantic-discovery.md)):
+
+#### 1. Semantic Index (`"AI Skills Search"` Entity Document)
+The `MJ: AI Skills` entity is indexed via the `"AI Skills Search"` `MJ: Entity Documents` template ([`metadata/entity-documents/templates/mj-ai-skills-search.njk`](../metadata/entity-documents/templates/mj-ai-skills-search.njk)), which embeds:
+- Skill `Name`, `Description`, `Category`, `Status`, `ActivationMode`, and `ActivationScope`
+- Bundled action names and descriptions (`MJ: AI Skill Actions` where `ExposeToModel = 1`)
+- Bundled sub-agent names (`MJ: AI Skill Sub Agents`)
+- A summary excerpt (first 800 characters) of `Instructions` so domain vocabulary is indexed without diluting embedding vectors with boilerplate
+
+#### 2. Skill Discovery Actions (`@memberjunction/core-actions`)
+Agents (such as `SkillSmith`, `Research Agent`, and large-catalog orchestrators) can search and inspect skills on demand via three dedicated actions in [`packages/Actions/CoreActions/src/custom/ai/`](../packages/Actions/CoreActions/src/custom/ai/):
+
+| Action | Class | Purpose |
+|---|---|---|
+| **`Find Candidate Skills`** | `FindCandidateSkillsAction` | Hybrid vector + keyword search over `MJ: AI Skills` using `RunSemanticEntitySearch` with an automatic lexical fallback when no vector index is synced. Supports `CategoryFilter`, `ActionNameFilter`, `EnforceAgentPermissions` (`GetSkillsForAgent(agent, contextUser)`), and `OnlyAutoActivatable`. |
+| **`Find Best Skill`** | `FindBestSkillAction` | Single-result convenience action returning `Found`, `SkillID`, `SkillName`, `SimilarityScore`, `BundledActionNames`, and `BundledSubAgentNames`. |
+| **`Get Skill Details`** | `GetSkillDetailsAction` | On-demand progressive-disclosure inspector returning full `Instructions`, bundled `Actions` (with parameter summaries and `ExposeToModel`), bundled `SubAgents`, and portable `SkillMarkdown` (`SKILL.md`). Enforces `AISkillPermissionHelper.Instance.UserCanViewSkill`. |
+
+#### 3. Two-Stage Hybrid Skill Prioritization (`maxSkillsInPrompt`)
+Loop agents configure prompt catalog caps in `LoopAgentPromptParams` (`AgentTypePromptParams`):
+- **`maxSkillsInPrompt`** (default `25` when `decisionsEnabled: true` or when explicitly set): Maximum number of skills rendered in the `## Available Skills` prompt catalog per turn.
+- **`maxSkillDecisionCandidates`** (default `60`): Maximum candidate skills passed to the fast decision model (`selectRelevantCatalogItems`) before LLM narrowing.
+
+When an agent's available skills exceed `maxSkillsInPrompt`, [`AgentPromptCatalogAndNarrowingHelper.EnsureCatalogNarrowing`](../packages/AI/Agents/src/helpers/prompt/AgentPromptCatalogAndNarrowingHelper.ts) (exposed via `BaseAgentPromptHelper`) runs a **two-stage narrowing pipeline** implemented in [`catalog-narrowing.ts`](../packages/AI/Agents/src/catalog-narrowing.ts):
+
+```
+Stage 1: PreFilterSkillCandidatesForDecision (in-memory, 0ms)
+   └─ RankSkillsByHybridRelevance(skills, userMessage, usageStatsMap)
+         Score = 0.55 × LexicalAndSemanticFit (name, description, category, bundled action names)
+               + 0.25 × AgentUsageFrequency   (log-normalized agent-specific + global run-step usage)
+               + 0.20 × RecencyDecay          (exponential half-life = 7 days, agent-preferred)
+   └─ Slices top `maxSkillDecisionCandidates` (60) from N (e.g., 1,000+)
+
+Stage 2: Decision-Model Narrowing (or deterministic fallback)
+   ├─ When `decisionsEnabled: true`: `AgentDecisionService` selects up to `maxSkillsInPrompt` from the Stage 1 shortlist
+   └─ When `decisionsEnabled: false` (or on error): deterministically slices the top `maxSkillsInPrompt` from Stage 1
+```
+
+- **Pinned skills never drop**: Any skill already activated in the current run (`_activatedSkillIDs`) or explicitly requested by the user (`requestedSkillIDs`) is pinned (`pinnedSkillIDs`) and guaranteed to remain in the prompt catalog regardless of `maxSkillsInPrompt`.
+- **Scale-aware `CatalogNarrowingNote`**: When skills are narrowed and the agent holds `Find Candidate Skills` in its effective actions, `BuildCatalogNarrowingNote` explicitly instructs the model that it can call `Find Candidate Skills` and `Get Skill Details` to discover omitted skills.
+
+### 1.9 Built-in Skill Example: `GitHub Engineering & Repository Steward`
+
+MemberJunction ships a first-class **`GitHub Engineering & Repository Steward`** skill ([`metadata/ai-skills/.github-skill.json`](../metadata/ai-skills/.github-skill.json), template at [`metadata/ai-skills/templates/github-engineering.skill.md`](../metadata/ai-skills/templates/github-engineering.skill.md), and portable [`SKILL.md`](../packages/Actions/CoreActions/src/custom/github/SKILL.md)) with `ActivationMode = 'Auto'` that bundles all 14 `GitHub: *` actions:
+- **6 Read-Only Discovery Actions**: `GitHub: Get Repository Context`, `GitHub: Search Code`, `GitHub: Read File Content`, `GitHub: List Issues and PRs`, `GitHub: Get Issue or PR Details`, and `GitHub: Get Workflow Runs and Logs`. (Also granted directly to `Research Agent`, `ActionSmith`, and `SkillSmith`.)
+- **8 Governed Write Actions**: `GitHub: Create or Update Issue`, `GitHub: Add Issue or PR Comment`, `GitHub: Commit Files and Create PR`, `GitHub: Commit Files to Branch`, `GitHub: Submit PR Review`, `GitHub: Merge Pull Request`, `GitHub: Trigger Workflow Dispatch`, and `GitHub: Re-run Failed Workflow`.
 
 ---
 
@@ -331,6 +424,7 @@ Two subtleties worth calling out (both are load-bearing correctness points):
 
 - **The step returned to the framework is `'Chat'`, not `'Plan'`.** `'Plan'` is only an intermediate classification and the `AIAgentRunStep.StepType` audit value the UI keys on. The *terminal* step must stay within `AIAgentRun.FinalStep`'s DB-CHECK-constrained vocabulary, which deliberately excludes `Plan`/`Skill`/`ClientTools` (same reason as §1.3). So a plan-approval pause is represented with the same terminal shape `executeChatStep` uses.
 - **Rejection forces a re-plan** because `resumeAgent` re-enables `planMode` **only** when the resume originated from a `Plan` run-step. Without that, the gate would be off on the resumed run and a rejected plan would silently execute anyway. Regular Chat-clarification resumes are unaffected — they leave `planMode` off.
+- **Plan Mode is root-only (`depth === 0`).** Sub-agents never enter Plan Mode (`resolvePlanModeGate` requires `this._depth === 0`). When a sub-agent needs a human or parent sign-off before acting, its approval point is a regular `Chat` step carrying a `responseForm` — which a parent configured with `ChatHandlingOption = 'Consult'` can either answer itself (via `resumeRunId`) or escalate to its own caller.
 
 `resolvePlanModeGate`, `validatePlanNextStep`, `executePlanStep`, and `buildPlanApprovalForm` are all `protected` — override to change eligibility rules, plan-quality validation, or the approval card's layout.
 
@@ -370,7 +464,10 @@ Additive: `AISkill.ActivationScope` (`'Run'`/`'Conversation'`, default `'Run'`) 
 | `/skill` composer UX | `packages/Angular/Generic/conversations/src/lib/services/mention-autocomplete.service.ts` (`getSuggestions(…, '/', targetAgentId)` → `skillsForTarget` → `skill-picker-narrowing.ts` `IntersectAcceptedSkills`; the host binds `TargetAgentId` on `mj-ai-composer` — `mj-message-input` binds `pickerTargetAgentId`: an `@agent` chip in the draft, else its resolved agent), `components/mention/mention-editor.component.ts`, `components/message/message-input.component.ts` |
 | `requestedSkillIDs` transport | `AgentsClient/src/generic/AgentClientTypes.ts` + `AgentClientSession.ts`, `GraphQLDataProvider/src/graphQLAIClient.ts`, `MJServer/src/resolvers/RunAIAgentResolver.ts`, `ConversationsRuntime/src/agent-runner/ConversationAgentRunner.ts` |
 | SKILL.md | `packages/AI/Agents/src/SkillMarkdownConverter.ts`, `SkillImportExportService.ts`, `operations/AISkillMarkdownOperations.ts` |
+| Skill catalog narrowing & hybrid prioritization | `packages/AI/Agents/src/catalog-narrowing.ts` (`RankSkillsByHybridRelevance`, `PreFilterSkillCandidatesForDecision`, `NarrowSkillsWithDecision`, `BuildCatalogNarrowingNote`), `packages/AI/Agents/src/base-agent.ts` (`narrowCatalogsIfConfigured`, `getSkillUsageStatsForCatalog`) |
+| Semantic skill discovery actions | `packages/Actions/CoreActions/src/custom/ai/{base-find-skills,find-candidate-skills,find-best-skill,get-skill-details}.action.ts`, `metadata/entity-documents/templates/mj-ai-skills-search.njk`, `metadata/actions/.skill-discovery-actions.json` |
+| GitHub Engineering skill & actions | `packages/Actions/CoreActions/src/custom/github/`, `metadata/ai-skills/.github-skill.json`, `metadata/ai-skills/templates/github-engineering.skill.md`, `metadata/actions/.github-actions.json` |
 | Plan-approval resume | `packages/AI/Agents/src/MJAIAgentRequestEntityServer.ts` |
 | Sharing / permission grid / import UI | `packages/Angular/Explorer/core-entity-forms/src/lib/panels/ai-skill-sharing/`, `packages/Angular/Generic/agents/src/lib/{services/skill-permissions.service,components/skill-permissions-*}` |
 | Governance metadata | `metadata/authorizations/` (`Can Share Skills`), `metadata/permission-domains/` (`AI Skill Permissions`) |
-| Tests | unit: `packages/AI/Agents/src/__tests__/{skill-step,plan-mode-gate,loop-agent-type,SkillMarkdownConverter}.test.ts`, `packages/AI/BaseAIEngine/src/__tests__/AISkillPermissionHelper.test.ts`, `packages/MJCoreEntities/src/__tests__/PermissionProviders/AISkillPermissionProvider.test.ts`, `packages/MJCoreEntitiesServer/src/__tests__/MJAISkillPermissionEntityServer.test.ts`; integration: `packages/MJServer/integration-test-scripts/ai-skills-tests.ts` |
+| Tests | unit: `packages/AI/Agents/src/__tests__/{skill-step,plan-mode-gate,loop-agent-type,SkillMarkdownConverter,catalog-narrowing,github-skill-agent-run.integration}.test.ts`, `packages/Actions/CoreActions/src/__tests__/{find-candidate-skills.action,github-actions}.test.ts`, `packages/AI/BaseAIEngine/src/__tests__/AISkillPermissionHelper.test.ts`, `packages/MJCoreEntities/src/__tests__/PermissionProviders/AISkillPermissionProvider.test.ts`, `packages/MJCoreEntitiesServer/src/__tests__/MJAISkillPermissionEntityServer.test.ts`; integration: `packages/MJServer/integration-test-scripts/ai-skills-tests.ts` |

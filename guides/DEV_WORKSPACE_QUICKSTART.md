@@ -115,6 +115,19 @@ the `exports` root; `dist/` when none is declared) does not exist, and WARNS whe
 newer than everything in the output folder. Test files do not count. Rebuild with
 `pnpm --filter <package> run build` at the parent.
 
+### Explorer's prebundle exclude
+
+Explorer's Vite dev server pre-bundles dependencies into a cache, so a linked package rebuilt by
+`pnpm run watch` is served stale unless its scope is in `serve.options.prebundle.exclude` in the
+shell's `angular.json`. MJ commits `@memberjunction/*` there. On join, `mj dev workspace` adds the
+npm scopes of the packages the other members link (`@mj-biz-apps/*`, ...) to every enumerated app
+shell that already has that list, and records the additions in `.mj-dev-workspace.json`. `status`
+and `doctor` list them (doctor warns if one went missing, e.g. after a `git checkout` of the file),
+a re-join drops the scopes of members that left, and `clean` removes exactly the recorded entries,
+leaving the file as it was. Do not commit the change: CI's guards job (and `npm run check:guards`)
+fails any committed `angular.json` whose exclude holds anything but `@memberjunction/*`. An
+`angular.json` with comments is not edited; the command names it so you can add the scope by hand.
+
 ## Recovery
 
 Someone (or an IDE) ran `npm install` / `pnpm install` **inside** a member repo? `status` will flag
@@ -131,8 +144,9 @@ node MJ/packages/MJCLI/bin/run.js dev workspace clean
 ```
 
 Removes only the generated parent files (sentinel-verified — it refuses to delete a workspace it
-didn't generate unless you `--force`). Member repos are untouched and stay git-clean throughout;
-the workspace never commits anything to any repo.
+didn't generate unless you `--force`) and takes the recorded prebundle-exclude entries back out of
+the shell's `angular.json`. That file is the one member file the workspace edits; everything else in
+the member repos is untouched. The workspace never commits anything to any repo.
 
 ## Gotchas
 

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
+// Both `vi.mock` calls below are hoisted above every import, so this module binds the mocked transport and spawn.
+import { MLSidecar } from '../ml-sidecar.js';
 
 /**
  * Managed-mode unit tests for {@link MLSidecar}. `node:child_process` is mocked so
@@ -9,10 +11,10 @@ import { EventEmitter } from 'node:events';
  * The primary regression this file covers (Memory Leak Audit Round 7, Critical —
  * see `MLSidecarProvider` in `@memberjunction/predictive-studio`): once multiple
  * production call sites share ONE `MLSidecar` instance via `MLSidecarProvider`,
- * two `start()` calls landing before the first spawn's port-announcement resolves
+ * two `Start()` calls landing before the first spawn's port-announcement resolves
  * previously raced independent `spawnManaged()` calls — forking a second Python
  * process whose cleanup handlers never registered (`registerCleanup()` is a no-op
- * on the second call), leaking an untracked orphan. `start()` now shares a single
+ * on the second call), leaking an untracked orphan. `Start()` now shares a single
  * in-flight `startPromise` so concurrent callers await the same spawn.
  */
 
@@ -78,6 +80,8 @@ class MockChildProcess extends EventEmitter {
 }
 
 const spawnedProcesses: MockChildProcess[] = [];
+/** The argument list of every spawn, in order (the interpreter's arguments: the server script and the port). */
+const spawnedArgs: string[][] = [];
 const spawnMock = vi.fn(() => {
   const proc = new MockChildProcess();
   spawnedProcesses.push(proc);
@@ -85,11 +89,12 @@ const spawnMock = vi.fn(() => {
 });
 
 vi.mock('node:child_process', () => ({
-  spawn: (...args: unknown[]) => spawnMock(...args),
+  spawn: (_command: string, args: string[]) => {
+    spawnedArgs.push(args);
+    return spawnMock();
+  },
 }));
 
-// Import AFTER both mocks are registered.
-const { MLSidecar } = await import('../ml-sidecar.js');
 
 /** Simulate the sidecar announcing its listening port on stdout, one tick later. */
 function announcePort(proc: MockChildProcess, port: number) {
@@ -100,16 +105,20 @@ describe('MLSidecar (managed mode)', () => {
   beforeEach(() => {
     responseQueue.length = 0;
     spawnedProcesses.length = 0;
+    spawnedArgs.length = 0;
     spawnMock.mockClear();
+    // A sidecar URL in the shell (a developer's or a runner's) would put every client below in remote mode.
+    vi.stubEnv('PREDICTIVE_STUDIO_SIDECAR_URL', '');
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
-  it('start() spawns exactly one child process and resolves once the port is announced and healthy', async () => {
+  it('Start() spawns exactly one child process and resolves once the port is announced and healthy', async () => {
     const s = new MLSidecar();
-    const startPromise = s.start();
+    const startPromise = s.Start();
     await Promise.resolve(); // let spawn() run synchronously inside spawnManaged()
 
     expect(spawnMock).toHaveBeenCalledTimes(1);
@@ -121,10 +130,10 @@ describe('MLSidecar (managed mode)', () => {
     expect(s.Port).toBe(5555);
   });
 
-  it('concurrent start() calls before the process is ready share one in-flight spawn (no double-spawn race)', async () => {
+  it('concurrent Start() calls before the process is ready share one in-flight spawn (no double-spawn race)', async () => {
     const s = new MLSidecar();
-    const p1 = s.start();
-    const p2 = s.start();
+    const p1 = s.Start();
+    const p2 = s.Start();
     await Promise.resolve();
 
     // Both callers landed before `port`/`process` were set (IsRunning was still
@@ -139,35 +148,35 @@ describe('MLSidecar (managed mode)', () => {
     expect(s.IsRunning).toBe(true);
   });
 
-  it('a start() call after a fully-started sidecar is a cheap no-op (does not spawn again)', async () => {
+  it('a Start() call after a fully-started sidecar is a cheap no-op (does not spawn again)', async () => {
     const s = new MLSidecar();
-    const first = s.start();
+    const first = s.Start();
     await Promise.resolve();
     queueHealthOk();
     announcePort(spawnedProcesses[0], 7000);
     await first;
 
-    await s.start();
+    await s.Start();
     expect(spawnMock).toHaveBeenCalledTimes(1);
   });
 
-  it('stop() kills the managed process and IsRunning becomes false', async () => {
+  it('Stop() kills the managed process and IsRunning becomes false', async () => {
     const s = new MLSidecar();
-    const startPromise = s.start();
+    const startPromise = s.Start();
     await Promise.resolve();
     queueHealthOk();
     announcePort(spawnedProcesses[0], 8000);
     await startPromise;
 
-    await s.stop();
+    await s.Stop();
 
     expect(s.IsRunning).toBe(false);
     expect(spawnedProcesses[0].killSignals).toContain('SIGTERM');
   });
 
-  it('a start() call after a spawn failure spawns fresh rather than replaying the rejected promise', async () => {
+  it('a Start() call after a spawn failure spawns fresh rather than replaying the rejected promise', async () => {
     const s = new MLSidecar({ startupTimeoutMs: 50 });
-    const failedStart = s.start();
+    const failedStart = s.Start();
     await Promise.resolve();
     // Never announce a port or queue a health response — the process exits early instead.
     spawnedProcesses[0].emit('exit', 1);
@@ -175,7 +184,7 @@ describe('MLSidecar (managed mode)', () => {
 
     expect(spawnMock).toHaveBeenCalledTimes(1);
 
-    const retry = s.start();
+    const retry = s.Start();
     await Promise.resolve();
     expect(spawnMock).toHaveBeenCalledTimes(2); // fresh spawn, not the stale rejected promise
 
@@ -183,5 +192,34 @@ describe('MLSidecar (managed mode)', () => {
     announcePort(spawnedProcesses[1], 9000);
     await retry;
     expect(s.IsRunning).toBe(true);
+  });
+
+  it('asks the service for an ephemeral port (0) by default', async () => {
+    const s = new MLSidecar();
+    const startPromise = s.Start();
+    await Promise.resolve();
+    queueHealthOk();
+    announcePort(spawnedProcesses[0], 5600);
+    await startPromise;
+
+    expect(spawnedArgs[0][1]).toBe('0');
+  });
+
+  it('asks the service for the port option when one is given, so a restart answers on the same URL', async () => {
+    const s = new MLSidecar({ port: 61968 });
+    const startPromise = s.Start();
+    await Promise.resolve();
+    queueHealthOk();
+    announcePort(spawnedProcesses[0], 61968);
+    await startPromise;
+
+    expect(spawnedArgs[0][1]).toBe('61968');
+    expect(s.Port).toBe(61968);
+  });
+
+  it('refuses a port that is not an integer from 0 to 65535, naming it', () => {
+    expect(() => new MLSidecar({ port: 70000 })).toThrow('MLSidecar: port 70000 is not an integer from 0 (ephemeral) to 65535');
+    expect(() => new MLSidecar({ port: 1.5 })).toThrow('port 1.5');
+    expect(() => new MLSidecar({ port: -1 })).toThrow('port -1');
   });
 });

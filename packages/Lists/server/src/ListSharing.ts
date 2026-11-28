@@ -6,15 +6,16 @@ import {
   UserInfo,
 } from '@memberjunction/core';
 import {
-  AuditLogTypeEngine,
+  ConsumeEntityShareNotificationDispatched,
   CreateShareNotification,
-  MJAuditLogEntity,
   MJListEntity,
   MJListInvitationEntity,
   MJResourcePermissionEntity,
   MJUserEntity,
   ResourceTypeEngine,
 } from '@memberjunction/core-entities';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EmitListAuditLog, type ListAuditLogEntry } from './listAuditLog';
 import type {
   AcceptInvitationResult,
   InviteResult,
@@ -131,8 +132,14 @@ export class ListSharing {
       // that fans this out across the user's notification preferences (in-app
       // + email + SMS). Role-target shares are fan-out at the role level by
       // a separate worker; we don't try to enumerate every role member here.
-      if (args.Target.kind === 'user' && args.Target.userId !== this.contextUser.ID) {
-        await this.dispatchShareNotification(args.ListID, args.Target.userId, args.PermissionLevel);
+      // Guard against duplicate dispatch when `MJResourcePermissionEntityExtended.Save()`
+      // already fired the notification during `perm.Save()`.
+      if (
+        args.Target.kind === 'user' &&
+        !UUIDsEqual(args.Target.userId, this.contextUser.ID) &&
+        !ConsumeEntityShareNotificationDispatched(perm)
+      ) {
+        await this.dispatchShareNotification(args.ListID, args.Target.userId, args.PermissionLevel, perm.ID);
       }
 
       return { Success: true, ResultCode: 'SUCCESS', Message: 'Permission granted', PermissionID: perm.ID };
@@ -479,7 +486,7 @@ export class ListSharing {
     };
   }
 
-  private snapshotTarget(p: MJResourcePermissionEntity): Record<string, unknown> {
+  private snapshotTarget(p: MJResourcePermissionEntity): Record<string, string | null> {
     return {
       TargetKind: p.Type === 'User' ? 'user' : 'role',
       TargetID: p.Type === 'User' ? p.UserID : p.RoleID,
@@ -530,59 +537,11 @@ export class ListSharing {
   }
 
   /**
-   * Resolve an `MJ: Audit Log Types.ID` by row name via the shared
-   * `AuditLogTypeEngine`. Same fail-loud contract as
-   * {@link getListResourceTypeId}.
+   * Best-effort audit-log emit through the shared List audit writer. It never fails the parent
+   * operation; a failure is logged so the discrepancy is observable.
    */
-  private async getAuditLogTypeId(name: string): Promise<string> {
-    await AuditLogTypeEngine.Instance.Config(false, this.contextUser, this.provider);
-    const t = AuditLogTypeEngine.Instance.ByName(name);
-    if (!t) {
-      throw new Error(
-        `MJ: Audit Log Types row "${name}" not found. ` +
-          `Seed metadata/audit-log-types/ via 'mj sync push' before using ListSharing.`,
-      );
-    }
-    return t.ID;
-  }
-
-  /**
-   * Best-effort audit-log emit. We never fail the parent operation on
-   * an audit-log failure; instead we LogError so the discrepancy is
-   * observable. Cross-cutting reliability concern.
-   *
-   * Takes the audit-log-type by NAME so call sites are grep-able and
-   * resilient to seed-UUID changes. Name → ID resolution goes through the
-   * `AuditLogTypeEngine`.
-   */
-  private async emitAuditLog(args: {
-    Type: string;
-    ListID: string;
-    Description: string;
-    Details: Record<string, unknown>;
-  }): Promise<void> {
-    try {
-      const typeId = await this.getAuditLogTypeId(args.Type);
-      const md = this.metadata();
-      const log = await md.GetEntityObject<MJAuditLogEntity>('MJ: Audit Logs', this.contextUser);
-      log.NewRecord();
-      log.UserID = this.contextUser.ID;
-      log.AuditLogTypeID = typeId;
-      log.Status = 'Success';
-      log.Description = args.Description;
-      log.Details = JSON.stringify(args.Details);
-      // EntityID for MJ: Lists via the O(1) by-name map. Entities.find
-      // is an O(N) scan and the documented anti-pattern.
-      const listEntity = md.EntityByName('MJ: Lists');
-      if (listEntity) log.EntityID = listEntity.ID;
-      log.RecordID = args.ListID;
-      const ok = await log.Save();
-      if (!ok) {
-        LogError(`Audit log save failed: ${log.LatestResult?.CompleteMessage ?? 'unknown'}`);
-      }
-    } catch (e) {
-      LogError(`emitAuditLog threw: ${e instanceof Error ? e.message : String(e)}`);
-    }
+  private async emitAuditLog(args: ListAuditLogEntry): Promise<void> {
+    await EmitListAuditLog(args, this.metadata(), this.contextUser, this.provider);
   }
 
   /**
@@ -600,6 +559,7 @@ export class ListSharing {
     listId: string,
     granteeUserId: string,
     level: SharePermissionLevel,
+    permissionId?: string,
   ): Promise<void> {
     try {
       const md = this.metadata();
@@ -614,7 +574,7 @@ export class ListSharing {
         // ignore — listName stays undefined
       }
       await CreateShareNotification({
-        Provider: this.metadata() as unknown as IMetadataProvider,
+        Provider: this.provider ?? Metadata.Provider,
         ContextUser: this.contextUser,
         GrantorUserID: this.contextUser.ID,
         GranteeUserID: granteeUserId,
@@ -622,8 +582,15 @@ export class ListSharing {
         ResourceTypeName: 'Lists',
         ResourceName: listName,
         ResourceRecordID: listId,
-        ActionsSummary: `granted ${level} access`,
-        ExtraConfiguration: { PermissionLevel: level },
+        PermissionLevel: level,
+        ActionsSummary: `${level} access`,
+        ExtraConfiguration: {
+          type: 'list',
+          listId,
+          ResourceRecordID: listId,
+          ...(permissionId ? { ResourcePermissionID: permissionId } : {}),
+          PermissionLevel: level,
+        },
       });
     } catch (e) {
       LogError(`dispatchShareNotification failed for list ${listId}: ${e instanceof Error ? e.message : String(e)}`);
@@ -636,11 +603,11 @@ export class ListSharing {
 
   /** Escape a value for inline-literal use in `ExtraFilter`. */
   private escape(value: string): string {
-    return value.replace(/'/g, "''");
+    return EscapeSQLString(value);
   }
 
-  private metadata(): Metadata {
-    return (this.provider as unknown as Metadata | undefined) ?? new Metadata();
+  private metadata(): IMetadataProvider | Metadata {
+    return this.provider ?? new Metadata();
   }
 
   private runView(): RunView {

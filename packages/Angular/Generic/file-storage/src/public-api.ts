@@ -3,6 +3,7 @@
  */
 
 export * from './lib/category-tree/category-tree';
+export * from './lib/file-upload/file-upload';
 export * from './lib/files-grid/files-grid';
 export * from './lib/file-browser/file-browser.component';
 export * from './lib/file-browser/file-browser-demo.component';

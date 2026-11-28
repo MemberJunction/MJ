@@ -375,21 +375,22 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         if (input.ParameterHints && input.ParameterHints.length > 0) {
             record.ParameterHints = new Map(input.ParameterHints.map(h => [h.Name, h.Value]));
         }
-        this.ListenForEntityMessages(record, pubSub, context.userPayload.userRecord);
+        this.ListenForEntityMessages(record, pubSub, context.userPayload);
         return record;
     }
 
     /** After a successful create: the AfterCreate event, the permissions, and the result. */
     private async completeCreateAsync(provider: DatabaseProviderBase, input: CreateQuerySystemUserInput, record: MJQueryEntityServer, user: UserInfo): Promise<QueryMutationResultType> {
         await this.AfterCreate(provider, input); // fire event
+        let createdPermissions: MJQueryPermissionEntity[] | undefined;
         if (input.Permissions && input.Permissions.length > 0) {
             try {
-                await this.createPermissions(provider, input.Permissions, record.ID, user);
+                createdPermissions = await this.createPermissions(provider, input.Permissions, record.ID, user);
             } catch (e) {
                 return { Success: false, ErrorMessage: `Query '${record.Name}' (ID ${record.ID}) was created, but its permissions were not: ${e instanceof Error ? e.message : String(e)}` };
             }
         }
-        return this.buildSuccessResult(record, user, provider);
+        return this.buildSuccessResult(record, user, provider, undefined, createdPermissions);
     }
 
     /** The create-or-get result: the query another request created with this name. */
@@ -415,7 +416,14 @@ export class MJQueryResolverExtended extends MJQueryResolver {
      *
      * @param contextUser The caller the result is for. Field security projects the record for them.
      */
-    private async buildSuccessResult(entity: MJQueryEntityServer, contextUser: UserInfo, provider: DatabaseProviderBase, children?: StoredQueryChildren): Promise<QueryMutationResultType> {
+    private async buildSuccessResult(
+        entity: MJQueryEntityServer,
+        contextUser: UserInfo,
+        provider: DatabaseProviderBase,
+        children?: StoredQueryChildren,
+        createdPermissions?: MJQueryPermissionEntity[]
+    ): Promise<QueryMutationResultType> {
+        const permissionsToMap = children?.Permissions ?? createdPermissions ?? entity.QueryPermissions;
         return {
             Success: true,
             // Mapped for the caller, so the field-security projection applies: the record was just
@@ -425,7 +433,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             Fields: this.mapFields(children?.Fields ?? entity.QueryFields),
             Parameters: this.mapParameters(children?.Parameters ?? entity.QueryParameters),
             Entities: this.mapEntities(children?.Entities ?? entity.QueryEntities),
-            Permissions: this.mapPermissions(children?.Permissions ?? entity.QueryPermissions),
+            Permissions: this.mapPermissions(permissionsToMap),
         };
     }
 
@@ -466,6 +474,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             SourceEntityFieldID: f.SourceEntityFieldID,
             SourceEntityField: f.SourceEntityField,
             SourceObjectName: f.SourceObjectName,
+            InAllBranchVariants: f.InAllBranchVariants,
             IsNullable: f.IsNullable,
             IsComputed: f.IsComputed,
             ComputationDescription: f.ComputationDescription,
@@ -532,7 +541,8 @@ export class MJQueryResolverExtended extends MJQueryResolver {
      *
      * @throws Error naming the role and the save's own message when a row is not saved
      */
-    protected async createPermissions(p: DatabaseProviderBase, permissions: QueryPermissionInputType[], queryID: string, contextUser: UserInfo): Promise<void> {
+    protected async createPermissions(p: DatabaseProviderBase, permissions: QueryPermissionInputType[], queryID: string, contextUser: UserInfo): Promise<MJQueryPermissionEntity[]> {
+        const created: MJQueryPermissionEntity[] = [];
         for (const perm of permissions) {
             const permissionEntity = await p.GetEntityObject<MJQueryPermissionEntity>('MJ: Query Permissions', contextUser);
             if (permissionEntity) {
@@ -541,8 +551,10 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 if (!await permissionEntity.Save()) {
                     throw new Error(MJQueryResolverExtended.permissionWriteError('save', perm.RoleID, permissionEntity));
                 }
+                created.push(permissionEntity);
             }
         }
+        return created;
     }
 
     /**
@@ -648,17 +660,18 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             const queryID = queryEntity.ID;
 
             // Handle permissions update if provided
+            let createdPermissions: MJQueryPermissionEntity[] | undefined;
             if (input.Permissions !== undefined) {
                 // Replace the existing permissions (read from the QueryEngine cache); a failed write stops the update with its reason
                 try {
                     await this.deletePermissions(queryID);
-                    await this.createPermissions(provider, input.Permissions, queryID, context.userPayload.userRecord);
+                    createdPermissions = await this.createPermissions(provider, input.Permissions, queryID, context.userPayload.userRecord);
                 } catch (e) {
                     return { Success: false, ErrorMessage: `Failed to update query permissions: ${e instanceof Error ? e.message : String(e)}` };
                 }
             }
 
-            return await this.buildSuccessResult(queryEntity, context.userPayload.userRecord, provider);
+            return await this.buildSuccessResult(queryEntity, context.userPayload.userRecord, provider, undefined, createdPermissions);
 
         } catch (err) {
             LogError(err);

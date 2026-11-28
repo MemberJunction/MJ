@@ -85,8 +85,13 @@ describe('channel scope protection', () => {
 });
 
 describe('PROTECTED_SESSION_CONFIG_KEYS', () => {
-    it('protects the janitor deadline and the verification state', () => {
-        expect(PROTECTED_SESSION_CONFIG_KEYS).toEqual(['maxSessionDeadlineIso', 'identityVerification', 'channels']);
+    it('protects the janitor deadline, verification state, channel scope, and mint snapshot', () => {
+        expect(PROTECTED_SESSION_CONFIG_KEYS).toEqual([
+            'maxSessionDeadlineIso',
+            'identityVerification',
+            'channels',
+            'realtimeMintSnapshot',
+        ]);
     });
 });
 
@@ -300,5 +305,53 @@ describe('MJAIAgentSessionEntityServer.Validate — a transaction variable canno
             expect(inGroup(false, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'Config' }]).Validate().Success).toBe(true);
         });
         expect(inGroup(true, () => [{ EntityObject: {}, Type: 'Use', FieldName: 'ConversationID' }]).Validate().Success).toBe(true);
+    });
+});
+
+/*
+ * CloseReason is server-managed too: the owner may close their own row as 'Explicit' or 'Error' (what the
+ * CloseAgentSession mutation lets a client claim), but 'TimeLimit' is verified against the stored deadline inside
+ * SessionManager.CloseSession, and 'Idle' / 'Janitor' / 'Shutdown' are the janitor's and the host's own. Without this
+ * guard the generic UpdateMJAIAgentSession mutation would let an owner stamp any of them and skip the verification.
+ */
+describe('MJAIAgentSessionEntityServer.Validate — CloseReason', () => {
+    function closing(reason: string, dirty = true, previous: string | null = null): MJAIAgentSessionEntityServer {
+        const entity = session({ saved: true, previous: '{}', next: '{}', dirty: false });
+        const stub = entity as unknown as { CloseReason: string; Fields: Map<string, { Dirty: boolean; OldValue: string | null }> };
+        stub.CloseReason = reason;
+        stub.Fields.set('CloseReason', { Dirty: dirty, OldValue: previous });
+        return entity;
+    }
+
+    // A reason the server stamped is the audit record of how the session ended; the owner may not rewrite it either.
+    it.each(['TimeLimit', 'Idle', 'Janitor', 'Shutdown'])('refuses an untrusted save that replaces a stamped %s with Explicit', (stamped) => {
+        const result = closing('Explicit', true, stamped).Validate();
+        expect(result.Success).toBe(false);
+        expect(result.Errors[0].Source).toBe('CloseReason');
+        expect(result.Errors[0].Message).toContain(stamped);
+    });
+
+    it('allows the owner to change their own Explicit close to Error', () => {
+        expect(closing('Error', true, 'Explicit').Validate().Success).toBe(true);
+    });
+
+    it.each(['TimeLimit', 'Idle', 'Janitor', 'Shutdown'])('refuses an untrusted save that sets CloseReason %s', (reason) => {
+        const result = closing(reason).Validate();
+        expect(result.Success).toBe(false);
+        expect(result.Errors[0].Source).toBe('CloseReason');
+        expect(result.Errors[0].Message).toContain(reason);
+    });
+
+    it.each(['Explicit', 'Error'])('allows an untrusted save that sets CloseReason %s', (reason) => {
+        expect(closing(reason).Validate().Success).toBe(true);
+    });
+
+    it('does not inspect CloseReason when it was not edited', () => {
+        expect(closing('Janitor', false).Validate().Success).toBe(true);
+    });
+
+    it('allows a server-only reason inside the trusted scope', async () => {
+        const entity = closing('TimeLimit');
+        await expect(RunWithTrustedSessionConfigWrites(async () => entity.Validate().Success)).resolves.toBe(true);
     });
 });

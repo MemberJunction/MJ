@@ -1,15 +1,22 @@
 // The Media channel imports its standalone Angular surface component (partial-compiled Angular libs
 // require the JIT compiler in this node test environment), so load the compiler FIRST.
 import '@angular/compiler';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '@memberjunction/realtime-runtime';
 import { LoadRealtimeMediaChannel, RealtimeMediaChannel } from '../lib/components/realtime/media/media-channel';
-import { MediaChannelState, MediaItem } from '../lib/components/realtime/media/media-channel-state';
+import {
+  IsAllowedExternalMediaUrl,
+  MediaChannelState,
+  MediaItem,
+} from '../lib/components/realtime/media/media-channel-state';
 import { MEDIA_TOOL_NAMES } from '../lib/components/realtime/media/media-channel-tools';
 import {
-  RealtimeMediaSurfaceComponent, RouteForMediaItem, IsPlayerMediaType
+  IsEmbeddableSurfaceUrl,
+  RealtimeMediaSurfaceComponent,
+  RouteForMediaItem,
+  IsPlayerMediaType,
 } from '../lib/components/realtime/media/realtime-media-surface.component';
 
 LoadRealtimeMediaChannel();
@@ -59,8 +66,8 @@ describe('RealtimeMediaChannel — MJStorage file support', () => {
 
   // --- Tool contract: source is url OR fileId, at least one required -----------
 
-  it('Media_ShowMedia accepts a fileId WITHOUT a url (MJStorage file)', () => {
-    const result = parseResult(channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
+  it('Media_ShowMedia accepts a fileId WITHOUT a url (MJStorage file)', async () => {
+    const result = parseResult(await channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
       mediaType: 'image', fileId: 'FILE-A', displayName: 'Chart',
     })));
     expect(result.success).toBe(true);
@@ -72,8 +79,8 @@ describe('RealtimeMediaChannel — MJStorage file support', () => {
     expect(channel.State.ActiveItemId).toBe(item.Id);
   });
 
-  it('Media_ShowMedia still accepts a url WITHOUT a fileId (external/public asset)', () => {
-    const result = parseResult(channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
+  it('Media_ShowMedia still accepts a url WITHOUT a fileId (external/public asset)', async () => {
+    const result = parseResult(await channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
       mediaType: 'web', url: 'https://example.com', displayName: 'Site',
     })));
     expect(result.success).toBe(true);
@@ -82,8 +89,8 @@ describe('RealtimeMediaChannel — MJStorage file support', () => {
     expect(item.FileID).toBeUndefined();
   });
 
-  it('Media_ShowMedia REJECTS when neither url nor fileId is given', () => {
-    const result = parseResult(channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
+  it('Media_ShowMedia REJECTS when neither url nor fileId is given', async () => {
+    const result = parseResult(await channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
       mediaType: 'image', displayName: 'No source',
     })));
     expect(result.success).toBe(false);
@@ -91,8 +98,8 @@ describe('RealtimeMediaChannel — MJStorage file support', () => {
     expect(channel.State.Items).toHaveLength(0);
   });
 
-  it('Media_ShowMedia still rejects a missing/invalid mediaType even with a fileId', () => {
-    const result = parseResult(channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
+  it('Media_ShowMedia still rejects a missing/invalid mediaType even with a fileId', async () => {
+    const result = parseResult(await channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
       fileId: 'FILE-A', displayName: 'X',
     })));
     expect(result.success).toBe(false);
@@ -206,5 +213,168 @@ describe('RouteForMediaItem — surface render routing (pure)', () => {
     expect(IsPlayerMediaType(item({ Type: 'image' }))).toBe(false);
     expect(IsPlayerMediaType(item({ Type: 'pdf' }))).toBe(false);
     expect(IsPlayerMediaType(item({ Type: 'web' }))).toBe(false);
+  });
+});
+
+describe('Realtime media URL scheme screening (PR #6034)', () => {
+  it('Media_ShowMedia rejects javascript:, data:, blob:, relative, and scheme-relative URLs', async () => {
+    const channel = new RealtimeMediaChannel();
+    channel.Initialize(makeContext({ Notes: [], Saves: [] }));
+
+    const blockedUrls = [
+      'javascript:alert(document.cookie)',
+      '  JAVASCRIPT:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'blob:https://example.com/uuid',
+      '//evil.example.com/page',
+      '/relative/path.png',
+      'https://',
+    ];
+
+    for (const badUrl of blockedUrls) {
+      const result = parseResult(
+        await channel.ApplyAgentTool(
+          MEDIA_TOOL_NAMES.ShowMedia,
+          JSON.stringify({ mediaType: 'web', url: badUrl, displayName: 'Untrusted' }),
+        ),
+      );
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/http:\/\/ or https:\/\//i);
+    }
+    expect(channel.State.Items).toHaveLength(0);
+  });
+
+  it('MediaChannelState.LoadFromJSON drops persisted items carrying poisoned non-http(s) URLs', () => {
+    const poisonedPayload = JSON.stringify({
+      V: 1,
+      Items: [
+        { Id: 'xss-1', Type: 'image', Url: 'javascript:alert(1)', DisplayName: 'XSS' },
+        { Id: 'xss-2', Type: 'web', Url: '//evil.example.com/frame', DisplayName: 'SchemeRelative' },
+        { Id: 'ok-1', Type: 'image', Url: 'https://cdn.example.com/diagram.png', DisplayName: 'Safe' },
+      ],
+      ActiveItemId: 'xss-1',
+    });
+
+    const state = new MediaChannelState();
+    expect(state.LoadFromJSON(poisonedPayload)).toBe(true);
+    expect(state.Items).toHaveLength(1);
+    expect(state.Items[0].Id).toBe('ok-1');
+    expect(state.ActiveItemId).toBe('ok-1');
+  });
+
+  it('IsAllowedExternalMediaUrl and IsEmbeddableSurfaceUrl distinguish external vs same-origin streaming URLs', () => {
+    const origin = 'https://app.example.com';
+
+    expect(IsAllowedExternalMediaUrl('https://cdn.example.com/video.mp4')).toBe(true);
+    expect(IsAllowedExternalMediaUrl('/media/file-1?token=jwt')).toBe(false);
+    expect(IsAllowedExternalMediaUrl('//evil.example.com/video.mp4')).toBe(false);
+    expect(IsAllowedExternalMediaUrl('javascript:alert(1)')).toBe(false);
+
+    expect(IsEmbeddableSurfaceUrl('https://cdn.example.com/video.mp4', origin)).toBe(true);
+    expect(IsEmbeddableSurfaceUrl('/media/file-1?token=jwt', origin)).toBe(true);
+    expect(IsEmbeddableSurfaceUrl('//evil.example.com/video.mp4', origin)).toBe(false);
+    expect(IsEmbeddableSurfaceUrl('javascript:alert(1)', origin)).toBe(false);
+    expect(IsEmbeddableSurfaceUrl('data:text/html,hi', origin)).toBe(false);
+    expect(IsEmbeddableSurfaceUrl('blob:https://app.example.com/id', origin)).toBe(false);
+  });
+
+  it('checks external URL health before adding broken media and refuses bad URLs synchronously or asynchronously', async () => {
+    const channel = new RealtimeMediaChannel();
+    const notes: string[] = [];
+    const requests: string[] = [];
+    channel.Initialize({
+      AgentName: 'Sage',
+      Provider: null,
+      SendContextNote: (text: string) => notes.push(text),
+      RequestSave: (json: string) => requests.push(json),
+      SetFocusMode: () => undefined,
+      SaveAsArtifact: async () => null,
+      AgentSessionID: 'sess-health',
+      ExecuteServerAction: async () => null,
+    });
+
+    try {
+      // Sync rejection: broken image never enters State
+      RealtimeMediaChannel.UrlHealthChecker = (url: string) =>
+        url.includes('404') ? { Ok: false, Reason: '404 Not Found' } : { Ok: true };
+      const syncFail = JSON.parse(
+        channel.ApplyAgentTool(
+          MEDIA_TOOL_NAMES.ShowMedia,
+          JSON.stringify({ mediaType: 'image', url: 'https://cdn.example.com/404.png', displayName: 'Broken' }),
+        ) as string,
+      );
+      expect(syncFail.success).toBe(false);
+      expect(syncFail.error).toContain('404 Not Found');
+      expect(channel.State.Items).toHaveLength(0);
+
+      // Async healthy vs broken probe
+      RealtimeMediaChannel.UrlHealthChecker = async (url: string) =>
+        url.includes('broken') ? { Ok: false, Reason: 'Network unreachable' } : { Ok: true };
+      const asyncFail = JSON.parse(
+        await channel.ApplyAgentTool(
+          MEDIA_TOOL_NAMES.ShowMedia,
+          JSON.stringify({ mediaType: 'image', url: 'https://cdn.example.com/broken.png', displayName: 'Broken2' }),
+        ),
+      );
+      expect(asyncFail.success).toBe(false);
+      expect(asyncFail.error).toContain('Network unreachable');
+      expect(channel.State.Items).toHaveLength(0);
+
+      const asyncPass = JSON.parse(
+        await channel.ApplyAgentTool(
+          MEDIA_TOOL_NAMES.ShowMedia,
+          JSON.stringify({ mediaType: 'image', url: 'https://cdn.example.com/ok.png', displayName: 'Healthy' }),
+        ),
+      );
+      expect(asyncPass.success).toBe(true);
+      expect(channel.State.Items).toHaveLength(1);
+    } finally {
+      RealtimeMediaChannel.UrlHealthChecker = null;
+      channel.Dispose();
+    }
+  });
+
+  it('exposes GetState() and emits passive perception delta notes on user tab switches and closes', async () => {
+    vi.useFakeTimers();
+    const channel = new RealtimeMediaChannel();
+    const notes: string[] = [];
+    try {
+      channel.Initialize({
+        AgentName: 'Sage',
+        Provider: null,
+        SendContextNote: (text: string) => notes.push(text),
+        RequestSave: () => undefined,
+        SetFocusMode: () => undefined,
+        SaveAsArtifact: async () => null,
+        AgentSessionID: 'sess-passive',
+        ExecuteServerAction: async () => null,
+      });
+
+      channel.ApplyAgentTool(
+        MEDIA_TOOL_NAMES.ShowMedia,
+        JSON.stringify({ mediaType: 'image', url: 'https://cdn.example.com/one.png', displayName: 'One' }),
+      );
+      const second = JSON.parse(
+        channel.ApplyAgentTool(
+          MEDIA_TOOL_NAMES.ShowMedia,
+          JSON.stringify({ mediaType: 'image', url: 'https://cdn.example.com/two.png', displayName: 'Two' }),
+        ) as string,
+      );
+
+      expect(channel.GetState()).toMatchObject({
+        activeItemId: second.id,
+        itemCount: 2,
+      });
+
+      notes.length = 0;
+      const firstId = channel.State.Items[0].Id;
+      channel.State.SetActive(firstId);
+      vi.advanceTimersByTime(1000);
+
+      expect(notes.some((n) => n.includes('[channel:Media#') && n.includes(firstId))).toBe(true);
+    } finally {
+      channel.Dispose();
+      vi.useRealTimers();
+    }
   });
 });

@@ -1,257 +1,237 @@
 # Artifact Tools Guide
 
-How file uploads, generated artifacts, and the artifact tool dispatch path
-reach an AI agent's context. Covers storage vs. rendering, the Artifact Type
-registry, delivery modes, MIME resolution, and authoring custom tool
-libraries.
+How file uploads, governed collaborative artifacts, and the artifact tool dispatch path reach an AI agent's context. Covers storage vs. rendering, the Artifact Type registry, delivery modes, MIME resolution, the 13 built-in tool libraries, always-on workspace tools, security guards, and authoring custom tool libraries.
 
 ## Storage vs. rendering: two different decisions
 
-Every file that an agent needs to see (uploaded by a user, attached to a
-message, or produced by an upstream agent) lives in MemberJunction as a
-**`ConversationArtifactVersion`** row. That row carries the bytes (inline in
-`Content` or by reference via `FileID` to MJStorage), the MIME type, a
-filename, a size, a SHA hash, and a foreign key to the registered
-**`ArtifactType`** that describes what kind of thing it is.
+Every file or governed document an agent operates on (uploaded by a user, created mid-run via workspace tools, or produced as an agent output) lives in MemberJunction as an **`MJ: Artifacts`** (`MJArtifactEntity`) + **`MJ: Artifact Versions`** (`MJArtifactVersionEntity`) row pair. Each version row carries the content (`Content` JSON/text or `FileID` referencing MJStorage), MIME type (`ContentType`), filename, size, SHA hash, and a foreign key to the registered **`MJ: Artifact Types`** (`MJArtifactTypeEntity`) definition.
 
-How the bytes actually reach the LLM is a separate decision, made per
-agent-turn by the resolver:
+How the bytes actually reach the LLM is a separate decision made per agent turn by `RouteArtifact()` (`packages/MJServer/src/resolvers/artifact-routing.ts`):
 
 | Path | What the LLM sees |
 |---|---|
-| **Inline** | A native multimodal content block on the user message: `image_url`, `audio_url`, `video_url`, or `file_url`. Vision-capable models "see" the content directly. |
-| **Tools** | An entry on the artifact manifest plus a registered tool library (`get_full`, `json_path`, `get_text`, …). The agent reads the bytes lazily, only when it decides it needs them. |
+| **Inline** | A native multimodal content block on the user message: `image_url`, `audio_url`, `video_url`, or `file_url`. Vision-capable models inspect the content directly. |
+| **Tools** | An entry on the artifact manifest (`ArtifactToolManager.ToManifestString`) plus registered `BaseArtifactToolLibrary` tools (`get_full`, `json_path`, `get_text`, `read_range`, …). The agent reads or mutates content lazily via `artifactToolCalls` (or native `artifact_tool`). |
 
-The decision is driven by **artifact-type metadata, model driver capability,
-and an explicit per-instance override** — never by a hardcoded MIME list
-inside the resolver.
+Delivery routing is driven by **artifact-type metadata, model driver capability, and a one-way per-instance override** — never by a hardcoded MIME allowlist in the resolver.
 
 ## Artifact Type registry
 
-Each registered Artifact Type carries:
+Each registered `MJ: Artifact Types` record carries:
 
 | Field | Meaning |
 |---|---|
-| `Name` | Human-readable label ("JSON", "PDF", "Image", …) |
-| `ContentType` | MIME pattern. Exact (`application/pdf`) or subtype wildcard (`image/*`, `text/*`). |
-| `ToolLibraryClass` | Class name of the `BaseArtifactToolLibrary` subclass that provides type-specific tools. `null` for inline-only types (Image, Audio, Video). |
-| `DefaultDeliveryMode` | `Inline` or `ToolsOnly`. Two states only — `Auto` was considered and rejected because it collapses to one of the existing values. |
-| `Priority` | Higher wins within a specificity tier. Use to disambiguate when multiple types claim the same MIME. |
-| `SystemSupplied` | `true` for MJ-shipped defaults, `false` for org customizations. User customizations win over shipped defaults at equal priority. |
+| `Name` | Human-readable label (`Markdown Document`, `Excel Spreadsheet`, `Presentation`, `Whiteboard`, `JSON`, `PDF`, `Image`, …) |
+| `ContentType` | MIME pattern. Exact (`application/pdf`, `application/vnd.mj.spreadsheet+json`) or subtype wildcard (`image/*`, `text/*`). |
+| `DriverClass` | Angular `@RegisterClass(BaseArtifactViewerPluginComponent, ...)` viewer plugin class name. |
+| `ToolLibraryClass` | Class name of the `BaseArtifactToolLibrary` subclass providing server-side tools (`null` for inline-only media types such as Image, Audio, Video). |
+| `DefaultDeliveryMode` | `Inline` or `ToolsOnly`. |
+| `Priority` | Higher wins within a specificity tier to disambiguate overlapping MIME patterns. |
+| `SystemSupplied` | `true` for MJ-shipped defaults, `false` for org customizations (customizations win over shipped defaults at equal priority). |
 
-Default-registered types cover the long tail: JSON, XML, CSV, PDF, Office
-variants, `image/*`, `audio/*`, `video/*`, `text/*` (catchall: logs, YAML,
-TOML, Markdown, source code), and a minimal `application/octet-stream` Generic
-Binary fallback. Anything outside the registry is rejected at upload time —
-see *Unknown file types* below.
+Anything outside the registry is rejected at upload time unless the target agent opts into `AcceptUnregisteredFiles`.
 
 ## Routing — when each path fires
 
-Pseudocode (the real implementation is the pure `RouteArtifact()` function in
-`packages/MJServer/src/resolvers/artifact-routing.ts`, fully unit-tested):
+`RouteArtifact(input: ArtifactRoutingInput)` in `packages/MJServer/src/resolvers/artifact-routing.ts` evaluates:
 
 ```
-typeDefault = artifactType.DefaultDeliveryMode      // 'Inline' | 'ToolsOnly'
-forceTools  = artifactVersion.ForceToolsOnly        // bool, default false
+TypeDefault = artifactType.DefaultDeliveryMode      // 'Inline' | 'ToolsOnly'
+ForceToolsOnly = artifactVersion.ForceToolsOnly     // boolean, default false
 
-if typeDefault == 'ToolsOnly' OR forceTools:
-    register with ArtifactToolManager
-    return
+if TypeDefault == 'ToolsOnly' OR ForceToolsOnly:
+    return { delivery: 'tools' }                    // registered with ArtifactToolManager
 
-// typeDefault == 'Inline' and no instance opt-out
+if NOT ModelSupportsModality(mimeType):
+    return { delivery: 'error', message }           // explicit remediation error
 
-if NOT modelDriver.SupportsModality(mimeType):
-    throw — name the type, model, and three remediation paths
+if SizeBytes >= InlineSizeCap (100 KB default):
+    return { delivery: 'tools', Annotation }        // manifest annotation + server WARN log
 
-if sizeBytes >= INLINE_SIZE_CAP (100 KB):
-    register with ArtifactToolManager + visible manifest annotation + WARN log
-    return
-
-emit inline content block
+return { delivery: 'inline' }
 ```
 
-Two behaviors worth calling out:
-
-- **Modality mismatch is a hard error.** Configuring an `image/*` type as
-  `Inline` and pointing it at a non-vision model is a config bug. There is
-  no defensible runtime fix, so we surface a remediable message rather than
-  silently falling back to tools.
-- **Size cap fallback is explicit, not silent.** When an Inline-default
-  artifact exceeds the inline cap, it still gets routed to tools, but the
-  manifest entry the agent sees carries a visible note ("…configured for
-  Inline but exceeds inline size cap; delivered via tools") and the server
-  logs at WARN. Both the LLM and the operator can tell that the configured
-  intent didn't take effect.
+Two key guarantees:
+- **Modality mismatch is a hard error**, not a silent fallback — configuring an `image/*` artifact as `Inline` for a non-vision model surfaces a remediable error immediately.
+- **Size cap fallback is explicit.** When an `Inline`-default artifact exceeds `InlineSizeCap` (`100 KB` default), it routes to `ArtifactToolManager` with a manifest note and a server WARN log.
 
 ## The per-instance override is one-way
 
-`ConversationArtifactVersion.ForceToolsOnly: bool` (default `false`) lets a
-specific artifact opt out of inline delivery. **There is no inverse.** An
-instance whose type default is `ToolsOnly` cannot be widened to `Inline`.
-
-Why one-way: going to tools-only always succeeds, so this override can never
-silently fail. A two-way override would re-introduce the exact silent-config
-antipattern this whole design exists to remove — set `Inline`, model doesn't
-support the modality, resolver quietly falls back to tools, user has no idea
-why their override didn't take effect. If a deployment legitimately needs an
-instance to be `Inline` when its type default is `ToolsOnly`, the answer is
-to change the type or pick a different one.
+`MJArtifactVersionEntity.ForceToolsOnly` (`boolean`, default `false`) lets a specific artifact opt out of inline delivery. **There is no inverse**: an instance whose type default is `ToolsOnly` cannot be forced `Inline`, avoiding silent modality failures.
 
 ## MIME resolution — wildcards, priority, tiebreakers
 
-`ArtifactMetadataEngine.GetArtifactTypeByMimeType(mimeType, fileExtension?)`
-walks the registry as follows (see
-`packages/MJCoreEntities/src/engines/artifact-mime-resolver.ts`):
+`ArtifactMetadataEngine.GetArtifactTypeByMimeType(mimeType, fileExtension?)` (`packages/MJCoreEntities/src/engines/artifact-mime-resolver.ts`) resolves MIME types deterministically:
 
-```
-1. Filter to types whose ContentType pattern matches the upload's MIME
-   (after stripping any "; charset=..." parameter, case-insensitive)
-2. Bucket by specificity: exact > subtype wildcard
-3. Within the highest-specificity bucket, sort by Priority desc
-4. Tiebreaker if priorities are equal:
-   a. SystemSupplied = false beats SystemSupplied = true
-      (user customizations win over shipped defaults)
-   b. otherwise lowest ID wins (deterministic)
-5. application/octet-stream + extension hint: also consult any type whose
-   fileExtensions list contains the hint
-```
+1. Match `ContentType` patterns against the upload MIME (case-insensitive, stripping `; charset=...`).
+2. Bucket by specificity: exact match > subtype wildcard.
+3. Within the highest-specificity bucket, sort by `Priority` descending.
+4. Tiebreak equal priority by `SystemSupplied === false` (custom) over `true` (shipped), then lowest ID.
+5. For `application/octet-stream` with an extension hint, consult types matching the extension.
 
-At engine boot, `LogArtifactTypeRegistryConflicts()` walks the registry and
-emits WARN for any pair of types that share an identical
-`(ContentType, Priority, SystemSupplied)` triple — almost always a config
-mistake that the deterministic-ID tiebreaker would otherwise hide.
+At boot, `LogArtifactTypeRegistryConflicts()` warns on any `(ContentType, Priority, SystemSupplied)` collisions.
 
 ## Unknown / unregistered file types
 
-Default policy: **reject at upload time.** The user sees a clear error
-naming the supported types before any bytes hit storage. No silent
-JSON-fallback, no base64-stuffing of random binaries into prompts. The
-`text/*` catchall already covers anything text-like, and the registry covers
-common binary formats.
+Default policy rejects unrecognized file types before storage. Per-agent opt-in `AIAgent.AcceptUnregisteredFiles` (default `false`) allows a specific agent (such as a research agent) to accept unknown uploads under `GenericBinaryToolLibrary` (`get_full`, `get_metadata`).
 
-Per-agent escape hatch: **`AIAgent.AcceptUnregisteredFiles: bool`**
-(default `false`). Set `true` for a specific agent — a research agent
-investigating unknown formats — and unrecognized uploads resolve to the
-Generic Binary artifact type, exposing only `get_full` (base64 bytes) and
-`get_metadata` (size + sha256). There is no system-wide flag;
-permissiveness is always scoped to an agent that has explicitly opted in.
+## Built-in Tool Libraries (`packages/AI/Agents/src/artifact-tools/`)
 
-## INLINE_SIZE_CAP
+All 13 built-in subclasses extend `BaseArtifactToolLibrary` (`packages/AI/CorePlus/src/artifact-tool-library.ts`), which supplies `get_full` automatically (overridden where domain extraction is needed, such as `PDFToolLibrary`).
 
-`100 KB` per artifact, by default. Single source of truth in
-`packages/MJServer/src/resolvers/artifact-routing.ts`. Configurable via
-environment variable / `mj.config.cjs` (TODO). This is defense-in-depth
-against future configuration drift — no MIME-list oversight or registry
-change can silently 6× the prompt because the cap is enforced regardless of
-the configured delivery mode.
+| Library Class | Target Artifact Type(s) | Total Tools | Tool Names |
+|---|---|---|---|
+| `DocumentToolLibrary` | `Markdown Document` (**MJ Docs**) | 26 | `get_full`, `get_outline`, `get_section`, `get_blocks`, `search_blocks`, `grep`, `get_lines`, `insert_block_after`, `replace_block`, `delete_block`, `upsert_table`, `insert_live_block`, `embed_artifact_block`, `move_block`, `duplicate_block`, `mutate_markdown_table`, `upsert_frontmatter`, `set_lock`, `release_lock`, plus shared NW-3 tools (`list_comments`, `add_comment`, `reply_comment`, `resolve_comment`, `propose_suggestion`, `review_suggestion`, `list_suggestions`) |
+| `SlideDeckToolLibrary` | `Presentation` (**MJ Slides**) | 29 | `get_full`, `read_deck`, `get_deck_outline`, `get_slide`, `add_slide`, `update_slide`, `delete_slide`, `duplicate_slide`, `reorder_slides`, `upsert_slide_element`, `update_slide_region`, `delete_slide_element`, `update_speaker_notes`, `update_deck_metadata`, `apply_theme`, `generate_deck_from_markdown`, `duplicate_region`, `align_distribute_regions`, `upsert_speaker_notes`, `batch_mutate_slides`, `set_lock`, `release_lock`, plus shared NW-3 tools (`list_comments`, `add_comment`, `reply_comment`, `resolve_comment`, `propose_suggestion`, `review_suggestion`, `list_suggestions`) |
+| `SpreadsheetToolLibrary` | `Excel Spreadsheet` (**MJ Sheets**) | 47 | `get_full`, `get_workbook_outline`, `read_workbook`, `read_range`, `write_cells`, `format_range`, `clear_range`, `insert_rows`, `delete_rows`, `insert_columns`, `delete_columns`, `add_sheet`, `rename_sheet`, `duplicate_sheet`, `reorder_sheets`, `delete_sheet`, `set_sheet_layout`, `upsert_live_table`, `refresh_live_tables`, `upsert_chart`, `delete_chart`, `delete_live_table`, `embed_artifact`, `delete_embedded_artifact`, `sort_and_filter`, `get_sheets`, `get_sheet_data`, `search_cells`, `aggregate_column`, `get_formulas`, `merge_cells`, `unmerge_cells`, `upsert_conditional_format`, `delete_conditional_format`, `upsert_validation_rule`, `delete_validation_rule`, `upsert_named_range`, `delete_named_range`, `set_lock`, `release_lock`, plus shared NW-3 tools (`list_comments`, `add_comment`, `reply_comment`, `resolve_comment`, `propose_suggestion`, `review_suggestion`, `list_suggestions`) |
+| `WhiteboardToolLibrary` | `Whiteboard` | 8 | `get_full`, `get_board_summary`, `list_elements`, `upsert_nodes`, `connect_nodes`, `add_sticky_notes`, `delete_elements`, `auto_layout` |
+| `DataSnapshotToolLibrary` | `Data Snapshot` | 9 | `get_full`, `get_tables`, `get_schema`, `get_rows`, `search_rows`, `aggregate`, `group_aggregate`, `compute`, `filter` |
+| `DocxToolLibrary` | Word (`.docx`) | 6 | `get_full`, `get_text`, `get_html`, `search_text`, `get_lines`, `get_sections` |
+| `ExcelToolLibrary` | Binary Excel (`.xlsx`) | 6 | `get_full`, `get_sheets`, `get_sheet_data`, `search_cells`, `aggregate_column`, `get_formulas` |
+| `PDFToolLibrary` | `PDF` | 5 | `get_full` (overridden extracted text), `get_page_count`, `get_text`, `search_text`, `get_metadata` |
+| `CSVToolLibrary` | `CSV` | 4 | `get_full`, `get_columns`, `get_rows`, `search` |
+| `JSONToolLibrary` | `JSON` | 5 | `get_full`, `json_path`, `json_keys`, `json_search`, `json_iterate` |
+| `SearchResultSetToolLibrary` | `Search Result Set` | 6 | `get_full`, `filterByScore`, `groupBySourceProvider`, `getMatchingChunks`, `followSourceLink` (also accepts `follow_source_link`), `rerankInline` (also accepts `rerank_results`) |
+| `TextToolLibrary` | `text/*` | 3 | `get_full`, `grep`, `get_lines` |
+| `GenericBinaryToolLibrary` | `application/octet-stream` | 2 | `get_full`, `get_metadata` |
+
+### NW-3 Comment & Suggest-Mode Tool Schemas
+
+`GetSharedCommentAndSuggestionToolDefinitions(domain)` (`packages/AI/Agents/src/artifact-tools/artifact-comment-suggestion-helper.ts`) injects 7 uniform tools into `DocumentToolLibrary`, `SlideDeckToolLibrary`, and `SpreadsheetToolLibrary`:
+
+- **`list_comments`**: `{ status?: 'open' | 'resolved' | 'all', anchorFilter?: { heading?, blockId?, sheet?, range?, slideNumber?, slideId?, elementId? } }`
+- **`add_comment`**: `{ anchor: object, body: string }` (required: `['anchor', 'body']`)
+- **`reply_comment`**: `{ threadId: string, body: string }` (required: `['threadId', 'body']`)
+- **`resolve_comment`**: `{ threadId: string, resolved?: boolean, resolutionNote?: string }` (required: `['threadId']`)
+- **`propose_suggestion`**: `{ anchor: object, originalSlice: string, proposedReplacement: string, rationale: string, expectedRevisionHash?: string }` (required: `['anchor', 'originalSlice', 'proposedReplacement', 'rationale']`) — writes non-destructively to the Yjs `suggestions` map and `Configuration.suggestions` without mutating canonical artifact content.
+- **`review_suggestion`**: `{ suggestionId: string, decision: 'accept' | 'reject', comment?: string, expectedRevisionHash?: string }` (required: `['suggestionId', 'decision']`) — enforcing lock checks and ACL edit permissions before applying accepted suggestions.
+- **`list_suggestions`**: `{ status?: 'Pending' | 'Accepted' | 'Rejected' | 'All' }` — reads Suggest-Mode proposals across the active live Yjs collaboration room and persisted `MJ: Artifact Versions.Configuration.suggestions`.
+
+### NW-4 Spreadsheet Structure & Formula Tool Schemas
+
+`SpreadsheetToolLibrary` includes NW-4 workbook structural/analytics tools powered by `SpreadsheetEngine` (`packages/MJCoreEntities/src/custom/SpreadsheetEngine.ts`):
+
+- **`merge_cells`** / **`unmerge_cells`**: `{ sheet?, range, expectedRevisionHash? }` (required: `['range']`; validates bounds and overlapping merges).
+- **`upsert_conditional_format`**: `{ sheet?, ruleId?, range, operator ('gt' | 'lt' | 'eq' | 'between' | 'contains'), value1, value2?, highlightTone ('success' | 'warning' | 'danger' | 'info'), expectedRevisionHash? }` (required: `['range', 'operator', 'value1', 'highlightTone']`).
+- **`delete_conditional_format`**: `{ sheet?, ruleId, expectedRevisionHash? }` (required: `['ruleId']`).
+- **`upsert_validation_rule`**: `{ sheet?, ruleId?, range, ruleType ('list' | 'numberRange' | 'notEmpty'), allowedValues?, minValue?, maxValue?, errorMessage?, expectedRevisionHash? }` (required: `['range', 'ruleType']`).
+- **`delete_validation_rule`**: `{ sheet?, ruleId, expectedRevisionHash? }` (required: `['ruleId']`).
+- **`upsert_named_range`**: `{ name, sheet?, range, description?, expectedRevisionHash? }` (required: `['name', 'range']`).
+- **`delete_named_range`**: `{ name, expectedRevisionHash? }` (required: `['name']`).
+
+`SpreadsheetEngine` evaluates 100+ Excel formula functions, including NW-4 2D dynamic arrays (`FILTER`, `UNIQUE`, `SORT`, `SORTBY`, `SEQUENCE`, `LET`, `LAMBDA`) with automatic `#SPILL!` collision detection and live `=MJ.QUERY`, `=MJ.VIEW`, and `=MJ.AI` AST evaluation.
 
 ## Authoring a tool library
 
-The base class — `BaseArtifactToolLibrary` in
-`packages/AI/CorePlus/src/artifact-tool-library.ts` — provides `get_full`
-for free. Subclasses implement two methods:
+`BaseArtifactToolLibrary` (`packages/AI/CorePlus/src/artifact-tool-library.ts`) provides `GetToolList()` / `InvokeTool()` and the default `get_full` implementation. Subclasses override protected camelCase hooks using strictly typed `ArtifactToolArgs` (never `any` or `unknown`):
 
 ```typescript
+import { RegisterClass } from '@memberjunction/global';
+import {
+    BaseArtifactToolLibrary,
+    type ArtifactToolArgs,
+    type ArtifactToolDefinition,
+    type ArtifactToolExecutionContext,
+    type ArtifactToolResult
+} from '@memberjunction/ai-core-plus';
+
 @RegisterClass(BaseArtifactToolLibrary, 'MyToolLibrary')
 export class MyToolLibrary extends BaseArtifactToolLibrary {
-    protected GetSubclassToolList(): ArtifactToolDefinition[] {
+    protected getSubclassToolList(): ArtifactToolDefinition[] {
         return [
             // ...your subclass-specific tools...
         ];
     }
 
-    protected async InvokeSubclassTool(
+    protected async invokeSubclassTool(
         toolName: string,
-        input: Record<string, unknown>,
-        artifactContent: string | Buffer
+        args: ArtifactToolArgs,
+        content: string | Buffer,
+        context?: ArtifactToolExecutionContext
     ): Promise<ArtifactToolResult> {
-        // ...dispatch on toolName...
+        // ...dispatch on toolName; use context.contextUser, context.provider, context.isEditor...
+        return { success: false, data: null, errorMessage: `Unknown tool: ${toolName}` };
     }
 }
 ```
 
-The default `get_full` returns utf-8 passthrough for string content and
-base64 for `Buffer`. Override `GetFull()` (and optionally
-`GetFullToolDefinition()`) only when "the full content" needs domain
-transformation. The canonical example is `PDFToolLibrary`, which overrides
-`GetFull` to return extracted text rather than the raw PDF bytes — far more
-useful to an agent than a base64 blob.
+Override `getFull(content: string | Buffer, context?: ArtifactToolExecutionContext)` and `getFullToolDefinition()` only when full-content retrieval needs domain transformation (for example, `PDFToolLibrary` extracts text instead of returning raw PDF bytes).
 
 Then wire it through metadata:
+1. Add or update the type in [`metadata/artifact-types/`](../../../../metadata/artifact-types/).
+2. Set `ToolLibraryClass` to the registered class name (`'MyToolLibrary'`).
+3. Set `DefaultDeliveryMode` (`'ToolsOnly'` for non-multimodal types).
+4. Push with `mj sync push --dir=metadata --include="artifact-types"`.
 
-1. Add a `.your-type-artifact-type.json` file under `/metadata/artifact-types/`
-2. Set `ToolLibraryClass` to the registered class name
-3. Pick a `DefaultDeliveryMode` (`ToolsOnly` for non-multimodal content)
-4. `mj sync push --dir=metadata --include="artifact-types"`
+## Always-On Workspace Tools & `ArtifactToolManager`
+
+When `ArtifactToolManager` (`packages/AI/Agents/src/ArtifactToolManager.ts`) is initialized with `contextUser` and `provider` (`workspaceEnabled: true`), Loop agents expose six workspace-level tools even when zero artifacts were attached at the start of the turn and regardless of `ArtifactCreationMode`:
+
+| Workspace Tool | Purpose |
+|---|---|
+| `create_artifact` | Create a new governed artifact (`Markdown Document`, `Presentation`, `Excel Spreadsheet`, `Whiteboard`) or materialize initial content, persisting v1 and attaching Yjs live state. |
+| `open_artifact` | Register an existing readable `ArtifactID` into the current turn's `ArtifactToolManager` scope (resolving latest or pinned version and checking ACL permissions). |
+| `list_workspace_artifacts` | List collaborative artifacts visible to the caller in the current conversation/workspace scope. |
+| `create_synthesized_artifact` | Synthesize a new `Markdown Document`, `Presentation`, or `Excel Spreadsheet` from multiple readable source artifacts via `Artifact.SynthesizeFromSources` / `GovernedArtifactService`. |
+| `refresh_and_snapshot_artifact` | Re-evaluate Live MJ Blocks / `=MJ.*` formulas across an existing artifact and create a new immutable snapshot version if outputs changed. |
+| `reload_artifact` | Reload latest persisted/Yjs state for an already-open artifact inside the active turn. |
+
+### `artifact_tool` ID Resolution & Workspace Routing
+
+In native tool-calling mode (`packages/AI/Agents/src/native-tools/framework-tools.ts`), `artifact_tool` declares `required: ['tool']` and defaults an omitted or empty `artifactId` to `'workspace'`. Inside `ArtifactToolManager.InvokeTool`:
+- Workspace tools (`create_artifact`, `open_artifact`, `list_workspace_artifacts`, `create_synthesized_artifact`, `refresh_and_snapshot_artifact`) are intercepted **before** artifact lookup so both `artifactId: 'workspace'` and `artifactId: '*'` dispatch cleanly.
+- `resolveExistingArtifactEntry(artifactId)` expands `'*'` **only** when `this.artifacts.size === 1`; if the caller supplies an explicit unknown `ArtifactID`, it fails explicitly rather than silently falling back.
+
+### Realtime `ArtifactWorkspace` Channel vs. Server Tools
+
+While Loop agents mutate artifact versions via `ArtifactToolManager` (`artifactToolCalls` / `artifact_tool`), a live voice/co-agent uses the `ArtifactWorkspace` realtime channel (`ContextTool` with `target: { channel: 'ArtifactWorkspace' }`) to control the user's side-by-side workspace surface:
+- Verbs: `open`, `focus`, `show_version`, `refresh`, `close`, `navigate_to_anchor` (`{ blockId?, heading?, sheet?, range?, slideNumber?, slideId?, elementId? }`), and `set_view_mode` (`{ mode: 'edit' | 'suggest' | 'diff' | 'present' }`).
+- Events emitted back to the session context: `opened`, `focused`, `version_changed`, `newer_version_available`, `refreshed`, `selection_changed` (from `EmitSelectionDelta`), `navigated_to_anchor`, `view_mode_changed`, `closed`.
+- See [`guides/REALTIME_CHANNELS_GUIDE.md`](../../../../guides/REALTIME_CHANNELS_GUIDE.md) for the complete channel contract.
+
+## Security & Concurrency Guards
+
+Every server-side artifact tool enforces defense-in-depth protections:
+
+1. **ReDoS & Bounded Regex Execution:** All user/agent regex patterns (`grep`, `search_blocks`, `search_cells`, `search_rows`, `grepHelper.ts`, `artifact-tool-helpers.ts`) pass through `CompileSafeUserRegex` / `IsSafeUserRegex` (`@memberjunction/core-entities`) and `ExecuteSafeRegexBatchWithRecovery` (`packages/AI/Agents/src/artifact-tools/node-vm-safe-regex.ts`) with a `65,536`-byte input ceiling per block/line and millisecond timeout recovery.
+2. **Serialized Mutation & Server Lock Enforcement:** Mutations coordinate through `GovernedArtifactService.Instance.WithArtifactLock` (`packages/AI/Agents/src/GovernedArtifactService.ts`) and check active `set_lock` / `release_lock` region locks persisted on the Yjs collaboration room (`lockOwners` / `HasActiveLocks`) before applying edits or accepting suggestions (`review_suggestion`).
+3. **Hierarchical ACL & Embedded Artifact Checks:** `ArtifactPermissionEngine.Instance.ResolvePermissions` enforces Collection-inherited permissions (including `Defer`) on every inspect/mutate/comment/suggestion call (`artifact-comment-suggestion-helper.ts`), and `ValidateEmbeddedArtifactAccess` + `ResolveEmbeddedArtifactId` / `ResolveEmbeddedVersionId` guard embedded OLE/block references with ancestor cycle detection.
+4. **Row-Level Security on Search Links:** `SearchResultSetToolLibrary.followSourceLink` executes entity loads under `contextUser` so agents never bypass user RLS.
+5. **Freeze & Integrity Verification:** Live MJ Blocks / `=MJ.*` formulas freeze into HMAC-SHA256 verified snapshots (verified with `MJ_ARTIFACT_FREEZE_HMAC_SECRET` / guest share secret) rather than auto-recomputing untrusted expressions for non-owners.
 
 ## Output Artifact Lifecycle (`artifactDirective`) & `_ARTIFACTS_ENABLED` Prompt Gating
 
-When a Loop agent produces a payload at the end of a turn (`taskComplete: true`), `AgentRunner` can automatically persist that payload as a `ConversationArtifact` + `ConversationArtifactVersion`. How the framework decides whether to **version an existing artifact in the conversation**, **create a brand-new artifact**, or **suppress artifact output** is governed by the `artifactDirective` response field and per-agent prompt gating.
+When a Loop agent completes a turn (`taskComplete: true`), `AgentRunner` can automatically persist the agent's payload as an `MJ: Artifacts` + `MJ: Artifact Versions` pair.
 
 ### 1. Per-Agent Prompt Gating (`_ARTIFACTS_ENABLED`, Default: `true`)
 
-`BaseAgent.isArtifactSupportEnabled(agent)` inspects `AIAgent.ArtifactCreationMode`:
+`BaseAgentPromptHelper.IsArtifactSupportEnabled` (`packages/AI/Agents/src/helpers/prompt/AgentTurnToolsAndFinishIfHelper.ts`, also preserved via the `@deprecated` `BaseAgent.isArtifactSupportEnabled` delegate in `v6.x`) inspects `Configuration.artifacts.creationMode` (bidirectionally synced with legacy `AIAgent.ArtifactCreationMode` during `v6.x`; see [Agent Administrator Guide](../../../../guides/AGENT_ADMINISTRATOR_GUIDE.md)):
 
 | `AIAgent.ArtifactCreationMode` | `_ARTIFACTS_ENABLED` | System Prompt Behavior |
 |---|---|---|
-| `'Always'`, `'Prompt'`, or `null` / `undefined` *(default)* | `true` | Injects the `artifactDirective` JSON schema, `### Artifact Lifecycle: Creating a New Artifact vs. Versioning an Existing One` instructions, and `_CONVERSATION_ARTIFACTS` catalog into `<mj-runtime-state>`. |
-| `'Never'` or `'System Only'` | `false` | Strips all `artifactDirective` schema fields, rules, and examples from the Loop Agent system prompt (`{% if _ARTIFACTS_ENABLED != false %}`) and suppresses `<mj-runtime-state>` artifact catalog rendering so non-artifact agents (e.g., `Sage`, `Knowledge Agent`) pay zero token overhead and never hallucinate artifact directives. |
-
-The Nunjucks template checks `{% if _ARTIFACTS_ENABLED != false %}`, so artifact instructions **default to ON** whenever `_ARTIFACTS_ENABLED` is `true` or omitted.
+| `'Always'`, `'Prompt'`, or `null` / `undefined` *(default)* | `true` | Injects the `artifactDirective` JSON schema, lifecycle instructions, and `_CONVERSATION_ARTIFACTS` catalog into `<mj-runtime-state>`. |
+| `'Never'` or `'System Only'` | `false` | Strips automatic turn-end `artifactDirective` JSON instructions (`{% if _ARTIFACTS_ENABLED != false %}`) and suppresses `<mj-runtime-state>` artifact catalog rendering. Note that explicit workspace tools (`create_artifact`, `open_artifact`, etc.) remain available when `ArtifactToolManager` has `workspaceEnabled: true`. |
 
 ### 2. The `artifactDirective` Contract
 
-On its final turn (`taskComplete: true`), an artifact-producing Loop agent may include an optional `artifactDirective`:
-
 ```typescript
 export interface AgentArtifactDirective {
-    /**
-     * - 'version-source' (default when an existing artifact is present): appends a new version (v2, v3, ...)
-     *   to the targeted existing artifact in the conversation.
-     * - 'create-new': creates a brand-new Artifact record (v1) instead of versioning the previous artifact.
-     * - 'suppress': skips creating or versioning any user-visible artifact for this turn (e.g., conversational-only reply).
-     */
     behavior: 'create-new' | 'version-source' | 'suppress';
-
-    /**
-     * Optional ArtifactID from the conversation's Output Artifacts catalog (`_CONVERSATION_ARTIFACTS`).
-     * Allows the agent to version an earlier artifact (e.g., Artifact #1 after Artifact #2 was created)
-     * rather than only the most recently touched artifact. Falls back to `sourceArtifactId` if omitted or invalid.
-     */
     targetArtifactId?: string;
-
-    /**
-     * Optional human-friendly artifact title override (used when creating a new artifact or naming a new version).
-     */
     name?: string;
-
-    /**
-     * Optional summary description of the artifact or what changed in this version.
-     */
     description?: string;
 }
 ```
 
-### 3. Full-Conversation Artifact Discovery & Resolution (`AgentRunner`)
+### 3. Full-Conversation Artifact Discovery & `ExecuteAgentResult.touchedArtifacts`
 
-Before executing a conversational agent turn:
-1. **`AgentRunner.loadConversationArtifactsCatalog`** queries all prior `Direction = 'Output'` artifact versions in the conversation (honoring `agentHistoryFrom` and `Visibility !== 'System Only'`), groups them by `ArtifactID` in chronological order, and passes the deduplicated `ConversationArtifactSummary[]` list into `BaseAgent` (`_CONVERSATION_ARTIFACTS` in `<mj-runtime-state>`).
-2. **`BaseAgent.executePromptStep` clean-payload reset on `create-new`**: When the LLM emits `artifactDirective.behavior === 'create-new'` and the current payload is still the unmodified inherited payload from the prior conversation turn (`payload === params.payload`, even if read-only action steps ran first in the current run) or `replaceElements` is used, `BaseAgent` applies `payloadChangeRequest` against a fresh `{}` object so fields from the previous artifact never bleed into the new artifact.
-3. **`AgentRunner.resolveArtifactVersioningDecision`** resolves the final persistence action (`shouldProcess`, `previousArtifactInfo`, `nameOverride`, `descriptionOverride`) using case-insensitive UUID matching (`NormalizeUUID`) against `conversationArtifacts` and `sourceArtifactId`.
+- `AgentRunner.loadConversationArtifactsCatalog` loads prior `Direction = 'Output'` artifact versions (`Visibility !== 'System Only'`), passing `ConversationArtifactSummary[]` as `_CONVERSATION_ARTIFACTS`.
+- `GovernedArtifactService` populates `ExecuteAgentResult.touchedArtifacts` (`GovernedRunArtifactSummary[]` with `ArtifactID`, `ArtifactVersionID`, `VersionNumber`, `Name`, `ArtifactTypeName`, `DriverClass?`, `Operation`) so callers — including realtime delegation and `ArtifactWorkspaceChannel` — open newly created or updated collaborative artifacts even when `result.payload` is `{}`.
 
 ### 4. Metadata-Driven Naming (`ArtifactType.ExtractRules`)
 
-Each `ArtifactType` in `/metadata/artifact-types/.artifact-types.json` can declare `ExtractRules` (`ArtifactExtractRule[]`) that extract human-friendly `name` and `description` values from the JSON payload when `artifactDirective.name` / `description` are not explicitly supplied. For example, the **`Data`** artifact type extracts:
-- **`name`**: `content.queryName || content.name || content.title || 'Data Query'`
-- **`description`**: `content.description || content.explanation || ''`
+Each type in [`metadata/artifact-types/.artifact-types.json`](../../../../metadata/artifact-types/.artifact-types.json) can declare `ExtractRules` to extract `name` and `description` when `artifactDirective` omits them.
 
-This ensures data/query artifacts display meaningful titles (such as `"Top 5 Schemas by Entity Count"`) in chat cards and the Artifact Panel header instead of generic `<AgentName> Payload` fallbacks.
+## Deprecated: `MJ: Conversation Detail Attachments`
 
-## Deprecated: ConversationDetailAttachment
-
-The `MJ: Conversation Detail Attachments` entity is `Status='Deprecated'`
-as of v5.35.x. The table, generated entity class, GraphQL types, and stored
-procedures all remain functional — runtime use produces the framework's
-standard console warning. New code should write to
-`ConversationArtifactVersion` directly. The attachment path will be removed
-in a future major version once known consumers have migrated.
+The `MJ: Conversation Detail Attachments` entity is `Status='Deprecated'`. New code should write to `MJ: Artifacts` / `MJ: Artifact Versions` (`MJArtifactEntity` / `MJArtifactVersionEntity`) directly.

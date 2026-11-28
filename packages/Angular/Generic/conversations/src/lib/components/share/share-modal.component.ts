@@ -1,9 +1,18 @@
 import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { MJConversationEntity, MJResourcePermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
+import {
+  BuildUpdatedAdditionalDataForFolderInheritance,
+  ConversationEngine,
+  IsInheritingFolderAccess,
+  MJConversationEntity,
+  MJResourcePermissionEntity,
+  MJUserEntity
+} from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
+import { ConfirmInheritFolderAccess } from '../../utils/folder-move';
 
 interface SharePermission {
   permissionId: string | null;
@@ -25,20 +34,44 @@ interface SharePermission {
         [Visible]="true"
         (Close)="onClose()">
         <div class="share-content">
-          <div class="add-user-section">
-            <h4>Add People</h4>
-            <div class="add-user-form">
-              <input
-                type="text"
-                [(ngModel)]="newUserEmail"
-                placeholder="Enter email address"
-                class="mj-textbox"
-                style="flex: 1;">
-              <button mjButton variant="primary" (click)="onAddUser()">
-                Add
-              </button>
+          @if (conversation?.ProjectID && IsConversationOwner) {
+            <div class="folder-inheritance-section">
+              <h4>Folder Access</h4>
+              <label class="folder-inheritance-toggle">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="InheritFolderAccess"
+                  (ngModelChange)="OnToggleInheritFolderAccess($event)" />
+                <span>Inherit access from folder</span>
+              </label>
+              <p class="folder-inheritance-hint">
+                {{ InheritFolderAccess
+                    ? 'People with access to this folder see this conversation in their list.'
+                    : 'People with access to this folder do not see this conversation in their list. People added below do.' }}
+              </p>
             </div>
-          </div>
+          }
+          @if (IsConversationOwner) {
+            <div class="add-user-section">
+              <h4>Add People</h4>
+              <div class="add-user-form">
+                <input
+                  type="text"
+                  [(ngModel)]="newUserEmail"
+                  placeholder="Enter email address"
+                  class="mj-textbox"
+                  style="flex: 1;">
+                <button mjButton variant="primary" (click)="onAddUser()">
+                  Add
+                </button>
+              </div>
+            </div>
+          } @else {
+            <div class="owner-only-notice" data-testid="share-modal-owner-only-notice">
+              <i class="fas fa-lock"></i>
+              <span>Only the conversation owner can share or revoke access for this conversation.</span>
+            </div>
+          }
           <div class="permissions-section">
             <h4>People with Access</h4>
             <div class="permission-list">
@@ -57,49 +90,55 @@ interface SharePermission {
                       <div class="user-email">{{ permission.userEmail }}</div>
                     </div>
                   </div>
-                  <div class="permission-controls">
-                    <select
-                      [ngModel]="permission.permissionLevel"
-                      (ngModelChange)="onAccessLevelChange(permission, $event)"
-                      style="width: 120px;" class="mj-select">
-                      @for (level of accessLevels; track level.value) {
-                        <option [value]="level.value">{{ level.label }}</option>
-                      }
-                    </select>
-                    <button
-                      class="btn-remove"
-                      (click)="onRemoveUser(permission)"
-                      title="Remove access">
-                      <i class="fas fa-times"></i>
-                    </button>
-                  </div>
+                  @if (IsConversationOwner) {
+                    <div class="permission-controls">
+                      <select
+                        [ngModel]="permission.permissionLevel"
+                        (ngModelChange)="onAccessLevelChange(permission, $event)"
+                        style="width: 120px;" class="mj-select">
+                        @for (level of accessLevels; track level.value) {
+                          <option [value]="level.value">{{ level.label }}</option>
+                        }
+                      </select>
+                      <button
+                        class="btn-remove"
+                        (click)="onRemoveUser(permission)"
+                        title="Remove access">
+                        <i class="fas fa-times"></i>
+                      </button>
+                    </div>
+                  } @else {
+                    <span class="permission-readonly-badge">{{ permission.permissionLevel }}</span>
+                  }
                 </div>
               }
             </div>
           </div>
-          <div class="link-section">
-            <h4>Share Link</h4>
-            <div class="link-controls">
-              <input
-                type="checkbox"
-                [(ngModel)]="isPublicLink"
-                (ngModelChange)="onTogglePublicLink()">
-              <label>Anyone with the link can view</label>
-            </div>
-            @if (isPublicLink) {
-              <div class="link-display">
+          @if (IsConversationOwner) {
+            <div class="link-section">
+              <h4>Share Link</h4>
+              <div class="link-controls">
                 <input
-                  type="text"
-                  [value]="shareLink"
-                  readonly
-                  class="mj-textbox"
-                  style="flex: 1;">
-                <button mjButton variant="flat" (click)="onCopyLink()">
-                  <i class="fas fa-copy"></i> Copy
-                </button>
+                  type="checkbox"
+                  [(ngModel)]="isPublicLink"
+                  (ngModelChange)="onTogglePublicLink()">
+                <label>Anyone with the link can view</label>
               </div>
-            }
-          </div>
+              @if (isPublicLink) {
+                <div class="link-display">
+                  <input
+                    type="text"
+                    [value]="shareLink"
+                    readonly
+                    class="mj-textbox"
+                    style="flex: 1;">
+                  <button mjButton variant="flat" (click)="onCopyLink()">
+                    <i class="fas fa-copy"></i> Copy
+                  </button>
+                </div>
+              }
+            </div>
+          }
         </div>
         <mj-dialog-actions>
           <button mjButton (click)="onClose()">Close</button>
@@ -110,25 +149,31 @@ interface SharePermission {
   styles: [`
     .share-content { display: flex; flex-direction: column; gap: 24px; }
 
+    .folder-inheritance-section h4,
     .add-user-section h4,
     .permissions-section h4,
-    .link-section h4 { margin: 0 0 12px 0; font-size: 14px; font-weight: 600; }
+    .link-section h4 { margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: var(--mj-text-primary); }
+
+    .folder-inheritance-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+    .folder-inheritance-hint { margin: 6px 0 0 0; font-size: 12px; color: var(--mj-text-secondary); line-height: 1.4; }
+    .owner-only-notice { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 6px; background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-default); color: var(--mj-text-secondary); font-size: 13px; }
+    .permission-readonly-badge { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 999px; background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); }
 
     .add-user-form { display: flex; gap: 8px; }
 
-    .permission-list { border: 1px solid #D9D9D9; border-radius: 4px; max-height: 300px; overflow-y: auto; }
-    .permission-item { padding: 12px; border-bottom: 1px solid #E8E8E8; display: flex; justify-content: space-between; align-items: center; }
+    .permission-list { border: 1px solid var(--mj-border-default); border-radius: 4px; max-height: 300px; overflow-y: auto; }
+    .permission-item { padding: 12px; border-bottom: 1px solid var(--mj-border-subtle); display: flex; justify-content: space-between; align-items: center; }
     .permission-item:last-child { border-bottom: none; }
 
     .user-info { display: flex; align-items: center; gap: 12px; flex: 1; }
-    .user-info i { font-size: 32px; color: #999; }
+    .user-info i { font-size: 32px; color: var(--mj-text-muted); }
     .user-details { display: flex; flex-direction: column; }
-    .user-name { font-size: 14px; font-weight: 500; }
-    .user-email { font-size: 12px; color: #666; }
+    .user-name { font-size: 14px; font-weight: 500; color: var(--mj-text-primary); }
+    .user-email { font-size: 12px; color: var(--mj-text-secondary); }
 
     .permission-controls { display: flex; align-items: center; gap: 8px; }
-    .btn-remove { padding: 6px 8px; background: transparent; border: none; cursor: pointer; border-radius: 3px; color: #999; }
-    .btn-remove:hover { background: #FFEBEE; color: #D32F2F; }
+    .btn-remove { padding: 6px 8px; background: transparent; border: none; cursor: pointer; border-radius: 3px; color: var(--mj-text-muted); }
+    .btn-remove:hover { background: color-mix(in srgb, var(--mj-status-error) 12%, transparent); color: var(--mj-status-error); }
 
     .link-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
     .link-controls label { font-size: 13px; }
@@ -220,10 +265,11 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
     this.ShareLink = value;
   }
 
+  public InheritFolderAccess: boolean = false;
+
   public AccessLevels = [
     { label: 'Can View', value: 'View' },
-    { label: 'Can Edit', value: 'Edit' },
-    { label: 'Owner', value: 'Owner' }
+    { label: 'Can Edit', value: 'Edit' }
   ];
 
   /** @deprecated Use {@link AccessLevels}. */
@@ -246,8 +292,59 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
 
   ngOnInit() {
     if (this.Conversation) {
+      this.InheritFolderAccess = IsInheritingFolderAccess(this.Conversation);
       this.loadPermissions();
       this.updateShareLink();
+    }
+  }
+
+  /**
+   * True when the current user owns the conversation. Only the owner may change whether it inherits its
+   * folder's access; the server refuses anyone else (`MJConversationEntityServer`).
+   */
+  public get IsConversationOwner(): boolean {
+    return !!this.Conversation?.UserID && !!this.CurrentUser && UUIDsEqual(this.Conversation.UserID, this.CurrentUser.ID);
+  }
+
+  async OnToggleInheritFolderAccess(inherit: boolean): Promise<void> {
+    if (!this.Conversation) return;
+    const engine = ConversationEngine.Instance;
+    if (inherit && !(await ConfirmInheritFolderAccess(this.dialogService, engine, this.Conversation.ProjectID))) {
+      this.InheritFolderAccess = false;
+      this.cdr.detectChanges();
+      return;
+    }
+    try {
+      let saved = false;
+      if (engine?.SetConversationFolderInheritance && engine.GetConversation(this.Conversation.ID)) {
+        saved = await engine.SetConversationFolderInheritance(
+          this.Conversation.ID,
+          inherit,
+          this.CurrentUser
+        );
+      } else {
+        this.Conversation.AdditionalData = BuildUpdatedAdditionalDataForFolderInheritance(
+          this.Conversation.AdditionalData,
+          inherit
+        );
+        saved = await this.Conversation.Save();
+      }
+      if (!saved) {
+        this.InheritFolderAccess = !inherit;
+        this.toastService.error('Failed to update folder access inheritance');
+      } else {
+        this.toastService.success(
+          inherit
+            ? 'Folder access inheritance enabled'
+            : 'Folder access restricted for this conversation'
+        );
+      }
+    } catch (err) {
+      console.error('Failed to update folder inheritance:', err);
+      this.InheritFolderAccess = !inherit;
+      this.toastService.error('Failed to update folder access inheritance');
+    } finally {
+      this.cdr.detectChanges();
     }
   }
 

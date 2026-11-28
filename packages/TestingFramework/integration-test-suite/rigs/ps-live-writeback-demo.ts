@@ -7,15 +7,14 @@
  * returned in the response only), THIS script proves the closed loop: a model's predictions
  * are WRITTEN BACK into real entity columns and then READ BACK from those columns.
  *
- *   entity fields  →  PredictiveStudio.TrainModel    (MJAPI → TrainingEngine → sidecar /train)
- *                  →  PredictiveStudio.ScoreRecordSet (MJAPI → MLModelInferenceProcessor → /predict)
- *                         with writeBack OutputMapping → predictions persisted to columns
- *                  →  RunView the same rows           (the predictions now live in the columns)
+ *   entity fields  →  PredictiveStudio.TrainModel          (MJAPI → TrainingEngine → sidecar /train)
+ *                  →  PredictiveStudio.CreateScoringProcess (a scoring binding naming the RenewalScore column)
+ *                  →  PredictiveStudio.ScoreRecordSet       (MJAPI → ScoringService → /predict) with the
+ *                         bindingId → the binding's Feature Values, and the newest copied into the column
+ *                  →  RunView the same rows                 (the predictions now live in the column)
  *
- * The write-back uses the Record-Set-Processing OutputMapping format: a JSONPath-per-field map
- * from the prediction payload (which exposes `class` and `score`) onto entity field names:
- *
- *   writeBack: { OutputMapping: { fields: { PredictedRenewalClass: '$.class', RenewalScore: '$.score' } } }
+ * The column is written by the binding's column copy (one column per binding: its `TargetColumnSource`,
+ * the adverse probability for a classification). The class column is no longer written by this demo.
  *
  * The two THROWAWAY target columns were codegen'd onto the AssociationDemo `Memberships`
  * entity (vwMemberships / Membership table):
@@ -26,9 +25,14 @@
  *   `await new SomeOperation().Execute(input, { provider, user })` — the call marshals over
  *   GraphQL to MJAPI, which dispatches to the registered server operation.
  *
- * THROWAWAY: it creates a dedicated driver-named ML Algorithm row (if missing) + an ML
- * Training Pipeline, trains, scores WITH write-back, reads the columns back, then cleans up
- * the model + training run(s) + pipeline (leaving the algorithm). The written-back column
+ * THROWAWAY: it reuses (or creates) the driver's ML Algorithm row, creates an ML Training
+ * Pipeline bound to version 1 of its Prediction Unit and Evaluation Protocol through the
+ * harness's pipeline migration (`lib/ps-rig-lifecycle.ts`, every row saved over GraphQL), trains,
+ * publishes, scores WITH write-back and reads the columns back. It then deletes every row it
+ * created through the harness cleanup, children first, every Delete() checked — a row it cannot
+ * delete fails the rig: the scoring Action that publishing generated with its params, the model,
+ * its training run(s), Training Snapshot and stored files, the pipeline, unit and protocol, and the
+ * algorithm when it created it. The written-back column
  * VALUES intentionally remain on the Membership rows (that's the whole point) — this script
  * prints them, then NULLs them out at the very end so the demo is repeatable.
  *
@@ -37,7 +41,7 @@
  * PREREQUISITES:
  *   - MJAPI up on :4000, built WITH:
  *       • the Predictive Studio server-bootstrap fix (ops registered),
- *       • the local-disk artifact fallback (train/score work without remote artifact storage),
+ *       • model files stored through `PS_STORAGE_PROVIDER` (default "Local File System", rooted at STORAGE_LOCAL_ROOT),
  *       • the score-loader fix (model artifact loads for scoring),
  *       • the write-back runner fix (OutputMapping persists predictions to columns).
  *   - The Python sidecar reachable by MJAPI (managed child-process default is fine).
@@ -45,20 +49,22 @@
  *   - The two prediction columns codegen'd onto Memberships: PredictedRenewalClass, RenewalScore.
  *   - MJ_API_KEY set in the environment (or .env resolved by the harness).
  *
- * USAGE (from the repo root, with MJAPI already up on :4000):
- *   npx tsx packages/MJServer/integration-test-scripts/ps-live-writeback-demo.ts
+ * USAGE (from the repo root, with MJAPI already up on :4000 and its Python sidecar reachable):
+ *   PS_INTEGRATION=1 npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-live-writeback-demo.ts
  */
+import { RunRecords } from '@memberjunction/predictive-studio-truth-suite';
 import { LoadEnv, LoadClientConfig } from './lib/harness';
+import { RequireCheck, ShippedModelID } from './lib/ps-train-output';
 import { PromoteToPublished } from './lib/ps-promote';
+import { BindUnitAndProtocol, DeleteRecordedRows, EnsureDriverAlgorithm, ReportCleanup, type RigAlgorithm } from './lib/ps-rig-lifecycle';
 import { Metadata, RunView, UserInfo, BaseEntity, IMetadataProvider, CompositeKey } from '@memberjunction/core';
 import { GraphQLProviderConfigData, setupGraphQLClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import '@memberjunction/core-entities';
 import {
-  MJMLAlgorithmEntity,
   MJMLTrainingPipelineEntity,
-  MJMLTrainingRunEntity,
   PredictiveStudioTrainModelOperation,
   PredictiveStudioScoreRecordSetOperation,
+  PredictiveStudioCreateScoringProcessOperation,
 } from '@memberjunction/core-entities';
 
 const DRIVER_KEY = 'logistic_regression';
@@ -127,35 +133,6 @@ async function connect(): Promise<{ md: Metadata; route: IMetadataProvider; user
   }
   console.log(`Connected to ${client.Url} as ${user.Name ?? user.Email ?? user.ID}`);
   return { md, route, user };
-}
-
-/**
- * Resolve (or create) an ML Algorithm row whose DISPLAY NAME equals the sidecar driver
- * key. The TrainingEngine sends `pipeline.Algorithm` (the view's denormalized algorithm
- * NAME — NOT the DriverClass) to the sidecar, so we ensure a row whose Name IS the driver
- * key exists. Returns the row id + whether we created it (for cleanup).
- */
-async function ensureDriverNamedAlgorithm(md: Metadata, user: UserInfo): Promise<{ id: string; created: boolean }> {
-  const rv = new RunView();
-  const existing = await rv.RunView<{ ID: string }>(
-    { EntityName: 'MJ: ML Algorithms', ExtraFilter: `Name='${DRIVER_KEY}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
-    user,
-  );
-  if (existing.Success && existing.Results.length > 0) {
-    return { id: existing.Results[0].ID, created: false };
-  }
-  const algo = await md.GetEntityObject<MJMLAlgorithmEntity>('MJ: ML Algorithms', user);
-  algo.NewRecord();
-  algo.Name = DRIVER_KEY; // denormalized into vwMLTrainingPipelines.Algorithm → sent to sidecar
-  algo.Description = TAG;
-  algo.ProblemTypes = 'classification';
-  algo.DriverClass = DRIVER_KEY;
-  algo.SupportsFeatureImportance = true;
-  algo.Status = 'Active';
-  if (!(await algo.Save())) {
-    throw new Error(`Failed to create ML Algorithm: ${algo.LatestResult?.CompleteMessage}`);
-  }
-  return { id: algo.ID, created: true };
 }
 
 /** Resolve an entity's ID by name (throws if not found). */
@@ -276,46 +253,13 @@ async function clearWrittenColumns(md: Metadata, user: UserInfo, rows: Membershi
   console.log(`  cleared prediction columns on ${cleared}/${rows.length} rows`);
 }
 
-/** Best-effort cleanup: delete the model, its training run(s), the pipeline, and (if created) the algorithm. */
-async function cleanup(md: Metadata, user: UserInfo, ids: {
-  pipelineId?: string; modelId?: string; algorithmId?: string; algorithmCreated?: boolean;
-}): Promise<void> {
-  banner('CLEANUP');
-  const rv = new RunView();
-  const del = async (entity: string, id: string): Promise<void> => {
-    try {
-      const obj = await md.GetEntityObject<BaseEntity>(entity, user);
-      if (await obj.InnerLoad(CompositeKey.FromID(id))) {
-        const ok = await obj.Delete();
-        console.log(`  ${ok ? 'deleted' : 'FAILED to delete'} ${entity} ${id}${ok ? '' : ` — ${obj.LatestResult?.CompleteMessage}`}`);
-      }
-    } catch (e) {
-      console.log(`  skip ${entity} ${id}: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
-
-  // Training runs reference the pipeline (and the model); delete them first.
-  if (ids.pipelineId) {
-    const runs = await rv.RunView<MJMLTrainingRunEntity>(
-      { EntityName: 'MJ: ML Training Runs', ExtraFilter: `PipelineID='${ids.pipelineId}'`, ResultType: 'entity_object', BypassCache: true }, user,
-    );
-    for (const r of runs.Results ?? []) {
-      const ok = await r.Delete();
-      console.log(`  ${ok ? 'deleted' : 'FAILED to delete'} ML Training Run ${r.ID}`);
-    }
-  }
-  if (ids.modelId) await del('MJ: ML Models', ids.modelId);
-  if (ids.pipelineId) await del('MJ: ML Training Pipelines', ids.pipelineId);
-  if (ids.algorithmId && ids.algorithmCreated) await del('MJ: ML Algorithms', ids.algorithmId);
-}
-
 async function main(): Promise<void> {
   const t0 = Date.now();
   const { md, route, user } = await connect();
 
-  let pipelineId: string | undefined;
-  let modelId: string | undefined;
-  let algorithm: { id: string; created: boolean } | undefined;
+  const records = new RunRecords();
+  let algorithm: RigAlgorithm | undefined;
+  let cleanupFailures = 0;
   // Rows we read back — captured so cleanup can NULL out whatever the write-back persisted,
   // even if a later step threw.
   let readbackRows: MembershipReadback[] = [];
@@ -338,14 +282,17 @@ async function main(): Promise<void> {
     if (!hasClassCol || !hasScoreCol) {
       throw new Error(`Prediction columns missing on Memberships — codegen the ${CLASS_COLUMN} / ${SCORE_COLUMN} columns first.`);
     }
-    algorithm = await ensureDriverNamedAlgorithm(md, user);
-    console.log(`  Algorithm row: ${algorithm.id} (Name='${DRIVER_KEY}', ${algorithm.created ? 'created' : 'reused'})`);
+    algorithm = await EnsureDriverAlgorithm(route, user, DRIVER_KEY, TAG);
+    console.log(`  Algorithm row: ${algorithm.ID} (driver '${DRIVER_KEY}', ${algorithm.Created ? 'created' : 'reused'})`);
 
     // ── 2. Create the renewal pipeline ───────────────────────────────────────
-    banner('2. CREATE ML TRAINING PIPELINE');
-    const pipeline = await createPipeline(md, user, algorithm.id);
-    pipelineId = pipeline.ID;
+    banner('2. CREATE ML TRAINING PIPELINE + BIND UNIT AND PROTOCOL');
+    const pipeline = await createPipeline(md, user, algorithm.ID);
+    records.RecordPipeline(pipeline.ID);
     console.log(`  Pipeline ${pipeline.ID}`);
+    // Training refuses a pipeline without a Prediction Unit (UNIT_REQUIRED): bind version 1 of each, saved over GraphQL.
+    await BindUnitAndProtocol(route, user, pipeline, records);
+    console.log(`  Bound Prediction Unit ${pipeline.PredictionUnitID} and Evaluation Protocol ${pipeline.EvaluationProtocolID}`);
     console.log(`  Target: Memberships.Status (classification), Algorithm=${DRIVER_KEY}`);
     console.log(`  Features: select[AutoRenew, MembershipType] + onehot[MembershipType]`);
     console.log(`  Leakage deny: CancellationDate, CancellationReason, RenewalDate, EndDate, StartDate`);
@@ -363,45 +310,46 @@ async function main(): Promise<void> {
       throw new Error(`Training failed: ${trainResult.ErrorMessage}`);
     }
     const out = trainResult.Output;
-    modelId = out.modelId;
-    console.log(`  modelId       = ${out.modelId}`);
+    const shippedModelId = ShippedModelID(out, 'publish and score with write-back', RequireCheck);
+    if (shippedModelId === null) throw new Error(`Training shipped no model to publish and score with write-back: ${out.gateOutcome ?? 'no gate decision'}.`);
+    records.RecordModel(shippedModelId);
+    console.log(`  modelId       = ${shippedModelId}`);
     console.log(`  trainingRunId = ${out.trainingRunId}`);
     console.log(`  version       = ${out.version}`);
     console.log(`  status        = ${out.status}`);
     console.log(`  leakageFlagged= ${out.leakageFlagged}`);
     console.log(`  holdoutMetrics= ${out.holdoutMetrics ?? '(none)'}`);
     // Scoring refuses a Draft model (MODEL_NOT_SCORABLE), so promote it to Published first.
-    console.log(`  promoted      → ${await PromoteToPublished(route, user, out.modelId, TAG)}`);
+    console.log(`  promoted      → ${await PromoteToPublished(route, user, shippedModelId, TAG)}`);
 
-    // ── 4. Score WITH write-back (NOT dryRun) ────────────────────────────────
-    // The OutputMapping maps the prediction payload's `class` / `score` onto the two
-    // entity columns. The Record-Set-Processing runner persists them to the Membership rows.
-    banner('4. SCORE WITH WRITE-BACK (PredictiveStudio.ScoreRecordSet)');
+    // ── 4. Score through a binding that names the column (NOT dryRun) ────────
+    // The binding's column copy writes the newest score into RenewalScore for each scored Membership row.
+    banner('4. SCORE THROUGH A BINDING (PredictiveStudio.CreateScoringProcess + ScoreRecordSet)');
+    const created = await new PredictiveStudioCreateScoringProcessOperation().Execute(
+      { modelId: shippedModelId, targetEntityName: 'Memberships', scope: { filter: ROW_FILTER }, outputField: SCORE_COLUMN, name: `${TAG} scoring` },
+      { provider: route, user },
+    );
+    if (!created.Success || !created.Output || !created.Output.scoringBindingId) {
+      throw new Error(`Creating the scoring binding failed: ${created.ErrorMessage || 'no binding'}`);
+    }
     const scoreStart = Date.now();
     const scoreResult = await new PredictiveStudioScoreRecordSetOperation().Execute(
       {
-        modelId: out.modelId,
+        modelId: shippedModelId,
+        bindingId: created.Output.scoringBindingId,
         scope: { filter: { entityName: 'Memberships', extraFilter: ROW_FILTER, maxRows: ROW_COUNT } },
         dryRun: false,
-        writeBack: {
-          OutputMapping: {
-            fields: {
-              [CLASS_COLUMN]: '$.class',
-              [SCORE_COLUMN]: '$.score',
-            },
-          },
-        },
       },
       { provider: route, user },
     );
     console.log(`  Execute() Success=${scoreResult.Success}${scoreResult.ErrorMessage ? ` Error=${scoreResult.ErrorMessage}` : ''} (${Date.now() - scoreStart}ms)`);
     if (!scoreResult.Success || !scoreResult.Output) {
-      throw new Error(`Scoring (write-back) failed: ${scoreResult.ErrorMessage}`);
+      throw new Error(`Scoring through the binding failed (${scoreResult.ResultCode}): ${scoreResult.ErrorMessage}`);
     }
     const s = scoreResult.Output;
-    console.log(`  scored=${s.scored} failed=${s.failed} skipped=${s.skipped} wroteBack=${s.wroteBack}`);
-    if (!s.wroteBack) {
-      console.log('  WARNING: wroteBack=false — the runner did not persist predictions (check the write-back runner fix).');
+    console.log(`  status=${s.status} total=${s.total} written=${s.written} scoringRunId=${s.scoringRunId}`);
+    if (s.written === 0) {
+      console.log('  WARNING: written=0 — the binding wrote no Feature Value.');
     }
 
     // ── 5. Read the values back off the entity columns ───────────────────────
@@ -424,12 +372,10 @@ async function main(): Promise<void> {
     } else {
       console.log('  (no read-back rows captured — nothing to clear)');
     }
-    await cleanup(md, user, {
-      pipelineId, modelId,
-      algorithmId: algorithm?.id, algorithmCreated: algorithm?.created,
-    });
+    banner('CLEANUP');
+    cleanupFailures = ReportCleanup(await DeleteRecordedRows(route, user, records, algorithm));
   }
-  process.exit(0);
+  process.exit(cleanupFailures === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

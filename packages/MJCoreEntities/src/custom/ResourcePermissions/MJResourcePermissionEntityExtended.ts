@@ -1,13 +1,94 @@
 import { BaseEntity, CompositeKey, EntityDeleteOptions, EntityPermissionType, EntitySaveOptions, IMetadataProvider, LogError } from "@memberjunction/core";
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { MJResourcePermissionEntity, MJUserEntity } from "../../generated/entity_subclasses";
+import { MJResourcePermissionEntity, MJResourceTypeEntity, MJUserEntity } from "../../generated/entity_subclasses";
 import { ResourcePermissionEngine } from "./ResourcePermissionEngine";
 import { ConversationEngine } from "../../engines/conversations";
-import { CreateShareNotification } from "../Permissions/shareNotification";
-import { CheckShareManagePermission } from "../Permissions/BaseShareEntityExtended";
+import { CreateShareNotification, MarkEntityShareNotificationDispatched } from "../Permissions/shareNotification";
+import { AsShareMetadataProvider, CheckShareManagePermission, FailShareSave } from "../Permissions/BaseShareEntityExtended";
 
 /** `MJ: Resource Types.ID` for Conversations. */
 const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
+
+/** `MJ: Resource Types.ID` for Projects (Conversation Folders). */
+const PROJECTS_RESOURCE_TYPE_ID = '88D0DF27-AF8F-43AC-9EC4-2AC314F49355';
+
+const SINGULAR_RESOURCE_TYPE_LABELS: Record<string, string> = {
+    conversations: 'Conversation',
+    lists: 'List',
+    dashboards: 'Dashboard',
+    artifacts: 'Artifact',
+    collections: 'Collection',
+    'user views': 'View',
+    queries: 'Query',
+    records: 'Record',
+    projects: 'Folder',
+};
+
+function resolveSingularResourceTypeLabel(rawLabel: string | null | undefined): string {
+    const trimmed = rawLabel?.trim();
+    if (!trimmed) {
+        return 'resource';
+    }
+    const mapped = SINGULAR_RESOURCE_TYPE_LABELS[trimmed.toLowerCase()];
+    return mapped ?? trimmed;
+}
+
+function readEntityFieldString(entity: BaseEntity, fieldName: string): string | null {
+    if (typeof entity.GetFieldByName === 'function') {
+        const field = entity.GetFieldByName(fieldName);
+        if (field && field.Value !== null && field.Value !== undefined) {
+            const str = String(field.Value).trim();
+            return str.length > 0 ? str : null;
+        }
+    }
+    return null;
+}
+
+function buildResourceShareExtraConfiguration(
+    resourceTypeName: string | null | undefined,
+    resourceRecordId: string,
+    permissionId: string,
+    permissionLevel: MJResourcePermissionEntity['PermissionLevel']
+): Record<string, string | number | boolean | null | undefined> {
+    const normalized = resourceTypeName?.trim().toLowerCase() ?? '';
+    const base: Record<string, string | number | boolean | null | undefined> = {
+        ResourcePermissionID: permissionId,
+        ResourceRecordID: resourceRecordId,
+        ...(permissionLevel ? { PermissionLevel: permissionLevel } : {}),
+    };
+
+    // Never include ParentID, parent conversation names, or sibling/child thread metadata
+    // on conversation shares so private side threads remain isolated.
+    if (normalized === 'conversations') {
+        return {
+            type: 'conversation',
+            conversationId: resourceRecordId,
+            ...base,
+        };
+    }
+    if (normalized === 'lists') {
+        return {
+            type: 'list',
+            listId: resourceRecordId,
+            ...base,
+        };
+    }
+    if (normalized === 'dashboards') {
+        return {
+            type: 'dashboard',
+            dashboardId: resourceRecordId,
+            ...base,
+        };
+    }
+    if (normalized === 'artifacts') {
+        return {
+            type: 'artifact',
+            artifactId: resourceRecordId,
+            ...base,
+        };
+    }
+    return base;
+}
 
 /**
  * Subclass for the Resource Permissiosn entity that implements some workflow logic
@@ -59,7 +140,7 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
     private async currentUserOwnsResourceAsync(): Promise<boolean> {
         const user = this.ContextCurrentUser;
         if (!user) return false;
-        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const provider = AsShareMetadataProvider(this.ProviderToUse);
         if (provider?.ProviderType !== 'Database') return false;
 
         try {
@@ -70,18 +151,19 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
             await engine.Config(false, user);
 
             const rt = engine.ResourceTypes.find((t) => UUIDsEqual(t.ID, this.ResourceTypeID));
+            const entityName = rt?.Entity ?? (UUIDsEqual(this.ResourceTypeID, PROJECTS_RESOURCE_TYPE_ID) ? 'MJ: Projects' : null);
             const typeFields = engine.GetResourceTypeInfoFields(this.ResourceTypeID);
-            if (!rt || !typeFields?.OwnerIDFieldName || !typeFields?.PrimaryKeyFieldName) {
+            if (!entityName || !typeFields?.OwnerIDFieldName || !typeFields?.PrimaryKeyFieldName) {
                 return false;
             }
 
-            const resourceRecord = await provider.GetEntityObject(rt.Entity, user);
+            const resourceRecord = await provider.GetEntityObject(entityName, user);
             const ck = new CompositeKey([
                 { FieldName: typeFields.PrimaryKeyFieldName, Value: this.ResourceRecordID }
             ]);
             const loaded = await resourceRecord.InnerLoad(ck);
             if (!loaded) return false;
-            const ownerId = resourceRecord.Get(typeFields.OwnerIDFieldName);
+            const ownerId = readEntityFieldString(resourceRecord, typeFields.OwnerIDFieldName);
             return !!ownerId && UUIDsEqual(ownerId, user.ID);
         } catch (error) {
             LogError(
@@ -114,7 +196,7 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
      * the base class will bypass the role-based gate.
      */
     override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const provider = AsShareMetadataProvider(this.ProviderToUse);
         if (provider?.ProviderType === 'Database') {
             if (await this.callerMayManageShare()) {
                 this._authorizedByOwnerOverride = true;
@@ -138,6 +220,12 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
                 UUIDsEqual(c.ID, this.ResourceRecordID)
             );
             return !!conv?.UserID && UUIDsEqual(conv.UserID, userId);
+        }
+        if (UUIDsEqual(this.ResourceTypeID, PROJECTS_RESOURCE_TYPE_ID)) {
+            const proj = ConversationEngine.Instance.Projects.find((p) =>
+                UUIDsEqual(p.ID, this.ResourceRecordID)
+            );
+            return !!proj?.OwnerUserID && UUIDsEqual(proj.OwnerUserID, userId);
         }
         // Additional resource-type owner lookups can be added here.
         return false;
@@ -171,41 +259,50 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
      * @param options 
      */
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        const p = <IMetadataProvider><any>this.ProviderToUse;
-        if (p.ProviderType === 'Database') {
+        const p = AsShareMetadataProvider(this.ProviderToUse);
+        if (p?.ProviderType === 'Database') {
             // operating on the server side so we can do the notification logic
             // first check to see if we're a new record and the status is "Requested"
-            const newRequest =  !this.IsSaved && this.Status === 'Requested';
-            const statusField = this.Fields.find(f=>f.Name.trim().toLowerCase() === 'status');
-            const statusChangedfromRequested = this.IsSaved && statusField.Dirty && statusField.OldValue.trim().toLowerCase() === 'requested';
-            // New direct share (grantor picked this user explicitly via the share dialog).
-            // Captured before `super.Save()` since `IsSaved` flips afterwards.
+            const newRequest = !this.IsSaved && this.Status === 'Requested';
+            const statusField = typeof this.GetFieldByName === 'function'
+                ? this.GetFieldByName('Status')
+                : this.Fields.find(f => f.Name.trim().toLowerCase() === 'status');
+            const previousStatus = typeof statusField?.OldValue === 'string'
+                ? statusField.OldValue.trim().toLowerCase()
+                : '';
+            const statusChangedfromRequested = Boolean(this.IsSaved && statusField?.Dirty && previousStatus === 'requested');
+            // New direct share (or re-granting a previously revoked share) for an approved user target.
+            // Captured before `super.Save()` since `IsSaved` and dirty flags reset afterwards.
             const newApprovedUserShare =
-                !this.IsSaved && this.Status === 'Approved' && this.Type === 'User' && !!this.UserID;
+                this.Type === 'User' &&
+                !!this.UserID &&
+                this.Status === 'Approved' &&
+                (!this.IsSaved || (Boolean(statusField?.Dirty) && previousStatus === 'revoked'));
 
-            // just in case, config the engine but it probably already has been configured in which case nothing will happen 
-            const engine = <ResourcePermissionEngine> ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(p, ResourcePermissionEngine);
+            // just in case, config the engine but it probably already has been configured in which case nothing will happen
+            const engine = ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(p, ResourcePermissionEngine) as ResourcePermissionEngine;
             await engine.Config(false, this.ContextCurrentUser);
-            const rt = engine.ResourceTypes.find((rt: any) => UUIDsEqual(rt.ID, this.ResourceTypeID));
-            const rtEntityRecord = engine.ResourceTypes.find((rt: any) => rt.Name.trim().toLowerCase() === "records")
+            const rt = engine.ResourceTypes.find((item: MJResourceTypeEntity) => UUIDsEqual(item.ID, this.ResourceTypeID));
+            const entityName = rt?.Entity ?? (UUIDsEqual(this.ResourceTypeID, PROJECTS_RESOURCE_TYPE_ID) ? 'MJ: Projects' : null);
+            const rtEntityRecord = engine.ResourceTypes.find((item: MJResourceTypeEntity) => item.Name.trim().toLowerCase() === 'records');
 
             // now get the field names for the given resource type based on its entity metadata with this helper method in the engine
             const resourceTypeFields = engine.GetResourceTypeInfoFields(this.ResourceTypeID);
-            if (resourceTypeFields && resourceTypeFields.NameFieldName && resourceTypeFields.OwnerIDFieldName) {
+            if (entityName && resourceTypeFields && resourceTypeFields.NameFieldName && resourceTypeFields.OwnerIDFieldName) {
                 // grab the data from the resource record itself so we have it for the notification so it is easy for the user to read
-                const resourceRecord = await p.GetEntityObject(rt.Entity, this.ContextCurrentUser);
+                const resourceRecord = await p.GetEntityObject(entityName, this.ContextCurrentUser);
                 const ck = new CompositeKey([
                     {
                         FieldName: resourceTypeFields.PrimaryKeyFieldName,
                         Value: this.ResourceRecordID
                     }
-                ])
+                ]);
                 await resourceRecord.InnerLoad(ck);
 
-                // we have the resource record (e.g. the User View, Dashboard, Report, etc)
-                // now grab the record name and owner from it 
-                const recordName = resourceRecord.Get(resourceTypeFields.NameFieldName);
-                const recordOwnerID = resourceRecord.Get(resourceTypeFields.OwnerIDFieldName);
+                // we have the resource record (e.g. the User View, Dashboard, Conversation, List, etc)
+                // now grab the record name and owner from it
+                const recordName = readEntityFieldString(resourceRecord, resourceTypeFields.NameFieldName);
+                const recordOwnerID = readEntityFieldString(resourceRecord, resourceTypeFields.OwnerIDFieldName);
 
                 // Authorization gate for *granting* a share: only the resource's
                 // owner (or an existing Owner-level grantee) may create an Approved
@@ -214,15 +311,14 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
                 if (!this.IsSaved && this.Status !== 'Requested') {
                     const authorized = this.callerMayGrantShare(engine, recordOwnerID);
                     if (!authorized) {
+                        const actor = this.ContextCurrentUser;
+                        if (actor) {
+                            return FailShareSave(this, actor, 'Only the owner can share this resource.', 'create');
+                        }
                         LogError(
-                            `User ${this.ContextCurrentUser?.ID ?? '(none)'} attempted to create a ${this.ResourceType} ` +
+                            `Anonymous caller attempted to create a ${this.ResourceType} ` +
                             `share on record ${this.ResourceRecordID} without Owner rights.`
                         );
-                        const result = this.LatestResult as unknown as { Success: boolean; Message?: string } | undefined;
-                        if (result) {
-                            result.Success = false;
-                            result.Message = 'Only the owner can share this resource.';
-                        }
                         return false;
                     }
                 }
@@ -230,6 +326,9 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
                 // we now have our cached state values of newRequest and statusChanged and can proceed with the logic below
                 // after we call super.Save() to actually save the record
                 if (await super.Save(options)) {
+                    const resourceTypeName = rt?.Name ?? this.ResourceType ?? undefined;
+                    const resourceTypeLabel = resolveSingularResourceTypeLabel(this.ResourceType ?? rt?.Name);
+
                     // All three workflow branches now route through CreateShareNotification so
                     // NotificationEngine honors the recipient's per-channel preferences (in-app /
                     // email / SMS) and the "Resource Shared" email template renders uniformly.
@@ -244,16 +343,18 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
                                 ContextUser: this.ContextCurrentUser,
                                 GrantorUserID: this.UserID!, // the *requester* is the actor; the owner receives
                                 GranteeUserID: recordOwnerID,
-                                ResourceTypeLabel: this.ResourceType ?? rt?.Name ?? 'resource',
+                                ResourceTypeLabel: resourceTypeLabel,
                                 ResourceTypeName: rtEntityRecord?.Name, // route deep-link via "Records" ResourceType so the owner can approve/reject
                                 ResourceName: recordName,
                                 ResourceRecordID: this.ID, // target the permission row itself — the owner approves *this* request
-                                Title: `New Request for Access to ${this.ResourceType}`,
-                                Message: `A new request for access to ${this.ResourceType} record "${recordName}" has been made by ${requester.Name} (${requester.Email})`,
+                                PermissionLevel: this.PermissionLevel ?? undefined,
+                                Title: `New Request for Access to ${resourceTypeLabel}`,
+                                Message: `A new request for access to ${resourceTypeLabel} record "${recordName ?? this.ResourceRecordID}" has been made by ${requester.Name} (${requester.Email})`,
                                 ExtraConfiguration: {
                                     Entity: 'MJ: Resource Permissions',
                                     ResourceRecordID: this.ResourceRecordID,
                                     ResourcePermissionID: this.ID,
+                                    ...(this.PermissionLevel ? { PermissionLevel: this.PermissionLevel } : {}),
                                 },
                             });
                         }
@@ -265,38 +366,51 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
                             ContextUser: this.ContextCurrentUser,
                             GrantorUserID: this.SharedByUserID ?? this.ContextCurrentUser?.ID ?? recordOwnerID!,
                             GranteeUserID: this.UserID!,
-                            ResourceTypeLabel: this.ResourceType ?? rt?.Name ?? 'resource',
-                            ResourceTypeName: rt?.Name,
+                            ResourceTypeLabel: resourceTypeLabel,
+                            ResourceTypeName: resourceTypeName,
                             ResourceName: recordName,
                             ResourceRecordID: this.ResourceRecordID,
-                            Title: `Request for Access to ${this.ResourceType} ${this.Status}`,
-                            Message: `Your request for access to ${this.ResourceType} record "${recordName}" has been ${this.Status}`,
-                            ExtraConfiguration: { ResourcePermissionID: this.ID },
+                            PermissionLevel: this.PermissionLevel ?? undefined,
+                            Title: `Request for Access to ${resourceTypeLabel} ${this.Status}`,
+                            Message: `Your request for access to ${resourceTypeLabel} record "${recordName ?? this.ResourceRecordID}" has been ${this.Status}`,
+                            ExtraConfiguration: buildResourceShareExtraConfiguration(
+                                resourceTypeName,
+                                this.ResourceRecordID,
+                                this.ID,
+                                this.PermissionLevel
+                            ),
                         });
                         return true;
                     }
                     else if (newApprovedUserShare) {
                         const grantorId = this.SharedByUserID ?? this.ContextCurrentUser?.ID ?? recordOwnerID;
                         if (grantorId && !UUIDsEqual(grantorId, this.UserID!)) {
+                            MarkEntityShareNotificationDispatched(this);
                             void CreateShareNotification({
                                 Provider: p,
                                 ContextUser: this.ContextCurrentUser,
                                 GrantorUserID: grantorId,
                                 GranteeUserID: this.UserID!,
-                                ResourceTypeLabel: this.ResourceType ?? rt?.Name ?? 'resource',
-                                ResourceTypeName: rt?.Name,
+                                ResourceTypeLabel: resourceTypeLabel,
+                                ResourceTypeName: resourceTypeName,
                                 ResourceName: recordName,
                                 ResourceRecordID: this.ResourceRecordID,
+                                PermissionLevel: this.PermissionLevel ?? undefined,
                                 ActionsSummary: this.PermissionLevel
                                     ? `${this.PermissionLevel} access`
                                     : undefined,
-                                ExtraConfiguration: { ResourcePermissionID: this.ID },
+                                ExtraConfiguration: buildResourceShareExtraConfiguration(
+                                    resourceTypeName,
+                                    this.ResourceRecordID,
+                                    this.ID,
+                                    this.PermissionLevel
+                                ),
                             });
                         }
                         return true;
                     }
                     else {
-                        return true; // nothing to notify about (update without status change, etc.)
+                        return true; // nothing to notify about (revocation, update without status change, etc.)
                     }
                 }
                 else {
@@ -304,7 +418,7 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
                 }
             }
             else {
-                throw new Error(`Resource Type ${rt.Name} does not have the required fields for ResourceTypeInfoFields`);
+                throw new Error(`Resource Type ${rt?.Name ?? this.ResourceTypeID} does not have the required fields for ResourceTypeInfoFields`);
             }
         }
         else {

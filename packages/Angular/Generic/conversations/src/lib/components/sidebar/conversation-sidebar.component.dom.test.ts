@@ -28,18 +28,32 @@ class StubConversationListComponent {
   @Input() showNewConversationButton = true;
   @Input() showHeaderMenu = true;
   @Input() showSectionHeaders = true;
+  @Input() FolderEditLabel = 'Rename';
   @Output() conversationSelected = new EventEmitter<string>();
   @Output() conversationDeleted = new EventEmitter<string>();
   @Output() newConversationRequested = new EventEmitter<void>();
   @Output() refreshRequested = new EventEmitter<void>();
   @Output() pinSidebarRequested = new EventEmitter<void>();
   @Output() unpinSidebarRequested = new EventEmitter<void>();
+  @Output() BeforeFolderEdit = new EventEmitter<unknown>();
+  @Output() AfterFolderEdit = new EventEmitter<unknown>();
 }
 
 @Component({ standalone: false, selector: 'mj-collection-tree', template: '' })
 class StubCollectionTreeComponent {
   @Input() environmentId: string | null = null;
   @Input() currentUser: UserInfo | null = null;
+}
+
+@Component({ standalone: false, selector: 'mj-my-agents-section', template: '' })
+class StubMyAgentsSectionComponent {
+  @Input() Provider: IMetadataProvider | null = null;
+  @Input() CurrentUser: UserInfo | null = null;
+  @Input() ShowMyAgents = true;
+  @Input() ActiveAgentId: string | null = null;
+  @Output() StartChatWithAgent = new EventEmitter<unknown>();
+  @Output() StartOnboardingWithTemplate = new EventEmitter<unknown>();
+  @Output() AgentInstanceChanged = new EventEmitter<unknown>();
 }
 
 @Component({ standalone: false, selector: 'mj-conversation-routines-section', template: '' })
@@ -58,6 +72,7 @@ describe('ConversationSidebarComponent (DOM) — pass-throughs + re-emits', () =
       imports: [CommonModule],
       declarations: [
         ConversationSidebarComponent,
+        StubMyAgentsSectionComponent,
         StubConversationListComponent,
         StubCollectionTreeComponent,
         StubRoutinesSectionComponent,
@@ -89,6 +104,26 @@ describe('ConversationSidebarComponent (DOM) — pass-throughs + re-emits', () =
     expect(list.showNewConversationButton).toBe(true);
     expect(list.showHeaderMenu).toBe(true);
     expect(list.showSectionHeaders).toBe(true);
+    expect(list.FolderEditLabel).toBe('Rename');
+  });
+
+  it('forwards FolderEditLabel and re-emits BeforeFolderEdit / AfterFolderEdit', () => {
+    const f = render({ FolderEditLabel: 'Edit' });
+    const list = listInstance(f);
+    expect(list.FolderEditLabel).toBe('Edit');
+
+    const beforeSpy = vi.fn();
+    const afterSpy = vi.fn();
+    f.componentInstance.BeforeFolderEdit.subscribe(beforeSpy);
+    f.componentInstance.AfterFolderEdit.subscribe(afterSpy);
+
+    const beforePayload = { Project: { ID: 'p1' }, Cancel: false };
+    const afterPayload = { Project: { ID: 'p1' } };
+    list.BeforeFolderEdit.emit(beforePayload);
+    list.AfterFolderEdit.emit(afterPayload);
+
+    expect(beforeSpy).toHaveBeenCalledWith(beforePayload);
+    expect(afterSpy).toHaveBeenCalledWith(afterPayload);
   });
 
   it("re-emits the list's conversationDeleted with the deleted ID intact", () => {

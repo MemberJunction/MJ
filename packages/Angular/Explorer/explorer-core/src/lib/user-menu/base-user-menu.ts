@@ -133,12 +133,35 @@ export class BaseUserMenu {
                 tooltip: 'View and edit your profile'
             },
             {
+                id: 'view-as-user',
+                label: this._context?.isImpersonating ? 'Switch Impersonated User...' : 'View As User...',
+                icon: 'fa-solid fa-masks-theater',
+                group: 'primary',
+                order: 15,
+                developerOnly: false,
+                visible: this._context?.canImpersonate === true,
+                enabled: true,
+                tooltip: 'Temporarily view the application as another user'
+            },
+            {
+                id: 'exit-impersonation',
+                label: 'Exit Impersonation',
+                icon: 'fa-solid fa-arrow-right-from-bracket',
+                group: 'primary',
+                order: 16,
+                developerOnly: false,
+                visible: this._context?.canImpersonate === true && this._context?.isImpersonating === true,
+                enabled: true,
+                tooltip: 'Return to your own authenticated session'
+            },
+            {
                 id: 'pin-to-home',
                 label: 'Pin to Home',
                 icon: 'fa-solid fa-house-chimney',
                 group: 'primary',
                 order: 20,
                 developerOnly: false,
+                adminOnly: true,
                 visible: true,
                 enabled: true,
                 tooltip: 'Pin the current resource to your Home dashboard'
@@ -150,6 +173,7 @@ export class BaseUserMenu {
                 group: 'primary',
                 order: 25,
                 developerOnly: false,
+                adminOnly: true,
                 visible: true,
                 enabled: true,
                 tooltip: "See what you've shared and what's been shared with you"
@@ -179,9 +203,22 @@ export class BaseUserMenu {
                 group: 'system',
                 order: 10,
                 developerOnly: false,
+                adminOnly: true,
                 visible: true,
                 enabled: true,
                 tooltip: 'Reset workspace to default layout'
+            },
+            {
+                id: 'diagnostic-bundle',
+                label: 'Diagnostic Bundle',
+                icon: 'fa-solid fa-stethoscope',
+                group: 'system',
+                order: 15,
+                developerOnly: false,
+                adminOnly: true,
+                visible: true,
+                enabled: true,
+                tooltip: 'Capture, download, or submit a diagnostic bundle (.mjdiag)'
             },
             {
                 id: 'about',
@@ -190,6 +227,7 @@ export class BaseUserMenu {
                 group: 'system',
                 order: 20,
                 developerOnly: false,
+                adminOnly: true,
                 visible: true,
                 enabled: true,
                 tooltip: 'Version, diagnostics, and links'
@@ -254,6 +292,11 @@ export class BaseUserMenu {
             return false;
         }
 
+        // Check restricted-participant admin/workspace-management visibility
+        if (this._context?.showAdminMenuItems === false && (item.developerOnly || item.adminOnly)) {
+            return false;
+        }
+
         // Check item's own visible flag
         return item.visible;
     }
@@ -292,8 +335,8 @@ export class BaseUserMenu {
         const items = this.GetMenuItems();
         const item = items.find(i => i.id === itemId);
 
-        if (!item || !item.enabled) {
-            return { success: false, closeMenu: false, message: 'Item not found or disabled' };
+        if (!item || !item.enabled || !this.IsItemVisible(item)) {
+            return { success: false, closeMenu: false, message: 'Item not found, hidden, or disabled' };
         }
 
         // Route theme selection items to the theme handler
@@ -425,6 +468,33 @@ export class BaseUserMenu {
             success: true,
             closeMenu: true,
             message: 'about'
+        };
+    }
+
+    /** Signal the shell to open the Diagnostic Bundle dialog */
+    protected async Handle_diagnostic_bundle(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'diagnostic-bundle'
+        };
+    }
+
+    /** Signal the shell to open the View As User impersonation dialog */
+    protected async Handle_view_as_user(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'view-as-user'
+        };
+    }
+
+    /** Signal the shell to end the active user impersonation session */
+    protected async Handle_exit_impersonation(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'exit-impersonation'
         };
     }
 

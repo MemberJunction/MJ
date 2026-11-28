@@ -129,10 +129,9 @@ export default class AgentRun extends Command {
   };
 
   async run(): Promise<void> {
-    const { AgentAuditService } = await import('@memberjunction/ai-cli');
+    const { AgentAuditService, CloseMJProvider, FlushStdout } = await import('@memberjunction/ai-cli');
 
     const { args, flags, metadata } = await this.parse(AgentRun);
-    const spinner = ora();
 
     // One typed resolution for all four render sites below — replaces the `as any`
     // casts and applies the same --format/pipe rules as the rest of the CLI.
@@ -143,98 +142,95 @@ export default class AgentRun extends Command {
       LegacyWasExplicit: metadata.flags.output?.setFromDefault === false,
       Map: { text: 'compact', json: 'json', md: 'markdown' },
     });
+    const isJson = outputFormat === 'json';
+    const spinner = !isJson ? ora() : null;
 
     try {
       const service = new AgentAuditService();
 
       // MODE 1: List recent runs
       if (flags.list) {
-        spinner.start('Loading recent agent runs...');
+        spinner?.start('Loading recent agent runs...');
         const runs = await service.listRecentRuns({
           agentName: flags.agent,
           status: flags.status as 'success' | 'failed' | 'running' | 'all',
           days: flags.days,
           limit: flags.limit,
         });
-        spinner.stop();
+        spinner?.stop();
 
         this.log(service.formatRunList(runs, outputFormat));
-        process.exit(0);
-        return;
-      }
+      } else {
+        // Validate runId for non-list modes
+        if (!args.runId) {
+          this.error('Run ID is required (use --list to see recent runs)');
+        }
 
-      // Validate runId for non-list modes
-      if (!args.runId) {
-        this.error('Run ID is required (use --list to see recent runs)');
-      }
+        if (flags.step != null) {
+          // MODE 2: Step detail mode
+          spinner?.start(`Loading step ${flags.step} details...`);
+          const stepDetail = await service.getStepDetail(
+            args.runId,
+            flags.step,
+            {
+              detailLevel: (flags.detail || 'standard') as 'minimal' | 'standard' | 'detailed' | 'full',
+              maxTokens: flags['max-tokens'],
+            }
+          );
+          spinner?.stop();
 
-      // MODE 2: Step detail mode
-      if (flags.step != null) {
-        spinner.start(`Loading step ${flags.step} details...`);
-        const stepDetail = await service.getStepDetail(
-          args.runId,
-          flags.step,
-          {
-            detailLevel: (flags.detail || 'standard') as 'minimal' | 'standard' | 'detailed' | 'full',
-            maxTokens: flags['max-tokens'],
+          this.log(service.formatStepDetail(stepDetail, outputFormat));
+        } else if (flags.errors) {
+          // MODE 3: Error analysis mode
+          spinner?.start('Analyzing errors...');
+          const errorAnalysis = await service.analyzeErrors(args.runId);
+          spinner?.stop();
+
+          this.log(service.formatErrorAnalysis(errorAnalysis, outputFormat));
+        } else if (flags.export && flags.file) {
+          // MODE 4: Export mode
+          spinner?.start('Exporting full audit data...');
+          const exportData = await service.exportRun(args.runId, flags.export as 'full' | 'summary' | 'steps');
+          await fs.writeFile(flags.file, JSON.stringify(exportData, null, 2), 'utf8');
+          spinner?.stop();
+
+          if (isJson) {
+            this.log(JSON.stringify({ exported: true, file: flags.file, bytes: JSON.stringify(exportData).length }, null, 2));
+          } else {
+            this.log(chalk.green(`✓ Full audit data exported to ${flags.file}`));
+            this.log(chalk.dim(`  File size: ${(JSON.stringify(exportData).length / 1024).toFixed(1)} KB`));
           }
-        );
-        spinner.stop();
+        } else {
+          // MODE 5: Summary mode (default)
+          spinner?.start('Loading agent run summary...');
+          const summary = await service.getRunSummary(args.runId, {
+            includeStepList: true,
+            maxTokens: flags['max-tokens'],
+          });
+          spinner?.stop();
 
-        this.log(service.formatStepDetail(stepDetail, outputFormat));
-        process.exit(0);
-        return;
+          this.log(service.formatRunSummary(summary, outputFormat));
+
+          if (flags.verbose && !isJson) {
+            this.log(chalk.dim('\n💡 Tip: Use --step <N> to see details for a specific step'));
+            this.log(chalk.dim('💡 Tip: Use --errors to see only error information'));
+          }
+        }
       }
-
-      // MODE 3: Error analysis mode
-      if (flags.errors) {
-        spinner.start('Analyzing errors...');
-        const errorAnalysis = await service.analyzeErrors(args.runId);
-        spinner.stop();
-
-        this.log(service.formatErrorAnalysis(errorAnalysis, outputFormat));
-        process.exit(0);
-        return;
-      }
-
-      // MODE 4: Export mode
-      if (flags.export && flags.file) {
-        spinner.start('Exporting full audit data...');
-        const exportData = await service.exportRun(args.runId, flags.export as 'full' | 'summary' | 'steps');
-        await fs.writeFile(flags.file, JSON.stringify(exportData, null, 2), 'utf8');
-        spinner.stop();
-
-        this.log(chalk.green(`✓ Full audit data exported to ${flags.file}`));
-        this.log(chalk.dim(`  File size: ${(JSON.stringify(exportData).length / 1024).toFixed(1)} KB`));
-        process.exit(0);
-        return;
-      }
-
-      // MODE 5: Summary mode (default)
-      spinner.start('Loading agent run summary...');
-      const summary = await service.getRunSummary(args.runId, {
-        includeStepList: true,
-        maxTokens: flags['max-tokens'],
-      });
-      spinner.stop();
-
-      this.log(service.formatRunSummary(summary, outputFormat));
-
-      if (flags.verbose) {
-        this.log(chalk.dim('\n💡 Tip: Use --step <N> to see details for a specific step'));
-        this.log(chalk.dim('💡 Tip: Use --errors to see only error information'));
-      }
-
-      process.exit(0);
     } catch (error) {
-      spinner.fail('Audit failed');
+      spinner?.fail('Audit failed');
 
-      if (flags.verbose && error instanceof Error) {
+      if (flags.verbose && !isJson && error instanceof Error) {
         this.log(chalk.red('\nError Details:'));
         this.log(error.stack || error.message);
       }
 
       this.error(error as Error);
+    } finally {
+      await CloseMJProvider().catch(() => {});
     }
+
+    await FlushStdout();
+    setImmediate(() => process.exit(0));
   }
 }

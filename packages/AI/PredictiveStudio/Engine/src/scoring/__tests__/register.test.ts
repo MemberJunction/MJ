@@ -27,7 +27,7 @@ import type { MLInferenceDeps } from '../types';
 const deps: MLInferenceDeps = {
   modelLoader: { async loadModel() { return null; } },
   artifactLoader: new InMemoryArtifactLoader(),
-  sidecar: { async predict() { return { predictions: [] }; } },
+  sidecar: { async predict() { return { predictions: [], classOrder: null }; } },
 };
 
 describe('isMLInferenceWorkType', () => {
@@ -110,5 +110,24 @@ describe('registerMLScoringProcessor', () => {
       Configuration: JSON.stringify({ autoTrain: { pipelineId: 'pipe-1' } }),
     });
     expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
+  });
+
+  it("never reads the Record Process's ChallengerConfiguration: the challenger is the binding run's (ScoringService's live mirror), so an unbound process mirrors nothing (D-069)", () => {
+    RegisterMLScoringProcessor(deps);
+    let reads = 0;
+    const proc = RecordProcessorRegistry.Instance.Resolve({
+      WorkType: ML_INFERENCE_WORK_TYPE,
+      RecordProcessID: 'rp-shadow-1',
+      Configuration: JSON.stringify({ modelId: 'champion-model-1' }),
+      RecordProcess: {
+        ID: 'rp-shadow-1',
+        get ChallengerConfigurationObject() {
+          reads++;
+          return { Enabled: true, SampleRate: 1, WorkType: 'ML Model' as const, ChallengerModelID: 'challenger-model-99' };
+        },
+      },
+    });
+    expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
+    expect(reads).toBe(0);
   });
 });

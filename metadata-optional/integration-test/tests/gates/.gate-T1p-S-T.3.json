@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "T1p -> S-T.3",
+    "Description": "Gate G2.20 (phase 2, dataset T1p, criterion S-T.3): at every origin the seasonal-naïve MASE equals the value computed independently from the planted series and that origin's training window, within 1e-9, 100% of origins. It fails when seasonal naïve reads the whole series instead of the origin's training window (mismatches > 0).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.20\",\"owner:PR3\",\"phase:2\",\"dataset:T1p\",\"criterion:S-T.3\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Every origin's seasonal-naive MASE and MASE scale equal the independent values from that origin's training window within 1e-9, 100% of origins (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-t1p-s-t-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "76F03E82-6D05-4C15-A77C-471331B157C9"
+  }
+}

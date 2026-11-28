@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { AtRiskRules, AT_RISK_LIST_MIN_RISK_PCT, type AtRiskRow } from '../at-risk-rules';
+import { AtRiskRules, AT_RISK_LIST_MIN_RISK_PCT, OutputBindingRows, type AtRiskRow, type OutputBindingEntityRow } from '../at-risk-rules';
+import type { SemanticsCheckBinding } from '../governance-contracts';
 
 describe('AtRiskRules.ParseAtRiskRows', () => {
   it('parses + ranks per-record predictions highest-risk first, with bands', () => {
@@ -85,7 +86,7 @@ describe('AtRiskRules.ParseAtRiskRows', () => {
   it('a renewal score of 0.35 is medium risk with a medium-risk badge, not a red "Low" renewal badge (I1)', () => {
     const rows = AtRiskRules.ParseAtRiskRows(
       [{ RecordID: 'r', ResultPayload: JSON.stringify({ score: 0.35 }) }],
-      AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'Renewed', ProblemType: 'classification' }),
+      AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'Renewed', ProblemType: 'classification', OutputSemantics: null }, null),
     );
     expect(rows[0]).toMatchObject({ RiskPct: 65, Band: 'medium', Status: 'Medium risk', BadgeColor: 'amber' });
   });
@@ -144,18 +145,18 @@ describe('AtRiskRules.HumanizeFeatureName', () => {
 describe('AtRiskRules.BuildAtRiskOptions (one polarity rule)', () => {
   it('inverts risk for a model whose outcome config says the score is the good outcome', () => {
     const lineage = JSON.stringify({ outcomeConfig: { Polarity: 'positive' } });
-    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: lineage, TargetVariable: 'X', ProblemType: 'classification' }).InvertedRisk).toBe(true);
+    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: lineage, TargetVariable: 'X', ProblemType: 'classification', OutputSemantics: null }, null).InvertedRisk).toBe(true);
   });
   it('does not invert an adverse-polarity model', () => {
     const lineage = JSON.stringify({ outcomeConfig: { Polarity: 'adverse' } });
-    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: lineage, TargetVariable: 'X', ProblemType: 'classification' }).InvertedRisk).toBe(false);
+    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: lineage, TargetVariable: 'X', ProblemType: 'classification', OutputSemantics: null }, null).InvertedRisk).toBe(false);
   });
   it('no polarity → no inversion: nothing guessed from payload text', () => {
-    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'Outcome', ProblemType: 'classification' }).InvertedRisk).toBe(false);
+    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'Outcome', ProblemType: 'classification', OutputSemantics: null }, null).InvertedRisk).toBe(false);
   });
   it('never inverts a regression model', () => {
     const lineage = JSON.stringify({ outcomeConfig: { Polarity: 'positive' } });
-    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: lineage, TargetVariable: 'X', ProblemType: 'regression' }).InvertedRisk).toBe(false);
+    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: lineage, TargetVariable: 'X', ProblemType: 'regression', OutputSemantics: null }, null).InvertedRisk).toBe(false);
   });
   it('bands a positive-polarity (renewal) model on risk, not on the raw score', () => {
     const rows = AtRiskRules.ParseAtRiskRows(
@@ -163,51 +164,51 @@ describe('AtRiskRules.BuildAtRiskOptions (one polarity rule)', () => {
         { RecordID: 'loyal', ResultPayload: JSON.stringify({ score: 0.98 }) },
         { RecordID: 'lapsing', ResultPayload: JSON.stringify({ score: 0.10 }) },
       ],
-      AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'Renewed', ProblemType: 'classification' }),
+      AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'Renewed', ProblemType: 'classification', OutputSemantics: null }, null),
     );
     expect(rows.find((r) => r.RecordID === 'loyal')).toMatchObject({ RiskPct: 2, Band: 'low' });
     expect(rows.find((r) => r.RecordID === 'lapsing')).toMatchObject({ RiskPct: 90, Band: 'high' });
   });
   it('carries the resolved outcome config', () => {
-    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'Renewed', ProblemType: 'classification' }).OutcomeConfig.Polarity).toBe('positive');
+    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'Renewed', ProblemType: 'classification', OutputSemantics: null }, null).OutcomeConfig.Polarity).toBe('positive');
   });
 
   const inverted = (target: string): boolean | undefined =>
-    AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: target, ProblemType: 'classification' }).InvertedRisk;
+    AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: target, ProblemType: 'classification', OutputSemantics: null }, null).InvertedRisk;
 
   it('an adverse word beats a renewal word: RenewalRisk, NonRenewal, WillNotRenew and RetentionRisk are not inverted (I2)', () => {
     for (const target of ['RenewalRisk', 'NonRenewal', 'WillNotRenew', 'RetentionRisk', 'ChurnFlag']) {
       expect({ target, inverted: inverted(target) }).toEqual({ target, inverted: false });
-      expect(AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: target, ProblemType: 'classification' }).OutcomeConfig.Polarity).toBe('adverse');
+      expect(AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: target, ProblemType: 'classification', OutputSemantics: null }, null).OutcomeConfig.Polarity).toBe('adverse');
     }
   });
 
   it('a plain renewal target is inverted, a plain Status target is neutral', () => {
     expect(inverted('Renewed')).toBe(true);
     expect(inverted('Status')).toBe(false);
-    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'Status', ProblemType: 'classification' }).OutcomeConfig.Polarity).toBeUndefined();
+    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'Status', ProblemType: 'classification', OutputSemantics: null }, null).OutcomeConfig.Polarity).toBeUndefined();
   });
 
   it('matches whole words, so IsRelated, DefaultPlan and Calculated are not adverse', () => {
     for (const target of ['IsRelated', 'DefaultPlan', 'Calculated']) {
-      expect({ target, polarity: AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: target, ProblemType: 'classification' }).OutcomeConfig.Polarity })
+      expect({ target, polarity: AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: target, ProblemType: 'classification', OutputSemantics: null }, null).OutcomeConfig.Polarity })
         .toEqual({ target, polarity: undefined });
     }
-    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'LoanDefault', ProblemType: 'classification' }).OutcomeConfig.Polarity).toBe('adverse');
+    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'LoanDefault', ProblemType: 'classification', OutputSemantics: null }, null).OutcomeConfig.Polarity).toBe('adverse');
   });
 
   it('gives monetary bands only to a regression model, never to a classifier with a money word (M5)', () => {
-    const classifier = AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'HighSpender', ProblemType: 'classification' });
+    const classifier = AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'HighSpender', ProblemType: 'classification', OutputSemantics: null }, null);
     expect(classifier.OutcomeConfig.Format).toBe('percentage');
     expect(classifier.InvertedRisk).toBe(false);
-    const regression = AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'CustomerLTV', ProblemType: 'regression' });
+    const regression = AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'CustomerLTV', ProblemType: 'regression', OutputSemantics: null }, null);
     expect(regression.OutcomeConfig.Format).toBe('currency');
     expect(regression.InvertedRisk).toBe(false);
   });
 
   it('reads the regression problem type case-insensitively, the same way the trust verdict does', () => {
     const lineage = JSON.stringify({ outcomeConfig: { Polarity: 'positive' } });
-    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: lineage, TargetVariable: 'X', ProblemType: ' Regression ' }).InvertedRisk).toBe(false);
+    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: lineage, TargetVariable: 'X', ProblemType: ' Regression ', OutputSemantics: null }, null).InvertedRisk).toBe(false);
   });
 });
 
@@ -225,7 +226,7 @@ describe('AtRiskRules.LabelFromRecord', () => {
   });
 });
 
-describe('driver direction follows the displayed risk (W1 → S9.4, F-UI-3)', () => {
+describe('driver direction follows the displayed risk', () => {
   it('a positive contribution to P(renew) lowers risk', () => {
     expect(AtRiskRules.DriverRaisesRisk(1.135756, true)).toBe(false);
   });
@@ -241,25 +242,35 @@ describe('driver direction follows the displayed risk (W1 → S9.4, F-UI-3)', ()
   });
 });
 
-describe('the At-Risk list is the highest-risk rows (W1 → S9.5, F-UI-4)', () => {
+describe('the At-Risk list is the highest-risk rows', () => {
   // W1-shaped payloads: target "Renewed", classes "0"/"1", score = P("1") = P(renew).
   const truth: Record<string, number> = { a: 0.95, b: 0.9, c: 0.85, d: 0.6, e: 0.4, f: 0.3, g: 0.2 };
   const scores: Record<string, number> = { a: 0.96, b: 0.92, c: 0.88, d: 0.62, e: 0.41, f: 0.33, g: 0.18 };
   const details = Object.keys(scores).map((id) => ({ RecordID: id, ResultPayload: JSON.stringify({ score: scores[id], class: scores[id] >= 0.5 ? '1' : '0' }) }));
-  const renewedModel = { Lineage: null, TargetVariable: 'Renewed', ProblemType: 'classification' };
+  const renewedModel = { Lineage: null, TargetVariable: 'Renewed', ProblemType: 'classification', OutputSemantics: null };
 
   it('AtRiskRules.BuildAtRiskOptions inverts a P(renew) model', () => {
-    expect(AtRiskRules.BuildAtRiskOptions(renewedModel).InvertedRisk).toBe(true);
-    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'IsSLABreached', ProblemType: 'classification' }).InvertedRisk).toBe(false);
+    expect(AtRiskRules.BuildAtRiskOptions(renewedModel, null).InvertedRisk).toBe(true);
+    expect(AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'IsSLABreached', ProblemType: 'classification', OutputSemantics: null }, null).InvertedRisk).toBe(false);
   });
 
   it('selects the highest-risk rows, at or above the minimum risk, up to the limit', () => {
-    const rows = AtRiskRules.ParseAtRiskRows(details, AtRiskRules.BuildAtRiskOptions(renewedModel));
+    const rows = AtRiskRules.ParseAtRiskRows(details, AtRiskRules.BuildAtRiskOptions(renewedModel, null));
     const list = AtRiskRules.SelectAtRiskListMembers(rows, 3);
     expect(list.map((r) => r.RecordID)).toEqual(['g', 'f', 'e']);
     expect(list.every((r) => r.RiskPct >= AT_RISK_LIST_MIN_RISK_PCT)).toBe(true);
     const mean = (ids: string[]): number => ids.reduce((s, id) => s + truth[id], 0) / ids.length;
     expect(mean(list.map((r) => r.RecordID))).toBeLessThan(mean(Object.keys(truth)));
+  });
+
+  it('lists the same records whatever the read order when the limit falls inside a run of equal risks', () => {
+    const row = (id: string, riskPct: number): AtRiskRow => ({ RecordID: id, Label: null, Score: 1 - riskPct / 100, RiskPct: riskPct, Class: null, Band: 'high', Status: 'At risk', BadgeColor: 'red', Icon: 'fa-triangle-exclamation', Drivers: null });
+    const tied = ['0C1D-B', '0c1d-a', '9F2E-D', '0C1D-C', '5A5A-E'].map((id) => row(id, 61));
+    const rows = [row('ffff-top', 90), ...tied, row('aaaa-low', 45)];
+    const expected = ['ffff-top', '0c1d-a', '0C1D-B', '0C1D-C'];
+    // Every rotation and the reverse of the input give the same members, in the same order.
+    const orders = [...rows.map((_, k) => [...rows.slice(k), ...rows.slice(0, k)]), [...rows].reverse()];
+    for (const order of orders) expect(AtRiskRules.SelectAtRiskListMembers(order, 4).map((r) => r.RecordID)).toEqual(expected);
   });
 
   it('never pads the list with low-risk rows', () => {
@@ -315,6 +326,94 @@ describe('AtRiskRules.RiskOf / RiskBandFor / RiskBands (one risk rule for every 
 
   it('looks up a band\'s display entry', () => {
     expect(AtRiskRules.RiskBandDisplayFor('medium')).toEqual({ Key: 'medium', Label: 'Medium risk', BadgeColor: 'amber', Icon: 'fa-triangle-exclamation' });
+  });
+});
+
+describe('AtRiskRules from a binding row (M4.3)', () => {
+  /** A binary task whose adverse class is classOrder[adverseIndex]; the score is P(classOrder[1]). */
+  const binary = (adverseIndex: 0 | 1): string => JSON.stringify({ task: { kind: 'binary', classOrder: ['true', 'false'], adverseIndex } });
+  const binding = (fields: Partial<SemanticsCheckBinding>): SemanticsCheckBinding => ({
+    BindingID: 'B1', Surface: 'at-risk-list', SortsBy: 'adverse-probability-desc', DriverDirectionRelativeTo: 'adverse-class', Label: 'false risk', ...fields,
+  });
+  // Named for renewal, so the outcome-config rule would invert it.
+  const renewalNamed = (semantics: string | null) => ({ Lineage: null, TargetVariable: 'Renewed', ProblemType: 'classification', OutputSemantics: semantics });
+
+  it('a binary model whose adverse class is index 0 (lower score is adverse) is inverted', () => {
+    const o = AtRiskRules.BuildAtRiskOptions(renewalNamed(binary(0)), binding({}));
+    expect([o.InvertedRisk, o.SemanticsProblem]).toEqual([true, null]);
+  });
+
+  it('a binary model whose adverse class is index 1 is not inverted, whatever its name says', () => {
+    const o = AtRiskRules.BuildAtRiskOptions(renewalNamed(binary(1)), binding({}));
+    expect([o.InvertedRisk, o.SemanticsProblem, o.SortsBy, o.DriverDirectionRelativeTo]).toEqual([false, null, 'adverse-probability-desc', 'adverse-class']);
+  });
+
+  it('a null binding keeps the outcome-config rule (the name inverts it) and sets no sort', () => {
+    const o = AtRiskRules.BuildAtRiskOptions(renewalNamed(binary(1)), null);
+    expect([o.InvertedRisk, o.SemanticsProblem, o.SortsBy, o.DriverDirectionRelativeTo]).toEqual([true, null, undefined, undefined]);
+  });
+
+  it('unparseable semantics with a binding: nothing inverted, the problem named', () => {
+    const o = AtRiskRules.BuildAtRiskOptions(renewalNamed('{not json'), binding({}));
+    expect(o.InvertedRisk).toBe(false);
+    expect(o.SemanticsProblem).toMatch(/^OutputSemantics: /);
+    const absent = AtRiskRules.BuildAtRiskOptions(renewalNamed(null), binding({}));
+    expect([absent.InvertedRisk, absent.SemanticsProblem === null]).toEqual([false, false]);
+  });
+
+  it('a regression model with a binding is never inverted', () => {
+    const o = AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'Revenue', ProblemType: 'regression', OutputSemantics: JSON.stringify({ task: { kind: 'continuous' } }) }, binding({ SortsBy: 'none', DriverDirectionRelativeTo: 'raw-contribution' }));
+    expect([o.InvertedRisk, o.SemanticsProblem]).toEqual([false, null]);
+  });
+
+  const stored = [0.9, 0.2, 0.6, 0.4].map((score, i) => ({ RecordID: `r${i}`, ResultPayload: JSON.stringify({ score }) }));
+  const order = (sortsBy: SemanticsCheckBinding['SortsBy'], inverted: boolean): number[] =>
+    AtRiskRules.ParseAtRiskRows(stored, { InvertedRisk: inverted, SortsBy: sortsBy }).map((r) => r.Score);
+
+  it("ParseAtRiskRows 'adverse-probability-desc' orders by displayed risk, highest first", () => {
+    expect(order('adverse-probability-desc', false)).toEqual([0.9, 0.6, 0.4, 0.2]);
+    expect(order('adverse-probability-desc', true)).toEqual([0.2, 0.4, 0.6, 0.9]);
+  });
+
+  it("ParseAtRiskRows 'adverse-probability-desc' orders rows of equal displayed risk by their unrounded risk", () => {
+    const close = [0.448, 0.447, 0.449, 0.446].map((score, i) => ({ RecordID: `c${i}`, ResultPayload: JSON.stringify({ score }) }));
+    const rows = AtRiskRules.ParseAtRiskRows(close, { InvertedRisk: true, SortsBy: 'adverse-probability-desc' });
+    expect([rows.map((r) => r.Score), rows.map((r) => r.RiskPct)]).toEqual([[0.446, 0.447, 0.448, 0.449], [55, 55, 55, 55]]);
+  });
+
+  it("ParseAtRiskRows 'score-desc' and 'score-asc' order by the raw score, whatever the polarity", () => {
+    expect(order('score-desc', true)).toEqual([0.9, 0.6, 0.4, 0.2]);
+    expect(order('score-asc', false)).toEqual([0.2, 0.4, 0.6, 0.9]);
+  });
+
+  it("ParseAtRiskRows 'none' keeps the stored scoring order", () => {
+    expect(order('none', false)).toEqual([0.9, 0.2, 0.6, 0.4]);
+    expect(order('none', true)).toEqual([0.9, 0.2, 0.6, 0.4]);
+  });
+
+  it('SignDriver: adverse-class follows the displayed risk, raw-contribution the raw sign', () => {
+    expect([AtRiskRules.SignDriver(-0.4, 'adverse-class', false), AtRiskRules.SignDriver(-0.4, 'adverse-class', true)]).toEqual([false, true]);
+    expect([AtRiskRules.SignDriver(-0.4, 'raw-contribution', false), AtRiskRules.SignDriver(-0.4, 'raw-contribution', true)]).toEqual([false, false]);
+    expect([AtRiskRules.SignDriver(0.4, 'raw-contribution', true), AtRiskRules.SignDriver(0.4, null, true)]).toEqual([true, false]);
+  });
+
+  it('ParseAtRiskRows signs the drivers by the binding row', () => {
+    const details = [{ RecordID: 'a', ResultPayload: JSON.stringify({ score: 0.7, drivers: [{ feature: 'Tenure', value: -0.4 }] }) }];
+    const up = (direction: SemanticsCheckBinding['DriverDirectionRelativeTo'] | undefined): boolean | undefined =>
+      AtRiskRules.ParseAtRiskRows(details, { InvertedRisk: true, DriverDirectionRelativeTo: direction })[0].Drivers?.[0].Up;
+    expect([up('adverse-class'), up('raw-contribution'), up(undefined)]).toEqual([true, false, true]);
+  });
+
+  it('ListIsRanked: a none binding is not a ranking; another sort or no binding row is', () => {
+    expect([AtRiskRules.ListIsRanked({ SortsBy: 'none' }), AtRiskRules.ListIsRanked({ SortsBy: 'adverse-probability-desc' }), AtRiskRules.ListIsRanked({ SortsBy: 'score-desc' }), AtRiskRules.ListIsRanked(null)])
+      .toEqual([false, true, true, true]);
+    expect(AtRiskRules.NoRankingReason).toBe('This list is not ranked by risk: its At-Risk list binding sorts by none.');
+  });
+
+  it('OutputBindingRows maps a stored row and finds a surface', () => {
+    const rows: OutputBindingEntityRow[] = [{ ID: 'B-1', Surface: 'at-risk-list', SortsBy: 'adverse-probability-desc', DriverDirectionRelativeTo: 'adverse-class', Label: 'Lapse risk' }];
+    expect(OutputBindingRows.ForSurface(rows, 'at-risk-list')).toEqual({ BindingID: 'B-1', Surface: 'at-risk-list', SortsBy: 'adverse-probability-desc', DriverDirectionRelativeTo: 'adverse-class', Label: 'Lapse risk' });
+    expect(OutputBindingRows.ForSurface(rows, 'why-badge')).toBeNull();
   });
 });
 

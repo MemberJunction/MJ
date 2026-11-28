@@ -1,0 +1,77 @@
+[
+  {
+    "_comments": [
+      "Sessions are read through the diagnostics operations, not cached or searched"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Diagnostic Sessions"
+    },
+    "fields": {
+      "Name": "MJ: Diagnostic Sessions",
+      "AllowCaching": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:43.021Z",
+      "checksum": "f357ce7a30be1bc718196bb891e47ffdaeffc60cc8e38b17785833ff8d1bf63c"
+    }
+  },
+  {
+    "_comments": [
+      "Binary capture chunks: no change tracking and no caching, so a chunk's data is never copied"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Diagnostic Session Chunks"
+    },
+    "fields": {
+      "Name": "MJ: Diagnostic Session Chunks",
+      "TrackRecordChanges": false,
+      "AllowCaching": false,
+      "Icon": "fa fa-layer-group"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "_comments": [
+            "Data holds gzip-compressed bytes (varbinary), not JSON"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Diagnostic Session Chunks&Name=Data"
+          },
+          "fields": {
+            "ExtendedType": null
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:45:43.092Z",
+            "checksum": "090b66956d216c3ddff048db1461ce4b3d3ed3a47d598f3d55408fe7f5fb0fbf"
+          }
+        }
+      ]
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:43.033Z",
+      "checksum": "755949973dfb3771c28328a02a54e14534881ddd5d925891a988e2806e15498f"
+    }
+  },
+  {
+    "_comments": [
+      "Bundle rows can hold the archive bytes: no change tracking, caching or search"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Diagnostic Bundles"
+    },
+    "fields": {
+      "Name": "MJ: Diagnostic Bundles",
+      "TrackRecordChanges": false,
+      "AllowCaching": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false,
+      "Icon": "fa fa-box-open"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:43.045Z",
+      "checksum": "06e51724ecc16575669368754e62e1b4dc0adeb798078cfa53bac8ef606d005e"
+    }
+  }
+]

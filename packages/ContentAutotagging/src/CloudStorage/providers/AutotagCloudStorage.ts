@@ -1,5 +1,5 @@
 import path from 'path';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, FilterByUUIDs } from '@memberjunction/global';
 import { MJGlobal } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError } from '@memberjunction/core';
 import { MJContentItemEntity } from '@memberjunction/core-entities';
@@ -60,7 +60,10 @@ export class AutotagCloudStorage extends AutotagBase {
         this.engine = AutotagBaseEngine.Instance;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Cloud Storage');
 
-        const contentSources = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
+        const allSources = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
+        const contentSources = contentSourceIDs?.length
+            ? FilterByUUIDs(allSources, contentSourceIDs)
+            : allSources;
         const contentItemsToProcess = await this.SetContentItemsToProcess(contentSources);
 
         if (contentItemsToProcess.length > 0) {

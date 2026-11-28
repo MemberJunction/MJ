@@ -22,7 +22,8 @@ vi.mock('@memberjunction/templates-base-types', () => ({
     },
 }));
 
-vi.mock('@memberjunction/core', () => {
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
     // Lightweight BaseEngine stub that stores properties directly
     class MockBaseEngine {
         protected _loaded = false;
@@ -58,6 +59,7 @@ vi.mock('@memberjunction/core', () => {
         }
     }
     return {
+        ...actual,
         BaseEngine: MockBaseEngine,
         BaseEnginePropertyConfig: class {},
         IMetadataProvider: class {},
@@ -80,9 +82,11 @@ vi.mock('@memberjunction/core', () => {
     };
 });
 
-vi.mock('@memberjunction/core-entities', () => {
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
     const cls = () => class { ID = ''; Name = '' };
     return {
+        ...actual,
         ArtifactMetadataEngine: {
             Instance: { ArtifactTypes: [], Config: vi.fn().mockResolvedValue(undefined) },
         },
@@ -104,35 +108,44 @@ vi.mock('@memberjunction/core-entities', () => {
     };
 });
 
-vi.mock('@memberjunction/ai-core-plus', () => ({
-    MJAIPromptEntityExtended: class { ID = ''; Name = ''; CategoryID = '' },
-    MJAIPromptCategoryEntityExtended: class { ID = ''; Name = ''; Prompts: unknown[] = [] },
-    MJAIModelEntityExtended: class {
-        ID = ''; Name = ''; AIModelType = ''; AIModelTypeID = ''; Vendor = ''; PowerRank = 0;
-        IsActive = true; InheritTypeModalities = true; ModelVendors: unknown[] = [];
-    },
-    MJAIAgentEntityExtended: class {
-        ID = ''; Name = ''; Status = 'Active'; ParentID: string | null = null;
-        OwnerUserID = ''; Actions: unknown[] = []; Notes: unknown[] = [];
-    },
-}));
+vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai-core-plus')>();
+    return {
+        ...actual,
+        MJAIPromptEntityExtended: class { ID = ''; Name = ''; CategoryID = '' },
+        MJAIPromptCategoryEntityExtended: class { ID = ''; Name = ''; Prompts: unknown[] = [] },
+        MJAIModelEntityExtended: class {
+            ID = ''; Name = ''; AIModelType = ''; AIModelTypeID = ''; Vendor = ''; PowerRank = 0;
+            IsActive = true; InheritTypeModalities = true; ModelVendors: unknown[] = [];
+        },
+        MJAIAgentEntityExtended: class {
+            ID = ''; Name = ''; Status = 'Active'; ParentID: string | null = null; BaseAgentID: string | null = null;
+            OwnerUserID = ''; InstantiationMode = 'None'; Actions: Array<{ ID: string }> = []; Notes: Array<{ ID: string }> = [];
+        },
+    };
+});
 
-vi.mock('../AIAgentPermissionHelper', () => ({
-    AIAgentPermissionHelper: {
-        HasPermission: vi.fn().mockResolvedValue(true),
-        GetEffectivePermissions: vi.fn().mockResolvedValue({
-            canView: true, canRun: true, canEdit: true, canDelete: true, isOwner: true,
-        }),
-        GetAccessibleAgents: vi.fn().mockResolvedValue([]),
-        IsDirectlyDiscoverable: vi.fn(
-            (a: { ParentID: string | null; ExposeAsAction: boolean; InvocationMode: string }) =>
-                a.ParentID === null && a.ExposeAsAction && a.InvocationMode !== 'Sub-Agent'
-        ),
-        ClearCache: vi.fn(),
-        RefreshCache: vi.fn().mockResolvedValue(undefined),
-    },
-    EffectiveAgentPermissions: class {},
-}));
+vi.mock('../AIAgentPermissionHelper', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../AIAgentPermissionHelper')>();
+    return {
+        AIAgentPermissionHelper: {
+            ...actual.AIAgentPermissionHelper,
+            HasPermission: vi.fn().mockResolvedValue(true),
+            GetEffectivePermissions: vi.fn().mockResolvedValue({
+                canView: true, canRun: true, canEdit: true, canDelete: true, isOwner: true,
+            }),
+            GetAccessibleAgents: vi.fn().mockResolvedValue([]),
+            ComputeEffectivePermissionsSync: actual.AIAgentPermissionHelper.ComputeEffectivePermissionsSync.bind(actual.AIAgentPermissionHelper),
+            IsDirectlyDiscoverable: vi.fn(
+                (a: { ParentID: string | null; ExposeAsAction: boolean; InvocationMode: string; InstantiationMode?: string }) =>
+                    a.ParentID === null && a.ExposeAsAction && a.InvocationMode !== 'Sub-Agent' && a.InstantiationMode !== 'Required'
+            ),
+            ClearCache: vi.fn(),
+            RefreshCache: vi.fn().mockResolvedValue(undefined),
+        },
+        EffectiveAgentPermissions: class {},
+    };
+});
 
 import { AIEngineBase } from '../BaseAIEngine';
 import { TimePerMinutePriceUnitType, PerMillionTokensPriceUnitType, type BasePriceUnitType } from '../PriceUnitTypes';
@@ -1662,6 +1675,16 @@ describe('AIEngineBase', () => {
             expect(effective!.Persona.Name).toBe('Alloy');
             expect(effective!.PersonaVendor?.APIName).toBe('alloy');
             expect(effective!.AgentPersona).toBeUndefined();
+        });
+
+        it('returns null when agent has no AIAgentPersona records and allowModelFallback is false', () => {
+            set('_agentPersonas', []);
+
+            const effective = AIEngineBase.Instance.ResolveAgentPersona('a1', {
+                modelId: 'm1',
+                allowModelFallback: false,
+            });
+            expect(effective).toBeNull();
         });
     });
 

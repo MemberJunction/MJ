@@ -67,6 +67,13 @@ export function IsWhiteboardHexColor(value: string): boolean {
 }
 
 /**
+ * The user pen palette (tuned for MJ's dark board). Never includes violet: violet ink is the
+ * agent's. Lives here, not in the toolbar, so the Angular-free state engine can default an ink
+ * stroke whose persisted `Color` is not a hex color.
+ */
+export const WHITEBOARD_PEN_COLORS: readonly string[] = ['#cbd5e1', '#fbbf24', '#5cc0ed', '#4ade80', '#f87171'];
+
+/**
  * Font family choices for text labels / stickies. The keys are mapped to token-friendly
  * font stacks in the board CSS (`wb-font-serif`, `wb-font-mono`; sans is the default).
  */
@@ -2092,6 +2099,26 @@ export class WhiteboardState {
     const num = (value: unknown, fallback: number): number =>
       typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 
+    const computeCounters = (allPages: WhiteboardPageJSON[]): { maxItemIdSuffix: number; maxItemZ: number } => {
+      let maxItemIdSuffix = 0;
+      let maxItemZ = 0;
+      for (const page of allPages) {
+        for (const item of page.items) {
+          const m = /-(\d+)$/.exec(item.ID);
+          if (m) {
+            const parsedSuffix = parseInt(m[1], 10);
+            if (Number.isFinite(parsedSuffix) && parsedSuffix > maxItemIdSuffix) {
+              maxItemIdSuffix = parsedSuffix;
+            }
+          }
+          if (typeof item.Z === 'number' && Number.isFinite(item.Z) && item.Z > maxItemZ) {
+            maxItemZ = item.Z;
+          }
+        }
+      }
+      return { maxItemIdSuffix, maxItemZ };
+    };
+
     if (Array.isArray(raw['pages'])) {
       // CURRENT shape (version 2, paged)
       const pages: WhiteboardPageJSON[] = [];
@@ -2113,12 +2140,13 @@ export class WhiteboardState {
       if (pages.length === 0) {
         pages.push({ id: 'page-1', name: 'Page 1', items: [] });
       }
+      const { maxItemIdSuffix, maxItemZ } = computeCounters(pages);
       const active = raw['activePageId'];
       return {
         version: 2,
         seq: num(raw['seq'], 0),
-        idCounter: num(raw['idCounter'], 0),
-        zCounter: num(raw['zCounter'], 0),
+        idCounter: Math.max(num(raw['idCounter'], 0), maxItemIdSuffix),
+        zCounter: Math.max(num(raw['zCounter'], 0), maxItemZ),
         pageCounter: Math.max(num(raw['pageCounter'], pages.length), pages.length),
         activePageId: typeof active === 'string' && pages.some((p) => p.id === active) ? active : pages[0].id,
         pages
@@ -2126,14 +2154,20 @@ export class WhiteboardState {
     }
     if (Array.isArray(raw['items'])) {
       // LEGACY shape (version 1, flat) — migrate to a single page "Page 1"
+      const pages: WhiteboardPageJSON[] = [{
+        id: 'page-1',
+        name: 'Page 1',
+        items: WhiteboardState.normalizePersistedItems(raw['items'] as unknown[])
+      }];
+      const { maxItemIdSuffix, maxItemZ } = computeCounters(pages);
       return {
         version: 2,
         seq: num(raw['seq'], 0),
-        idCounter: num(raw['idCounter'], 0),
-        zCounter: num(raw['zCounter'], 0),
+        idCounter: Math.max(num(raw['idCounter'], 0), maxItemIdSuffix),
+        zCounter: Math.max(num(raw['zCounter'], 0), maxItemZ),
         pageCounter: 1,
         activePageId: 'page-1',
-        pages: [{ id: 'page-1', name: 'Page 1', items: WhiteboardState.normalizePersistedItems(raw['items'] as unknown[]) }]
+        pages
       };
     }
     return null;
@@ -2143,7 +2177,10 @@ export class WhiteboardState {
    * Coerce the closed-set item fields of persisted items so hostile values from a shared
    * board never enter state: `Author` becomes `'agent'` or `'user'`, and a `FontWeight` /
    * `FontFamily` outside its literal set is dropped (the item falls back to the CSS
-   * default). Non-object entries are dropped (restore would skip them anyway).
+   * default). A `Color` that is not a hex color ({@link IsWhiteboardHexColor}) is dropped,
+   * or for ink (where it is required) replaced with the first user pen color, because it is
+   * painted into style and SVG attributes where a `url(...)` would be fetched. Non-object
+   * entries are dropped (restore would skip them anyway).
    */
   private static normalizePersistedItems(entries: unknown[]): WhiteboardItem[] {
     const items: WhiteboardItem[] = [];
@@ -2158,6 +2195,14 @@ export class WhiteboardState {
       }
       if ('FontFamily' in item && !IsWhiteboardFontFamily(item['FontFamily'])) {
         delete item['FontFamily'];
+      }
+      const color = item['Color'];
+      if (item['Kind'] === 'ink') {
+        if (typeof color !== 'string' || !IsWhiteboardHexColor(color)) {
+          item['Color'] = WHITEBOARD_PEN_COLORS[0];
+        }
+      } else if ('Color' in item && (typeof color !== 'string' || !IsWhiteboardHexColor(color))) {
+        delete item['Color'];
       }
       items.push(item as unknown as WhiteboardItem);
     }
@@ -2202,7 +2247,11 @@ export class WhiteboardState {
 
   /** Mint the next stable item ID for a kind (`sticky-3`, `shape-7`, …). */
   protected nextId(kind: WhiteboardItemKind): string {
-    return `${kind}-${++this.idCounter}`;
+    let candidate: string;
+    do {
+      candidate = `${kind}-${++this.idCounter}`;
+    } while (this.pages.some((p) => p.Items.has(candidate)));
+    return candidate;
   }
 
   /**

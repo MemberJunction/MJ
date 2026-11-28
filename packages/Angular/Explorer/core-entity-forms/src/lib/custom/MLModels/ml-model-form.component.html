@@ -21,9 +21,10 @@
         [DefaultExpanded]="true">
         <div class="ml-model-form-content">
             <ps-model-detail
-                [model]="record"
-                [provider]="ProviderToUse"
-                [currentUser]="ProviderToUse.CurrentUser ?? null">
+                [Model]="record"
+                [Provider]="ProviderToUse"
+                [CurrentUser]="ProviderToUse.CurrentUser || null"
+                (OpenRecord)="OnOpenModelRecord($event)">
             </ps-model-detail>
         </div>
     </mj-collapsible-panel>
@@ -258,8 +259,8 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Model Scoring Bindings','MLModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: ML Model Scoring Bindings','MLModelID')"
+                [Params]="PipelineBindingsParams"
+                [NewRecordValues]="PipelineBindingNewValues"
                 [AllowLoad]="IsSectionExpanded('mJMLModelScoringBindings')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"

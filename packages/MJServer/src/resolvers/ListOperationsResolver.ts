@@ -1,11 +1,14 @@
 import { LogError, UserInfo } from '@memberjunction/core';
-import { ListOperations, ListSharing } from '@memberjunction/lists';
+import type { MJListDetailEntity } from '@memberjunction/core-entities';
+import { type CheckedCallerSQL, ListFromQuery, type ListFromQueryOutcome, type ListFromQueryRequest, ListOperations, ListSharing } from '@memberjunction/lists';
 import type {
   ApplyResult as CoreApplyResult,
   ListDelta as CoreListDelta,
   ListDeltaWarning as CoreListDeltaWarning,
+  ListRefreshPreview as CoreListRefreshPreview,
   ListShareSummary,
   ListSource as CoreListSource,
+  ListSourceChange as CoreListSourceChange,
   MaterializeOptions as CoreMaterializeOptions,
   SetOpKind,
   SharePermissionLevel,
@@ -16,7 +19,9 @@ import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, Query, Resolver 
 
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
-import { GetReadWriteProvider } from '../util.js';
+import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
+import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
+import { ActionEngineServer } from '@memberjunction/actions';
 
 // ---------------------------------------------------------------------------
 // GraphQL types — mirror the @memberjunction/lists shape one-to-one.
@@ -94,6 +99,30 @@ export class ListDeltaType {
   @Field(() => String) DeltaToken!: string;
 }
 
+@ObjectType('ListSourceChangeType', {
+  description: 'The source query or view of a list changed after the list was linked to it, or after its owner last approved it.',
+})
+export class ListSourceChangeType {
+  @Field(() => String, { description: 'view | query' }) SourceKind!: 'view' | 'query';
+  @Field(() => String) SourceID!: string;
+  @Field(() => String) SourceName!: string;
+  @Field(() => Date, { nullable: true, description: 'When the source was last saved, if known.' }) ChangedAt?: Date | null;
+  @Field(() => String) LinkedFingerprint!: string;
+  @Field(() => String) CurrentFingerprint!: string;
+}
+
+@ObjectType('ListRefreshPreviewType', {
+  description: 'What refreshing a list from its source would change. Apply its Delta with ApplyListRefresh.',
+})
+export class ListRefreshPreviewType {
+  @Field(() => Boolean) Success!: boolean;
+  @Field(() => String) ResultCode!: string;
+  @Field(() => String) Message!: string;
+  @Field(() => ListDeltaType, { nullable: true }) Delta?: ListDeltaType;
+  @Field(() => ListSourceChangeType, { nullable: true, description: 'Set when ResultCode is SOURCE_CHANGED.' })
+  SourceChange?: ListSourceChangeType;
+}
+
 @ObjectType('ApplyListResultType')
 export class ApplyListResultType {
   @Field(() => Boolean) Success!: boolean;
@@ -104,7 +133,47 @@ export class ApplyListResultType {
   @Field(() => Int, { nullable: true }) AddedCount?: number;
   @Field(() => Int, { nullable: true }) RemovedCount?: number;
   @Field(() => Int, { nullable: true }) FailedCount?: number;
+  @Field(() => Int, { nullable: true, description: 'Members changed in place, such as by SetListRecordStatus.' })
+  UpdatedCount?: number;
   @Field(() => [String], { nullable: true }) Errors?: string[];
+  @Field(() => ListSourceChangeType, { nullable: true, description: 'Set when ResultCode is SOURCE_CHANGED.' })
+  SourceChange?: ListSourceChangeType;
+}
+
+@InputType('CreateListFromRecordsInput')
+export class CreateListFromRecordsInput {
+  @Field(() => String) ListName!: string;
+  @Field(() => String, { nullable: true }) Description?: string;
+  @Field(() => String, { nullable: true, description: 'List Category to file the new list under.' }) CategoryId?: string;
+}
+
+@InputType('CreateListFromQueryInput')
+export class CreateListFromQueryInput {
+  @Field(() => String) ListName!: string;
+  @Field(() => String, { nullable: true }) Description?: string;
+  @Field(() => String, { nullable: true, description: 'List Category to file the new list under.' }) CategoryID?: string;
+  @Field(() => String, { nullable: true, description: 'A saved query to link the list to. Pass QueryID or SQL, not both.' })
+  QueryID?: string;
+  @Field(() => String, {
+    nullable: true,
+    description: 'SQL written in a conversation. It gets the ExecuteAdhocQuery checks, is saved as a Pending query in the caller\'s User Lists, and the list is linked to it.',
+  })
+  SQL?: string;
+  @Field(() => String, { nullable: true, description: 'Required with SQL: the entity whose records the query returns.' }) EntityName?: string;
+  @Field(() => String, { nullable: true, description: "The query column holding the entity's primary key." }) KeyField?: string;
+  @Field(() => String, { nullable: true, description: "For a saved query: its parameter values, as a JSON object." }) ParametersJSON?: string;
+  @Field(() => String, { description: 'Refresh mode: Additive | Sync.' }) RefreshMode!: 'Additive' | 'Sync';
+  @Field(() => Boolean, { description: 'Refresh the list on the Lists app schedule.' }) AutoRefresh!: boolean;
+}
+
+@ObjectType('CreateListFromQueryResult')
+export class CreateListFromQueryResultType extends ApplyListResultType {
+  @Field(() => String, { nullable: true, description: 'The query the list refreshes from; empty when it will not refresh.' })
+  SourceQueryID?: string;
+  @Field(() => String, { nullable: true }) SourceQueryName?: string;
+  @Field(() => Boolean, { description: 'True when the SQL was saved by this call, as a Pending query.' }) SavedNewQuery!: boolean;
+  @Field(() => Boolean, { description: 'True when the list is linked to a query and can refresh.' }) Refreshes!: boolean;
+  @Field(() => String, { nullable: true, description: 'Why the list will not refresh, when it will not.' }) StaticReason?: string;
 }
 
 @InputType('ComputeDeltaInput')
@@ -303,8 +372,44 @@ export function FromCoreApplyResult(r: CoreApplyResult): ApplyListResultType {
     AddedCount: r.Counts?.Added,
     RemovedCount: r.Counts?.Removed,
     FailedCount: r.Counts?.Failed,
+    UpdatedCount: r.Counts?.Updated,
     Errors: r.Errors,
+    SourceChange: r.SourceChange ? FromCoreSourceChange(r.SourceChange) : undefined,
   };
+}
+
+export function FromCoreRefreshPreview(p: CoreListRefreshPreview): ListRefreshPreviewType {
+  return {
+    Success: p.Success,
+    ResultCode: p.ResultCode,
+    Message: p.Message,
+    Delta: p.Delta ? FromCoreDelta(p.Delta) : undefined,
+    SourceChange: p.SourceChange ? FromCoreSourceChange(p.SourceChange) : undefined,
+  };
+}
+
+export function FromCoreSourceChange(c: CoreListSourceChange): ListSourceChangeType {
+  return {
+    SourceKind: c.SourceKind,
+    SourceID: c.SourceID,
+    SourceName: c.SourceName,
+    ChangedAt: c.ChangedAt,
+    LinkedFingerprint: c.LinkedFingerprint,
+    CurrentFingerprint: c.CurrentFingerprint,
+  };
+}
+
+/**
+ * Parses the optional JSON object of source query parameter values sent to ApproveListSource.
+ * Returns undefined for a missing or blank value; throws on anything but a JSON object.
+ */
+export function ParseSourceParameters(json: string | null | undefined): Record<string, unknown> | undefined {
+  if (!json?.trim()) return undefined;
+  const parsed: unknown = JSON.parse(json);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('ParametersJSON must be a JSON object of query parameter values');
+  }
+  return parsed as Record<string, unknown>;
 }
 
 /** @deprecated Use {@link FromCoreApplyResult}. */
@@ -408,6 +513,48 @@ export function rebuildDeltaFromInput(input: ApplyDeltaInput): CoreListDelta {
 // enforces the drop-guard / token / staleness contract.
 // ---------------------------------------------------------------------------
 
+/** The mutation's input as a `ListFromQuery` request, or why it is not valid. */
+export function ToListFromQueryRequest(input: CreateListFromQueryInput): ListFromQueryRequest | string {
+  if (!input.ListName?.trim()) return 'ListName is required.';
+  if (input.RefreshMode !== 'Additive' && input.RefreshMode !== 'Sync') return `RefreshMode must be 'Additive' or 'Sync', got '${input.RefreshMode}'.`;
+  let parameters: Record<string, unknown> | undefined;
+  if (input.ParametersJSON?.trim()) {
+    try {
+      const parsed: unknown = JSON.parse(input.ParametersJSON);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return 'ParametersJSON must be a JSON object.';
+      parameters = parsed as Record<string, unknown>;
+    } catch {
+      return 'ParametersJSON must be a JSON object.';
+    }
+  }
+  return {
+    ListName: input.ListName.trim(),
+    Description: input.Description?.trim() || undefined,
+    CategoryID: input.CategoryID || undefined,
+    Parameters: parameters,
+    EntityName: input.EntityName?.trim() || undefined,
+    KeyField: input.KeyField?.trim() || undefined,
+    RefreshMode: input.RefreshMode,
+    AutoRefresh: input.AutoRefresh,
+  };
+}
+
+function refusedListFromQuery(code: string, message: string): CreateListFromQueryResultType {
+  return { Success: false, ResultCode: code, Message: message, SavedNewQuery: false, Refreshes: false };
+}
+
+export function FromListFromQueryOutcome(outcome: ListFromQueryOutcome): CreateListFromQueryResultType {
+  if (outcome.Kind === 'Refused') return refusedListFromQuery(outcome.Code, outcome.Message);
+  return {
+    ...FromCoreApplyResult(outcome.Result),
+    SourceQueryID: outcome.SourceQueryID ?? undefined,
+    SourceQueryName: outcome.SourceQueryName ?? undefined,
+    SavedNewQuery: outcome.SavedNewQuery,
+    Refreshes: !!outcome.Result.CreatedListId && !outcome.StaticReason,
+    StaticReason: outcome.StaticReason ?? undefined,
+  };
+}
+
 @Resolver()
 export class ListOperationsResolver extends ResolverBase {
   @Query(() => ListDeltaType, {
@@ -483,10 +630,131 @@ export class ListOperationsResolver extends ResolverBase {
     }
   }
 
-  @Mutation(() => ApplyListResultType)
+  @Mutation(() => ApplyListResultType, {
+    description: 'Add records to a list. Records the list already holds are skipped.',
+  })
+  async AddRecordsToList(
+    @Arg('listId', () => String) listId: string,
+    @Arg('recordIds', () => [String]) recordIds: string[],
+    @Ctx() ctx: AppContext,
+    @Arg('status', () => String, { nullable: true, description: 'Status of the new members.' }) status?: string,
+    @Arg('sequenceFromOrder', () => Boolean, {
+      nullable: true,
+      description: 'When true, each new member gets its zero-based input position as Sequence.',
+    })
+    sequenceFromOrder?: boolean,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      const opts = { Status: (status ?? undefined) as MJListDetailEntity['Status'] | undefined, SequenceFromOrder: sequenceFromOrder === true };
+      return FromCoreApplyResult(await ops.AddRecordsToList(listId, recordIds, opts));
+    } catch (e) {
+      return this.unexpectedFailure(e, 'AddRecordsToList');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, { description: 'Remove records from a list.' })
+  async RemoveRecordsFromList(
+    @Arg('listId', () => String) listId: string,
+    @Arg('recordIds', () => [String]) recordIds: string[],
+    @Ctx() ctx: AppContext,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      return FromCoreApplyResult(await ops.RemoveRecordsFromList(listId, recordIds));
+    } catch (e) {
+      return this.unexpectedFailure(e, 'RemoveRecordsFromList');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, {
+    description: 'Copy a list and all its members into a new plain list owned by the caller. Default name: "<name> (Copy)".',
+  })
+  async DuplicateList(
+    @Arg('listId', () => String) listId: string,
+    @Arg('listName', () => String, { nullable: true }) listName: string | null | undefined,
+    @Ctx() ctx: AppContext,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      return FromCoreApplyResult(await ops.DuplicateList(listId, { ListName: listName ?? undefined }));
+    } catch (e) {
+      return this.unexpectedFailure(e, 'DuplicateList');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, {
+    description:
+      'Copy records from one list to another. With removeFromSource they are then removed from the source, ' +
+      'but only when every add succeeded.',
+  })
+  async CopyRecordsToList(
+    @Arg('sourceListId', () => String) sourceListId: string,
+    @Arg('targetListId', () => String) targetListId: string,
+    @Arg('recordIds', () => [String]) recordIds: string[],
+    @Arg('removeFromSource', () => Boolean) removeFromSource: boolean,
+    @Ctx() ctx: AppContext,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      const result = await ops.CopyRecordsToList(sourceListId, targetListId, recordIds, {
+        RemoveFromSource: removeFromSource,
+      });
+      return FromCoreApplyResult(result);
+    } catch (e) {
+      return this.unexpectedFailure(e, 'CopyRecordsToList');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, {
+    description: 'Set the Status of list members. The status must be a List Details Status value; UpdatedCount reports the rows changed.',
+  })
+  async SetListRecordStatus(
+    @Arg('listId', () => String) listId: string,
+    @Arg('recordIds', () => [String]) recordIds: string[],
+    @Arg('status', () => String) status: string,
+    @Ctx() ctx: AppContext,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      // ListOperations checks the value against the field's value list before it writes anything.
+      const result = await ops.SetRecordStatus(listId, recordIds, status as MJListDetailEntity['Status']);
+      return FromCoreApplyResult(result);
+    } catch (e) {
+      return this.unexpectedFailure(e, 'SetListRecordStatus');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, {
+    description: 'Create a plain list (no source, never refreshes) holding the given records of an entity.',
+  })
+  async CreateListFromRecords(
+    @Arg('entityName', () => String) entityName: string,
+    @Arg('recordIds', () => [String]) recordIds: string[],
+    @Arg('options', () => CreateListFromRecordsInput) options: CreateListFromRecordsInput,
+    @Ctx() ctx: AppContext,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      const result = await ops.CreateListFromRecords(entityName, recordIds, {
+        ListName: options.ListName,
+        Description: options.Description,
+        CategoryId: options.CategoryId,
+      });
+      return FromCoreApplyResult(result);
+    } catch (e) {
+      return this.unexpectedFailure(e, 'CreateListFromRecords');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, {
+    description:
+      "Refresh a list from its linked source. With no mode, the list's own RefreshMode applies. " +
+      'Returns SOURCE_CHANGED, applying nothing, when the source changed since it was approved.',
+  })
   async RefreshListFromSource(
     @Arg('listId', () => String) listId: string,
-    @Arg('mode', () => String) mode: 'Additive' | 'Sync',
+    @Arg('mode', () => String, { nullable: true }) mode: 'Additive' | 'Sync' | null | undefined,
     @Arg('confirmDrops', () => Boolean) confirmDrops: boolean,
     @Ctx() ctx: AppContext,
   ): Promise<ApplyListResultType> {
@@ -496,6 +764,97 @@ export class ListOperationsResolver extends ResolverBase {
       return FromCoreApplyResult(result);
     } catch (e) {
       return this.unexpectedFailure(e, 'RefreshListFromSource');
+    }
+  }
+
+  @Query(() => ListRefreshPreviewType, {
+    description:
+      'Preview refreshing a list from its linked source (view or query). Never mutates. With acceptCurrentSource ' +
+      "(owner only), previews a changed source's current definition, optionally with new query parameter values.",
+  })
+  async PreviewListRefresh(
+    @Arg('listId', () => String) listId: string,
+    @Arg('mode', () => String, { nullable: true }) mode: 'Additive' | 'Sync' | null | undefined,
+    @Arg('acceptCurrentSource', () => Boolean, { nullable: true }) acceptCurrentSource: boolean | null | undefined,
+    @Arg('parametersJSON', () => String, { nullable: true }) parametersJSON: string | null | undefined,
+    @Ctx() ctx: AppContext,
+  ): Promise<ListRefreshPreviewType> {
+    const ops = this.buildOps(ctx);
+    try {
+      const preview = await ops.PreviewRefreshFromSource(listId, {
+        Mode: mode,
+        AcceptCurrentSource: acceptCurrentSource ?? false,
+        Parameters: ParseSourceParameters(parametersJSON),
+      });
+      return FromCoreRefreshPreview(preview);
+    } catch (e) {
+      return this.unexpectedFailure(e, 'PreviewListRefresh');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, {
+    description:
+      'Apply a delta from PreviewListRefresh. Re-checks the source first, stamps the list and writes a refresh audit row.',
+  })
+  async ApplyListRefresh(
+    @Arg('input', () => ApplyDeltaInput) input: ApplyDeltaInput,
+    @Ctx() ctx: AppContext,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      const result = await ops.ApplyRefreshPreview(RebuildDeltaFromInput(input), {
+        ConfirmDrops: input.ConfirmDrops,
+        DeltaToken: input.DeltaToken,
+      });
+      return FromCoreApplyResult(result);
+    } catch (e) {
+      return this.unexpectedFailure(e, 'ApplyListRefresh');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, {
+    description:
+      "The list owner approves its source's current definition (and, for a query, optionally new parameter " +
+      'values), resumes a paused refresh routine, and refreshes the list right away.',
+  })
+  async ApproveListSource(
+    @Arg('listId', () => String) listId: string,
+    @Arg('confirmDrops', () => Boolean) confirmDrops: boolean,
+    @Arg('parametersJSON', () => String, { nullable: true }) parametersJSON: string | null | undefined,
+    @Ctx() ctx: AppContext,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      const result = await ops.ApproveListSource(listId, {
+        ConfirmDrops: confirmDrops,
+        Parameters: ParseSourceParameters(parametersJSON),
+      });
+      return FromCoreApplyResult(result);
+    } catch (e) {
+      return this.unexpectedFailure(e, 'ApproveListSource');
+    }
+  }
+
+  @Mutation(() => CreateListFromQueryResultType, {
+    description:
+      'Creates a list from a saved query, or from SQL written in a conversation, linked so it refreshes. SQL is checked like ExecuteAdhocQuery and saved as a Pending query in the caller\'s User Lists; when the caller cannot save queries, the list is made but will not refresh.',
+  })
+  async CreateListFromQuery(
+    @Arg('input', () => CreateListFromQueryInput) input: CreateListFromQueryInput,
+    @Ctx() ctx: AppContext,
+  ): Promise<CreateListFromQueryResultType> {
+    try {
+      const user = this.requireUser(ctx);
+      const request = ToListFromQueryRequest(input);
+      if (typeof request === 'string') return refusedListFromQuery('INVALID_PARAMETER', request);
+      if (!!input.QueryID === !!input.SQL) return refusedListFromQuery('MISSING_PARAMETER', 'Pass QueryID or SQL, not both.');
+      const service = new ListFromQuery(user, GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: false }));
+      if (input.QueryID) return FromListFromQueryOutcome(await service.FromSavedQueryAsync({ ID: input.QueryID }, request));
+      const sql = this.checkCallerSQL(ctx, user, input.SQL!);
+      if (typeof sql === 'string') return refusedListFromQuery('PERMISSION_DENIED', sql);
+      return FromListFromQueryOutcome(await service.FromSQLAsync(sql, request));
+    } catch (e) {
+      return { ...this.unexpectedFailure(e, 'CreateListFromQuery'), SavedNewQuery: false, Refreshes: false };
     }
   }
 
@@ -635,6 +994,32 @@ export class ListOperationsResolver extends ResolverBase {
     const user = this.requireUser(ctx);
     const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: false });
     return new ListOperations(user, provider);
+  }
+
+  /**
+   * SECURITY: the ExecuteAdhocQuery checks for SQL a caller wrote. Scope-limited sessions are
+   * refused, the SQL runs only on the read-only login, the authorizer must accept the rendered SQL
+   * (one read statement reading only entity views the caller may read in full), and the server's
+   * timeout applies. The authorizer is the one MJServer registers with the action engine at
+   * startup (`CreateAdhocSQLAuthorizer`), so this applies ExecuteAdhocQuery's exact check; with
+   * none registered, SQL is refused. Returns the refusal message, or the SQL ready to run.
+   */
+  private checkCallerSQL(ctx: AppContext, user: UserInfo, sql: string): CheckedCallerSQL | string {
+    if (IsScopeLimitedPrincipal(user)) return 'Creating a list from SQL is not permitted for scope-limited sessions.';
+    const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: false, purpose: 'adhoc' });
+    if (!provider) return 'No read-only data source is available to run the SQL.';
+    const authorizer = ActionEngineServer.Instance.AdhocSQLAuthorizer;
+    if (!authorizer) return 'Running SQL is not configured on this server: no ad-hoc SQL authorizer is registered.';
+    const refusal = authorizer.Authorize(sql, provider, user);
+    if (refusal) return `Not permitted to run this query: ${refusal}`;
+    const timeoutSeconds = authorizer.ClampTimeoutSeconds(undefined);
+    return {
+      SQL: sql,
+      Run: async (maxRows) => {
+        const result = await provider.RunQuery({ SQL: sql, MaxRows: maxRows, TimeoutSeconds: timeoutSeconds }, user);
+        return { Success: result.Success, Results: (result.Results ?? []) as Record<string, unknown>[], ErrorMessage: result.ErrorMessage };
+      },
+    };
   }
 
   private requireUser(ctx: AppContext): UserInfo {

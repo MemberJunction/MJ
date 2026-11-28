@@ -47,7 +47,7 @@ export type TaskGraphNodeType = 'AgentTask' | 'ActionTask' | 'HumanTask';
  * person builds one, and a run view, where one that already ran is shown. The second must be able
  * to depict every kind the dispatcher can execute, whether or not the palette offers it.
  */
-export type TaskGraphRenderType = TaskGraphNodeType | 'PromptTask' | 'ForEachTask' | 'WhileTask' | 'ExternalTask';
+export type TaskGraphRenderType = TaskGraphNodeType | 'PromptTask' | 'ForEachTask' | 'WhileTask' | 'ExternalTask' | 'WaitTask';
 
 /** A palette entry, pinned to one of the three authorable shapes. */
 export type TaskGraphNodeTypeConfig = FlowNodeTypeConfig & { Type: TaskGraphNodeType };
@@ -133,10 +133,11 @@ export const TASK_GRAPH_NODE_TYPES: readonly TaskGraphNodeTypeConfig[] = [
  */
 export const TASK_GRAPH_RENDER_TYPES: readonly TaskGraphRenderTypeConfig[] = [
     ...TASK_GRAPH_NODE_TYPES,
-    { Type: 'PromptTask',   Label: 'Prompt Step',   Icon: 'fa-comment-dots', Color: '#8B5CF6', Category: 'Steps', DefaultPorts: TASK_GRAPH_PORTS },
-    { Type: 'ForEachTask',  Label: 'For Each Step', Icon: 'fa-repeat',       Color: '#D97706', Category: 'Steps', DefaultPorts: TASK_GRAPH_PORTS },
-    { Type: 'WhileTask',    Label: 'While Step',    Icon: 'fa-rotate',       Color: '#D97706', Category: 'Steps', DefaultPorts: TASK_GRAPH_PORTS },
-    { Type: 'ExternalTask', Label: 'External Step', Icon: 'fa-arrow-up-right-from-square', Color: '#0891B2', Category: 'Steps', DefaultPorts: TASK_GRAPH_PORTS },
+    { Type: 'PromptTask',   Label: 'Prompt Step',   Icon: 'fa-comment-dots', Color: '#8B5CF6', Category: 'Steps', Draggable: false, DefaultPorts: TASK_GRAPH_PORTS },
+    { Type: 'ForEachTask',  Label: 'For Each Step', Icon: 'fa-repeat',       Color: '#D97706', Category: 'Steps', Draggable: false, DefaultPorts: TASK_GRAPH_PORTS },
+    { Type: 'WhileTask',    Label: 'While Step',    Icon: 'fa-rotate',       Color: '#D97706', Category: 'Steps', Draggable: false, DefaultPorts: TASK_GRAPH_PORTS },
+    { Type: 'ExternalTask', Label: 'External Step', Icon: 'fa-arrow-up-right-from-square', Color: '#0891B2', Category: 'Steps', Draggable: false, DefaultPorts: TASK_GRAPH_PORTS },
+    { Type: 'WaitTask',     Label: 'Wait Step',     Icon: 'fa-hourglass-half', Color: '#64748B', Category: 'Steps', Draggable: false, DefaultPorts: TASK_GRAPH_PORTS },
 ];
 
 /**
@@ -216,6 +217,7 @@ export function GetTaskNodeType(node: TaskGraphSpecNode): TaskGraphRenderType {
         case 'ForEach':  return 'ForEachTask';
         case 'While':    return 'WhileTask';
         case 'External': return 'ExternalTask';
+        case 'Wait':     return 'WaitTask';
         // An unassigned node — just added, nothing picked — reads as an agent step: the commonest
         // intent, and the validator is already saying in words that it needs an assignee.
         default:         return 'AgentTask';
@@ -310,14 +312,36 @@ function edgeId(fromTempId: string, toTempId: string): string {
  */
 export type TaskGraphDebugOverlay = {
     breakpoints?: readonly string[];
+    /** Task IDs backed by a persisted Remembered Breakpoint across runs. */
+    rememberedTaskIDs?: readonly string[];
     pausedAtTaskID?: string | null;
     /** Graph is claim-gated. With no paused-at step, the entry node is what is waiting. */
     paused?: boolean;
     edgeOverrides?: Readonly<Record<string, 'true' | 'false'>>;
     /** Show the condition expression on the connection label, not just the word "if". */
     showConditions?: boolean;
+    /** Preserve untaken/skipped paths as muted ghosted dashed connectors (default true). */
+    showUntakenPaths?: boolean;
+    /** Active layout orientation so input/output ports align cleanly (left/right for horizontal, top/bottom for vertical). */
+    layoutDirection?: 'horizontal' | 'vertical';
     /** Edge IDs (or from→to) currently flowing — painted animated + brand. */
     activeEdgeIDs?: readonly string[];
+    /** Live `NodeProgress` telemetry keyed by task ID. */
+    liveActivity?: ReadonlyMap<string, { Message: string; Percent?: number }>;
+    /** Task IDs highlighted in a What-If failure blast-radius preview (`ComputeTasksToBlock`). */
+    blastRadiusTaskIDs?: readonly string[];
+    /** Task IDs carrying external-data taint. */
+    taintedTaskIDs?: readonly string[];
+    /** Task IDs verified by a Person step (clears taint). */
+    verifiedTaskIDs?: readonly string[];
+    /** Saga rollback / compensation labels keyed by task ID. */
+    sagaCompensationLabels?: Readonly<Record<string, string>>;
+    /** AI Decision confidence telemetry keyed by task ID. */
+    decisionConfidence?: Readonly<Record<string, { Score: number; Threshold?: number; Label?: string }>>;
+    /** Inline X-Ray key/value summary items keyed by task ID. */
+    xrayItems?: Readonly<Record<string, Array<{ Key: string; Value: string; Changed?: boolean }>>>;
+    /** True when targeted per-step execution (`Step(taskID)`) is available on eligible Pending steps. */
+    canStepSingle?: boolean;
 };
 
 export function SpecToNodes(
@@ -328,6 +352,12 @@ export function SpecToNodes(
 ): FlowNode[] {
     const entryIds = new Set(GetEntryTempIds(spec));
     const breakpoints = new Set(debug?.breakpoints ?? []);
+    const remembered = new Set(debug?.rememberedTaskIDs ?? []);
+    const blastSet = new Set(debug?.blastRadiusTaskIDs ?? []);
+    const taintedSet = new Set(debug?.taintedTaskIDs ?? []);
+    const verifiedSet = new Set(debug?.verifiedTaskIDs ?? []);
+    const inputSide = debug?.layoutDirection === 'horizontal' ? 'left' as const : 'top' as const;
+    const outputSide = debug?.layoutDirection === 'horizontal' ? 'right' as const : 'bottom' as const;
 
     return (spec.tasks ?? []).map((task) => {
         const type = GetTaskNodeType(task);
@@ -335,6 +365,15 @@ export function SpecToNodes(
         const awaiting = isAwaitingUser(task.tempId, entryIds, runtime, debug);
         const nextToRun = isNextToRun(task, runtime, debug, entryIds);
         const running = runtime?.[task.tempId] === 'In Progress';
+        const activity = debug?.liveActivity?.get(task.tempId);
+        const bpKind = remembered.has(task.tempId)
+            ? 'remembered' as const
+            : (breakpoints.has(task.tempId) ? 'single' as const : null);
+        const taintState = verifiedSet.has(task.tempId)
+            ? 'verified' as const
+            : (taintedSet.has(task.tempId) ? 'tainted' as const : null);
+        const canStepSingle = debug?.canStepSingle === true && (awaiting || (debug?.paused === true && nextToRun));
+
         return {
             ID: task.tempId,
             Type: type,
@@ -348,10 +387,19 @@ export function SpecToNodes(
             StatusMessage: task.description,
             IsStartNode: entryIds.has(task.tempId),
             Badges: NodeDebugBadges(task.tempId, breakpoints, debug, runtime, entryIds),
+            Breakpoint: bpKind,
+            ProgressMessage: activity?.Message,
+            ProgressPercent: activity?.Percent,
+            XRayItems: debug?.xrayItems?.[task.tempId],
+            Confidence: debug?.decisionConfidence?.[task.tempId],
+            TaintState: taintState,
+            SagaCompensationLabel: debug?.sagaCompensationLabels?.[task.tempId],
+            BlastRadius: blastSet.has(task.tempId),
+            CanStepSingle: canStepSingle,
             Position: known ? { ...known } : { X: 0, Y: 0 },
             Ports: [
-                { ID: InputPortID(task.tempId), Direction: 'input', Side: 'top', Multiple: true },
-                { ID: OutputPortID(task.tempId), Direction: 'output', Side: 'bottom', Multiple: true },
+                { ID: InputPortID(task.tempId), Direction: 'input', Side: inputSide, Multiple: true },
+                { ID: OutputPortID(task.tempId), Direction: 'output', Side: outputSide, Multiple: true },
             ],
             Data: { TempId: task.tempId, AwaitingUser: awaiting, NextToRun: nextToRun },
         };
@@ -401,11 +449,30 @@ export function TaskSubtitle(task: TaskGraphSpecNode, type: TaskGraphRenderType 
         case 'ForEachTask':  return LoopBodyLabel(ConfigOf(task, 'ForEach')) ?? 'Repeats for each item';
         case 'WhileTask':    return LoopBodyLabel(ConfigOf(task, 'While')) ?? 'Repeats until its condition is false';
         case 'ExternalTask': return ConfigOf(task, 'External')?.domain || 'Completed by an outside system';
+        case 'WaitTask':     return WaitLabel(ConfigOf(task, 'Wait'));
         // Only a genuinely unassigned node reaches this now. It used to catch Prompt, ForEach,
         // While and External too — so a fully-configured loop displayed "No agent chosen yet",
         // which reads as a broken step rather than an unrecognised one.
         default:             return ConfigOf(task, 'Agent')?.agentName || 'No agent chosen yet';
     }
+}
+
+/** What a Wait step waits for, in words. */
+function WaitLabel(wait: { until?: string; durationSeconds?: number } | null | undefined): string {
+    if (typeof wait?.durationSeconds === 'number') return `Waits ${DurationLabel(wait.durationSeconds)}`;
+    if (wait?.until) return `Waits until ${wait.until}`;
+    return 'Waits for a moment in time';
+}
+
+function DurationLabel(seconds: number): string {
+    const units: [number, string][] = [[86400, 'day'], [3600, 'hour'], [60, 'minute']];
+    for (const [size, name] of units) {
+        if (seconds >= size && seconds % size === 0) {
+            const n = seconds / size;
+            return `${n} ${name}${n === 1 ? '' : 's'}`;
+        }
+    }
+    return `${seconds} second${seconds === 1 ? '' : 's'}`;
 }
 
 /** What a loop repeats, when it says. */
@@ -444,9 +511,11 @@ export function SpecToConnections(
             const override = dep.id ? debug?.edgeOverrides?.[dep.id] : undefined;
             const eitherSkipped = runtime
                 && (runtime[task.tempId] === 'Skipped' || runtime[dep.tempId] === 'Skipped');
-            // RUN MODE DRAWS ONLY THE PATH TAKEN — except an operator-forced edge, which must stay
-            // visible or the history lies about why a branch ran (or did not).
-            if (eitherSkipped && !override) continue;
+            if (eitherSkipped && !override) {
+                if (debug?.showUntakenPaths === false) continue;
+                connections.push(ProjectUntakenConnection(dep, task.tempId, debug?.showConditions === true));
+                continue;
+            }
 
             const destQueued = isNextToRun(task, runtime, debug, entryIds);
             const flowing = destQueued || isFlowingEdge(dep.tempId, task.tempId, runtime, debug);
@@ -461,6 +530,32 @@ export function SpecToConnections(
         }
     }
     return connections;
+}
+
+/** Untaken / skipped branch connector: kept visible as a muted ghosted dashed line so skipped steps are never orphaned. */
+export function ProjectUntakenConnection(
+    dep: TaskGraphDependency,
+    toTempId: string,
+    showConditions: boolean = false,
+): FlowConnection {
+    const cond = dep.condition?.trim();
+    const label = cond && showConditions ? `✕ ${TruncateCondition(cond, 24)}` : '✕ Skipped';
+    return {
+        ID: edgeId(dep.tempId, toTempId),
+        SourceNodeID: dep.tempId,
+        SourcePortID: OutputPortID(dep.tempId),
+        TargetNodeID: toTempId,
+        TargetPortID: InputPortID(toTempId),
+        Label: label,
+        LabelDetail: cond ? `Path not taken — ${cond}` : 'Path not taken (branch skipped)',
+        Condition: dep.condition ?? undefined,
+        Style: 'dashed',
+        Color: 'var(--mj-text-disabled)',
+        StrokeWidth: 1.5,
+        Animated: false,
+        Untaken: true,
+        Data: { FromTempId: dep.tempId, ToTempId: toTempId, EdgeID: dep.id, Untaken: true },
+    };
 }
 
 /** One canvas connection, including the override styling that must never look like a real verdict. */
@@ -502,6 +597,7 @@ export function ProjectConnection(
             : (forced ? 'var(--mj-status-warning)' : (traveled ? 'var(--mj-status-success)' : undefined)),
         StrokeWidth: flowing ? 4.5 : (traveled || forced ? 3 : undefined),
         Animated: flowing,
+        ForcedVerdict: forced ? override : null,
         Data: { FromTempId: dep.tempId, ToTempId: toTempId, EdgeID: dep.id },
     };
 }

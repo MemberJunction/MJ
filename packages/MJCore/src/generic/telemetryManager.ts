@@ -33,6 +33,7 @@
 
 import { BaseSingleton, GetGlobalObjectStore, WarningManager } from '@memberjunction/global';
 import { Metadata } from './metadata.js';
+import { GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from './logging.js';
 
 // ============================================================================
 // TYPES - Using union types per MJ style guide
@@ -308,12 +309,22 @@ export interface TelemetryNetworkParams {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
     /** Request URL or endpoint */
     url?: string;
+    /** GraphQL or RPC operation kind/type */
+    operationType?: string;
+    /** GraphQL or RPC operation name */
+    operationName?: string;
     /** Response status code */
     statusCode?: number;
+    /** Alias for status code / status */
+    status?: number | string;
     /** Request size in bytes */
     requestSize?: number;
     /** Response size in bytes */
     responseSize?: number;
+    /** W3C traceparent trace ID */
+    traceId?: string;
+    /** Number of retries performed (e.g. JWT_EXPIRED refresh) */
+    retryCount?: number;
 }
 
 /**
@@ -383,6 +394,11 @@ export interface TelemetrySettings {
          * one insight is appended per emitted warning and they were never released.
          */
         maxInsights?: number;
+        /**
+         * Cap on concurrently open in-flight events (`_activeEvents`) to prevent leaks
+         * when `StartEvent` is not matched by `EndEvent`. Defaults to 2000.
+         */
+        maxActiveEvents?: number;
         maxAgeMs?: number;
     };
     /** Duplicate detection settings */
@@ -405,6 +421,33 @@ export interface MemorySnapshot {
     heapTotal: number;
     timestamp: number;
 }
+
+/**
+ * Lifecycle phase an {@link TelemetryEventCallback} is notified for: `'start'` when an event is
+ * created (via {@link TelemetryManager.StartEvent}), `'end'` when it completes (via
+ * {@link TelemetryManager.EndEvent} or {@link TelemetryManager.RecordEvent}).
+ */
+export type TelemetryEventLifecycleType = 'start' | 'end';
+
+/**
+ * Configuration options for {@link TelemetryManager.OnEvent}.
+ */
+export interface TelemetryOnEventOptions {
+    /**
+     * Which lifecycle phases to receive. Defaults to:
+     * - `['start', 'end']` when `listener.length >= 2`
+     * - `['end']` when `listener.length < 2`
+     */
+    Phases?: readonly TelemetryEventLifecycleType[];
+}
+
+/**
+ * Callback signature for {@link TelemetryManager.OnEvent}. Invoked synchronously; must never throw
+ * in a way that should disrupt the producer — `OnEvent` already catches and swallows exceptions,
+ * but implementations should still avoid relying on that as a substitute for their own error
+ * handling.
+ */
+export type TelemetryEventCallback = (event: TelemetryEvent, type: TelemetryEventLifecycleType) => void;
 
 /**
  * A single telemetry event
@@ -436,6 +479,10 @@ export interface TelemetryEvent<T extends TelemetryParamsUnion = TelemetryParams
 
     // Hierarchy
     parentEventId?: string;
+    /** Correlation trace ID (from W3C traceparent or DiagnosticContext) */
+    traceId?: string;
+    /** Active diagnostic session ID if captured inside a diagnostic session */
+    sessionId?: string;
 }
 
 /**
@@ -862,6 +909,7 @@ const DEFAULT_SETTINGS: TelemetrySettings = {
         enabled: true,
         maxEvents: 10000,
         maxInsights: 1000,
+        maxActiveEvents: 2000,
         maxAgeMs: 30 * 60 * 1000  // 30 minutes
     },
     duplicateDetection: {
@@ -873,6 +921,46 @@ const DEFAULT_SETTINGS: TelemetrySettings = {
         dedupeWindowMs: 30000  // 30 seconds
     }
 };
+
+const SENSITIVE_TELEMETRY_KEYS = /(?:token|password|secret|authorization|apikey|api_key|connectionstring|connection_string)/i;
+
+const SAFE_NUMERIC_TOKEN_KEYS: ReadonlySet<string> = new Set([
+    'inputTokens',
+    'outputTokens',
+    'promptTokens',
+    'completionTokens',
+    'totalTokens',
+    'cachedInputTokens',
+]);
+
+type TelemetryParamValue = string | number | boolean | object | null | undefined;
+
+/**
+ * Sanitizes telemetry params by redacting values whose key looks sensitive (credentials, secrets,
+ * auth tokens, connection strings). Finite numeric values for allowlisted token keys
+ * ({@link SAFE_NUMERIC_TOKEN_KEYS}) are preserved untouched so `mj.ai.tokens` OTel counters and
+ * cost-tracking analyzers keep working. All other matching sensitive keys (including non-allowlisted
+ * numeric secrets, NaN/Infinity token values, objects, and strings) are redacted to `'[REDACTED]'`.
+ */
+function sanitizeTelemetryParams<T extends TelemetryParamsUnion>(params: T): T {
+    if (!params || typeof params !== 'object') {
+        return params;
+    }
+    let cloned: Record<string, TelemetryParamValue> | null = null;
+    const record = params as Record<string, TelemetryParamValue>;
+    for (const [key, val] of Object.entries(record)) {
+        if (SENSITIVE_TELEMETRY_KEYS.test(key) && val !== undefined && val !== null) {
+            const isSafeNumericToken = SAFE_NUMERIC_TOKEN_KEYS.has(key) && typeof val === 'number' && Number.isFinite(val);
+            if (!isSafeNumericToken) {
+                if (!cloned) {
+                    cloned = { ...record };
+                }
+                cloned[key] = '[REDACTED]';
+            }
+        }
+    }
+    return (cloned ?? params) as T;
+}
 
 /**
  * How often the O(n) map sweeps in `trimIfNeeded` are allowed to run. `trimIfNeeded` is called on
@@ -904,6 +992,66 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
     private _analyzers: TelemetryAnalyzer[] = [];
     private _insights: TelemetryInsight[] = [];
     private _insightDedupeWindow: Map<string, number> = new Map();
+    private _listeners: Map<TelemetryEventCallback, ReadonlySet<TelemetryEventLifecycleType>> = new Map();
+
+    /**
+     * Subscribe to telemetry events as they start and complete (zero-polling flight recorder /
+     * OpenTelemetry span-bridge hook).
+     *
+     * - **2-arg listeners** `(event, type) => ...`: receive balanced `'start'` and `'end'` notifications
+     *   from both `StartEvent`+`EndEvent` and `RecordEvent` (which fires both in immediate succession).
+     * - **1-arg listeners** `(event) => ...`: fire **only once** on `'end'` (when `elapsedMs` is populated)
+     *   for both `StartEvent`+`EndEvent` and `RecordEvent`.
+     * - Listeners can explicitly select phases by passing `{ Phases: ['start', 'end'] }` (or `['start']`, `['end']`).
+     *
+     * Exceptions thrown by `listener` are caught and swallowed — an observer must never disrupt
+     * the producer it is observing. Notification is skipped entirely while diagnostic capture is
+     * suppressed ({@link IsDiagnosticCaptureSuppressed}).
+     *
+     * @returns An idempotent unsubscribe function.
+     */
+    public OnEvent(listener: TelemetryEventCallback, options?: TelemetryOnEventOptions): () => void {
+        const phases: ReadonlySet<TelemetryEventLifecycleType> = options?.Phases
+            ? new Set(options.Phases)
+            : listener.length >= 2
+                ? new Set(['start', 'end'])
+                : new Set(['end']);
+
+        this._listeners.set(listener, phases);
+        let unsubscribed = false;
+        return () => {
+            if (unsubscribed) return;
+            unsubscribed = true;
+            this._listeners.delete(listener);
+        };
+    }
+
+    /**
+     * Epoch time origin (milliseconds) for converting relative `performance.now()` timestamps
+     * (`startTime` / `endTime`) to UTC wall-clock milliseconds.
+     */
+    public get TimeOrigin(): number {
+        if (typeof performance !== 'undefined' && typeof performance.timeOrigin === 'number') {
+            return performance.timeOrigin;
+        }
+        return 0;
+    }
+
+    private notifyEventListeners(event: TelemetryEvent, type: TelemetryEventLifecycleType): void {
+        if (this._listeners.size === 0 || IsDiagnosticCaptureSuppressed()) {
+            return;
+        }
+        for (const [listener, phases] of this._listeners) {
+            if (!phases.has(type)) {
+                continue;
+            }
+            try {
+                listener(event, type);
+            } catch {
+                // Listeners must never disrupt telemetry recording
+            }
+        }
+    }
 
     /**
      * When the two map sweeps in {@link trimIfNeeded} last ran. They are O(n) over their maps,
@@ -1077,20 +1225,40 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
 
         const level = this.GetLevelForCategory(category);
         const levelValue = this.GetLevelValue(level);
+        const diagCtx = GetDiagnosticContext();
+        const sanitizedParams = sanitizeTelemetryParams(params);
+        const paramTraceId = (sanitizedParams as { traceId?: string })?.traceId;
 
         const event: TelemetryEvent = {
             id: this.generateId(),
             category,
             operation,
-            fingerprint: this.generateFingerprint(category, params),
+            fingerprint: this.generateFingerprint(category, sanitizedParams),
             startTime: this.getTimestamp(),
-            userId,
-            params: levelValue >= TelemetryLevelValue['standard'] ? params : ({} as TelemetryParamsUnion),
+            userId: userId ?? diagCtx?.userId,
+            traceId: paramTraceId ?? diagCtx?.traceId,
+            sessionId: diagCtx?.sessionId,
+            params: levelValue >= TelemetryLevelValue['standard'] ? sanitizedParams : ({} as TelemetryParamsUnion),
             stackTrace: levelValue >= TelemetryLevelValue['verbose'] ? this.captureStackTrace() : undefined,
             memoryBefore: levelValue >= TelemetryLevelValue['debug'] ? this.captureMemory() : undefined
         };
 
+        const maxActive = this._settings.autoTrim.maxActiveEvents ?? 2000;
+        if (this._settings.autoTrim.enabled && maxActive > 0 && this._activeEvents.size >= maxActive) {
+            const oldestKey = this._activeEvents.keys().next().value;
+            if (oldestKey !== undefined) {
+                const evicted = this._activeEvents.get(oldestKey);
+                this._activeEvents.delete(oldestKey);
+                if (evicted) {
+                    evicted.endTime = this.getTimestamp();
+                    evicted.elapsedMs = evicted.endTime - evicted.startTime;
+                    this.notifyEventListeners(evicted, 'end');
+                }
+            }
+        }
+
         this._activeEvents.set(event.id, event);
+        this.notifyEventListeners(event, 'start');
         return event.id;
     }
 
@@ -1110,7 +1278,11 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
 
         // Merge additional params if provided
         if (additionalParams) {
-            event.params = { ...event.params, ...additionalParams } as TelemetryParamsUnion;
+            event.params = sanitizeTelemetryParams({ ...event.params, ...additionalParams } as TelemetryParamsUnion);
+            const mergedTraceId = (event.params as { traceId?: string })?.traceId;
+            if (mergedTraceId && !event.traceId) {
+                event.traceId = mergedTraceId;
+            }
         }
 
         event.endTime = this.getTimestamp();
@@ -1125,6 +1297,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         this.updatePattern(event);
         this.runAnalyzers(event);
         this.trimIfNeeded();
+        this.notifyEventListeners(event, 'end');
 
         return event;
     }
@@ -1232,17 +1405,22 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         const level = this.GetLevelForCategory(category);
         const levelValue = this.GetLevelValue(level);
         const now = this.getTimestamp();
+        const diagCtx = GetDiagnosticContext();
+        const sanitizedParams = sanitizeTelemetryParams(params);
+        const paramTraceId = (sanitizedParams as { traceId?: string })?.traceId;
 
         const event: TelemetryEvent = {
             id: this.generateId(),
             category,
             operation,
-            fingerprint: this.generateFingerprint(category, params),
+            fingerprint: this.generateFingerprint(category, sanitizedParams),
             startTime: now - elapsedMs,
             endTime: now,
             elapsedMs,
-            userId,
-            params: levelValue >= TelemetryLevelValue['standard'] ? params : ({} as TelemetryParamsUnion),
+            userId: userId ?? diagCtx?.userId,
+            traceId: paramTraceId ?? diagCtx?.traceId,
+            sessionId: diagCtx?.sessionId,
+            params: levelValue >= TelemetryLevelValue['standard'] ? sanitizedParams : ({} as TelemetryParamsUnion),
             stackTrace: levelValue >= TelemetryLevelValue['verbose'] ? this.captureStackTrace() : undefined
         };
 
@@ -1250,6 +1428,11 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         this.updatePattern(event);
         this.runAnalyzers(event);
         this.trimIfNeeded();
+        // RecordEvent has no real "start" moment (the event is already complete), but both
+        // lifecycle phases fire in immediate succession so OTel-style span bridges that track
+        // open spans by event id see a balanced start/end pair rather than an orphaned 'end'.
+        this.notifyEventListeners(event, 'start');
+        this.notifyEventListeners(event, 'end');
     }
 
     // ========== PATTERN DETECTION ==========
@@ -1883,8 +2066,8 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         const { maxEvents, maxAgeMs } = this._settings.autoTrim;
         const now = this.getTimestamp();
 
-        // Trim by age
-        if (maxAgeMs) {
+        // Trim by age (fast-path O(1) check on head when oldest event is still within maxAgeMs)
+        if (maxAgeMs && this._events.length > 0 && now - this._events[0].startTime >= maxAgeMs) {
             this._events = this._events.filter(e => now - e.startTime < maxAgeMs);
         }
 

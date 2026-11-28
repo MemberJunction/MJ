@@ -10,7 +10,7 @@ The widget exposes three layers of extension:
 
 | Surface | What it lets you do |
 |---|---|
-| **8 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates — or ADD to the default header with `headerActions` (renders inside the default header's action strip, after the stock buttons; suppressed when a full `header` replacement is projected), or above the composer with `composerExtra`. Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
+| **10 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, `citedSources`, `citedSourcePill`, or `demonstrationSurface` regions with your own templates — or ADD to the default header with `headerActions` (renders inside the default header's action strip, after the stock buttons; suppressed when a full `header` replacement is projected), or above the composer with `composerExtra`. Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
 | **Before/After cancelable events** | `(beforeAgentTurn)`, `(beforeToolInvoked)`, `(beforeResponseFormSubmitted)` let you observe AND veto (`event.Cancel = true`) before the action runs. `(beforeAgentTurn)` fires once per agent turn, before any reply row exists, and can also send the turn to another agent (`event.RedirectAgentId`). Plus informational `(sessionStarted)` / `(sessionChannelStateChanged)` / `(sessionEnded)` for realtime lifecycle. |
 | **`--mj-chat-*` design tokens** | Override bubble colors, composer chrome, character accents, and voice-state hues via standard CSS custom-property overrides. Defaults adapt to dark mode through semantic `--mj-*` tokens. |
 
@@ -41,20 +41,20 @@ graph TD
     C --> C4[ConversationListComponent]
     C --> C5[ConversationChatAreaComponent]
 
-    D --> D1[CollectionTreeComponent]
-    D --> D2[CollectionViewComponent]
-    D --> D3[LibraryFullViewComponent]
-    D --> D4[ArtifactCreateModalComponent]
+    D --> D1[LibraryWorkspaceComponent — Hub / Navigator / Studio]
+    D --> D2[LibraryRemoteDrivePaneComponent — Stateless Cloud Drives]
+    D --> D3[CollectionTreeComponent & CollectionViewComponent]
+    D --> D4[LibraryCreateDialogComponent & LibraryCreationService]
 
     E --> E1[AgentProcessPanelComponent]
     E --> E2[ActiveAgentIndicatorComponent]
-    E --> E3[TasksFullViewComponent]
+    E --> E3[TasksFullViewComponent — Agent Activity]
     E --> E4[GlobalTasksPanelComponent]
 
     F --> F1[ShareModalComponent]
     F --> F2[MembersModalComponent]
     F --> F3[ExportModalComponent]
-    F --> F4[SearchPanelComponent]
+    F --> F4[WhiteboardArtifactViewerComponent — OLE Canvas]
 
     style A fill:#2d6a9f,stroke:#1a4971,color:#fff
     style B fill:#7c5295,stroke:#563a6b,color:#fff
@@ -132,6 +132,8 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 | `showAgentRunDetails` | The per-message agent run-details section — the expander header AND its grid (run ID, step/token counts, **$ cost**) — developer/observability data most end-user surfaces hide. The gear button that opens the panel is itself hidden when nothing would be left in it (no run details, no associated tasks, and no delete/pin/rating overflow), so an end-user surface gets no dead control rather than one that opens an empty popup |
 | `showReactions` | The per-message reaction buttons (like / comment) |
 | `showMessageRating` | The per-message thumbs rating control |
+| `ShowCitedSources` | The bottom Cited Sources footer bar (`<mj-cited-sources-bar>`) beneath AI messages containing citations |
+| `EnableInlineCitations` | Transforming inline `[[EntityName|RecordID|DisplayName]]` and `@{type:"record",...}` tokens into clickable inline citation chips inside message text |
 | `allowPinning` | Message pinning (per-message pin button, header pin chip, pinned-messages panel) |
 | `allowMessageEdit` | The per-message edit button (owner's own messages) |
 | `allowMessageDelete` | The per-message delete button (owner's own messages) |
@@ -145,6 +147,7 @@ Unlike the gates above, these change *how* the surface behaves and default to to
 | Input | Default | Effect when set |
 |---|---|---|
 | `readReplyFromTop` | `false` | A finished turn — the reader's message plus the reply — is scrolled to the top of the pane if it is taller than the pane, so the run ends at the start of the answer instead of its end. A turn that fits stays where it is; a reader who scrolled up during the run is never moved. (Independent of this switch, an in-place message update — progress, status, streamed text — only follows the tail for a reader who is already at the bottom.) |
+| `OpenLinksInNewTab` | `true` | Inline markdown links in messages (external and relative/same-origin URLs, whether bare `https://...` autolinks or `[text](url)` links) open in a new browser tab (`target="_blank"` with `rel="noopener noreferrer"`). In-page fragment links (`#heading`), `mailto:` / `tel:` / `sms:` links, and raw HTML links with an explicit `target` keep their behaviour. Set `false` to open links in the current tab. |
 
 
 ```html
@@ -257,6 +260,56 @@ These complement `agentCharacterConfig`, which drives only the `agentPresence` s
 
 **Scope — what the override deliberately does NOT cover:** the run-details expander header and its record link (they describe the *real* agent's diagnostics), the role tooltip (the agent record's `Description`), and realtime session cards. Hosts needing those surfaces hidden from end users gate them with `showAgentRunDetails` / their own chrome rather than relabeling internal data.
 
+#### Citations & Cited Sources
+
+AI messages support inline record citations (`[[EntityName|RecordID|DisplayName]]`, 2-part `[[EntityName|RecordID]]`, composite keys `[[Entity|Key1=Val1;Key2=Val2|Label]]`, and `@{type:"record",...}` mentions) plus a collapsible `<mj-cited-sources-bar>` footer. Parsing is memoized in `ConversationEngine` (`WeakMap` + per-conversation detail cache, zero `RunView` calls), and entity icons resolve synchronously from in-memory metadata.
+
+Downstream applications can customize every layer without forking:
+
+| Input / Slot | Default | Purpose |
+|---|---|---|
+| `[ShowCitedSources]` | `true` | Toggle the bottom Cited Sources footer bar beneath AI messages |
+| `[EnableInlineCitations]` | `true` | Toggle rendering inline `[[Entity|ID|Label]]` tokens as clickable inline chips |
+| `[CitationTransform]` | `undefined` | `(citations: readonly MessageCitation[], message: MJConversationDetailEntity) => readonly MessageCitation[]` — filter, reorder, relabel, or append custom external URL, artifact, or domain-record citations per message |
+| `mjChatSlot="citedSources"` | `<mj-cited-sources-bar>` | Replace the entire footer bar. Context (`IMJChatCitedSourcesContext`): `$implicit` / `citations`, `message`, `openCitation(citation)` |
+| `mjChatSlot="citedSourcePill"` | Default pill button | Replace individual source pills while keeping the bar's header, wrapping layout, and `"+K more"` / `"Show less"` overflow toggle. Context (`IMJChatCitedSourcePillContext`): `$implicit` / `citation`, `icon`, `title`, `open(event?)` |
+
+```html
+<mj-conversation-chat-area
+  [conversationId]="conversationId"
+  [ShowCitedSources]="true"
+  [EnableInlineCitations]="true"
+  [CitationTransform]="enrichCitations">
+
+  <!-- Option A: customize individual source pills while keeping overflow collapse -->
+  <ng-template mjChatSlot="citedSourcePill" let-citation let-icon="icon" let-open="open">
+    <button type="button" class="my-source-pill" (click)="open($event)">
+      <i [class]="icon"></i>
+      <span>{{ citation.DisplayName }}</span>
+    </button>
+  </ng-template>
+
+  <!-- Option B: replace the entire Cited Sources bar -->
+  <!--
+  <ng-template mjChatSlot="citedSources" let-citations let-message="message" let-openCitation="openCitation">
+    <my-custom-sources [Citations]="citations" [Message]="message" (Open)="openCitation($event)" />
+  </ng-template>
+  -->
+</mj-conversation-chat-area>
+```
+
+**Citation CSS Custom Properties** (all default to semantic `--mj-*` design tokens and adapt automatically to light/dark themes):
+
+| CSS Variable | Default Semantic Token | Applies To |
+|---|---|---|
+| `--mj-cited-sources-bg` | `var(--mj-bg-surface-sunken)` | Cited Sources footer container background |
+| `--mj-cited-sources-border` | `var(--mj-border-subtle, var(--mj-border-default))` | Cited Sources footer container border |
+| `--mj-cited-sources-radius` | `var(--mj-radius-md, 8px)` | Cited Sources footer container border-radius |
+| `--mj-cited-source-pill-bg` | `var(--mj-bg-surface-card, var(--mj-bg-surface))` | Individual source pill background |
+| `--mj-cited-source-pill-border` | `var(--mj-border-default)` | Individual source pill border |
+| `--mj-citation-chip-bg` | `var(--mj-brand-primary)` | Inline citation chip background inside message body |
+| `--mj-citation-chip-color` | `var(--mj-text-inverse)` | Inline citation chip text/icon color |
+
 ### Chat Overlay
 
 A floating chat panel (bottom-right corner) that wraps the chat area for persistent agent access across the application. Collapses to a bubble icon, expands to a full chat panel.
@@ -308,22 +361,37 @@ The overlay is generic — it raises events for navigation and tool execution. T
 </mj-mention-editor>
 ```
 
-### Collections and Library
+### Collections, Unified Library Workspace & Stateless Connected Drives
+
+`<mj-library-workspace>` powers MemberJunction's top-level **`Library`** application (`LibraryResource`, pinned beside `Chat` in the global header bar) and the **`Library`** nav tab inside `Chat` (`ChatCollectionsResource`, with `MOVED_NAV_ITEMS` redirecting legacy `Chat -> Collections` links):
 
 ```html
-<!-- Collection tree for organizing artifacts -->
+<mj-library-workspace
+  [CurrentUser]="currentUser"
+  [InitialMode]="'hub'"
+  [ExternalRouteParams]="routeParams"
+  (StateChanged)="onLibraryStateChanged($event)"
+  (HostNavigationRequested)="onLibraryNavigate($event)">
+</mj-library-workspace>
+```
+
+- **3 Progressive Workspace Modes**:
+  1. **`hub`** *(default landing)*: *Create New* quick-launch cards (`Blank Document`, `Blank Spreadsheet`, `Blank Presentation`, `New Collection`, `Upload File` via `LibraryCreationService`), **Multi-Artifact Synthesis** (`Artifact.SynthesizeFromSources`), *Continue Working* recents, *Collections* overview cards, and *Connected Cloud Drives* tiles.
+  2. **`navigator`** *(Power Navigator)*: Split-pane hierarchy with nested `MJ: Collections` (supporting hierarchical `ParentID` ACL inheritance & `'Defer'`) + Connected Cloud Drives on the left, faceted `MJFilterPanelComponent` search & list/grid toggle in the center, and slide-over preview inspector on the right. User preferences (`Library.SurfaceMode`, `Library.ListStyle`, `Library.StarredArtifactIDs`) persist server-side via `UserInfoEngine.Instance`.
+  3. **`studio`** *(Full-Canvas Studio)*: Distraction-free collaborative editor hosting `<mj-artifact-viewer-panel>` with breadcrumb navigation, **Save to Collection**, **Export to Connected Drive** (`<mj-library-export-drive-dialog>`), **Linked Drive Push/Pull/ETag Sync** (`ConnectedDriveSyncRequested`), **Share** (`<mj-artifact-share-modal>` with internal ACL & Guest Share links), and **Compare Versions**.
+- **Stateless Connected Cloud Drives (`<mj-library-remote-drive-pane>`) — Zero `MJ: Files` Invariant**:
+  - Dynamically browses, searches (`GraphQLFileStorageClient.SearchFiles`), previews, uploads (`CreatePreAuthUploadUrl`), creates folders, moves, copies, renames, and deletes files across external `MJStorage` accounts (Google Drive, SharePoint/OneDrive, Dropbox, Box, S3, Azure Blob) **without creating `MJ: Files` database rows**.
+  - Supports one-click **Import to MJ Library** (converting remote `.md`, `.docx`, `.xlsx`, and `.csv` files into governed, versioned `MJ: Artifacts` records), **Export to Drive** (`.docx`/`.md`, `.xlsx`/`.csv`, `.pptx`), and bidirectional **Push/Pull ETag-checked Sync** for linked artifacts.
+
+```html
+<!-- Standalone collection tree or legacy library subviews -->
 <mj-collection-tree
   [projectId]="currentProjectId"
   (collectionSelected)="onCollectionSelected($event)">
 </mj-collection-tree>
-
-<!-- Full library view -->
-<mj-library-full-view
-  [projectId]="currentProjectId">
-</mj-library-full-view>
 ```
 
-### Project and Task Management
+### Project and Agent Activity Management
 
 ```html
 <!-- Project selector -->
@@ -332,7 +400,7 @@ The overlay is generic — it raises events for navigation and tool execution. T
   (projectChanged)="onProjectChanged($event)">
 </mj-project-selector>
 
-<!-- Tasks view -->
+<!-- Agent Activity view (scoped in Chat to conversation/agent-originated runs) -->
 <mj-tasks-full-view
   [projectId]="currentProjectId">
 </mj-tasks-full-view>
@@ -398,6 +466,12 @@ This package never navigates (no Router): developer links emit a `RealtimeNaviga
 </mj-export-modal>
 ```
 
+#### Conversation folders
+
+A folder (`MJ: Projects`) is Private (only its owner sees it, the default), Shared (with chosen users or roles, through `MJ: Resource Permissions`) or Public (`OwnerUserID` null, everyone in the environment). A conversation in a Shared or Public folder appears in the lists of the people the folder is shared with only when its owner turns on folder inheritance (off by default), at the folder's level (View for a Public folder). Each folder is shared on its own; a subfolder does not inherit its parent's grants. Only a conversation's owner can move it or change whether it inherits, and only a folder's owner can change its owner or parent; the server enforces both on save, except for the server itself and the system user (so system-user agent runs are exempt). The server also refuses moving a folder into itself or one of its subfolders.
+
+Folder sharing controls which conversations are listed, not who can read them. Core ships no UI-role row-level security on `MJ: Conversations` or `MJ: Conversation Details`, so a host that needs hard read isolation must add that RLS itself.
+
 ## Component Reference
 
 ### Messaging Components
@@ -429,8 +503,13 @@ This package never navigates (no Router): developer links emit a `RealtimeNaviga
 
 ### Collection and Library Components
 
-| Component | Selector | Description |
+| Component / Service | Selector | Description |
 |-----------|----------|-------------|
+| `LibraryWorkspaceComponent` | `mj-library-workspace` | Unified 3-mode Library workspace (`Hub`, `Power Navigator`, and `Full-Canvas Studio`) for Docs, Sheets, Slides, Collections, and Connected Cloud Drives |
+| `LibraryRemoteDrivePaneComponent` | `mj-library-remote-drive-pane` | Stateless live cloud drive browser, cross-drive search, upload, file ops, and governed import/export via `GraphQLFileStorageClient` (zero `MJ: Files` rows) |
+| `LibraryCreateDialogComponent` | `mj-library-create-dialog` | Modal launcher for creating blank Docs/Sheets/Slides, new Collections, or uploading files |
+| `LibraryExportDriveDialogComponent` | `mj-library-export-drive-dialog` | Modal picker for exporting MJ Docs, Sheets, and Slides directly to a Connected Cloud Drive folder |
+| `LibraryCreationService` | *(Injectable)* | Creates governed starter `Markdown Document`, `Excel Spreadsheet`, and `Presentation` artifacts and imports `.md`/`.docx`/`.xlsx`/`.csv` files |
 | `CollectionTreeComponent` | `mj-collection-tree` | Hierarchical collection browser |
 | `CollectionViewComponent` | `mj-collection-view` | Collection detail view |
 | `CollectionArtifactCardComponent` | `mj-collection-artifact-card` | Artifact card within collections |
@@ -439,13 +518,13 @@ This package never navigates (no Router): developer links emit a `RealtimeNaviga
 | `ArtifactCreateModalComponent` | `mj-artifact-create-modal` | Create new artifact |
 | `CollectionsFullViewComponent` | `mj-collections-full-view` | All collections browser |
 
-### Project and Task Components
+### Project and Agent Activity Components
 
 | Component | Selector | Description |
 |-----------|----------|-------------|
 | `ProjectSelectorComponent` | `mj-project-selector` | Project selection dropdown |
 | `ProjectFormModalComponent` | `mj-project-form-modal` | Create/edit project |
-| `TasksFullViewComponent` | `mj-tasks-full-view` | Full tasks management view (standalone) |
+| `TasksFullViewComponent` | `mj-tasks-full-view` | Agent Activity & multi-step workflow command center (standalone; scoped in `ChatTasksResource` to conversation/agent-originated tasks so human `bizapps-tasks` deliverables remain separate) |
 | `TasksDropdownComponent` | `mj-tasks-dropdown` | Task quick-access dropdown |
 | `TaskWidgetComponent` | `mj-task-widget` | Compact task widget |
 | `GlobalTasksPanelComponent` | `mj-global-tasks-panel` | Global tasks panel |
@@ -470,15 +549,18 @@ This package never navigates (no Router): developer links emit a `RealtimeNaviga
 | `RealtimeChannelStripComponent` | `mj-realtime-channel-strip` | Chip-per-channel strip |
 | `RealtimeComposerComponent` | `mj-realtime-composer` | The bottom dock: phone-call strip (levels 0–1: mute / captions / Details peek / End) ⇄ fused minis + typed composer (level 2+) |
 | `RealtimeSurfaceTabsComponent` | `mj-realtime-surface-tabs` | Tabbed surface panel: channel tabs first, glowing unfocused artifact tabs, Activity pinned last (backed by the framework-free, unit-tested `RealtimeSurfaceTabsModel`) |
-| `WhiteboardArtifactViewerComponent` | `mj-whiteboard-artifact-viewer` | Saved-board artifact viewer (registered as `WhiteboardArtifactViewerPlugin`); renders via `@memberjunction/ng-whiteboard`'s snapshot component |
+| `RealtimeArtifactWorkspaceSurfaceComponent` | `mj-realtime-artifact-workspace-surface` | Side-by-side multi-tab collaborative viewer/editor for Docs, Slides, Sheets, and Whiteboards powered by `ArtifactWorkspaceChannel` (`navigate_to_anchor`, `set_view_mode`, `EmitSelectionDelta`) |
+| `RealtimeInteractiveComponentSurfaceComponent` | `mj-realtime-interactive-component-surface` | Multi-tab live React/Angular `Component` host powered by `InteractiveComponentChannel` |
+| `WhiteboardArtifactViewerComponent` | `mj-whiteboard-artifact-viewer` | Saved-board & inline MS OLE artifact viewer (`WhiteboardArtifactViewerPlugin`, `SupportsInlineEdit = true`); renders `<mj-whiteboard-snapshot>` in read-only mode and interactive `<mj-realtime-whiteboard-host>` in inline edit mode |
 
-> The live whiteboard surface itself (`mj-realtime-whiteboard-host`, board, toolbar, zoom, "What the agent sees" popover) ships in [`@memberjunction/ng-whiteboard`](../whiteboard/README.md); the `RealtimeWhiteboardChannel` plugin here creates it dynamically in a channel tab.
+> The live whiteboard surface itself (`mj-realtime-whiteboard-host`, board, toolbar, zoom, "What the agent sees" popover) ships in [`@memberjunction/ng-whiteboard`](../whiteboard/README.md); the `RealtimeWhiteboardChannel` plugin here creates it dynamically in a channel tab. For full channel documentation, see [`src/lib/components/realtime/README.md`](./src/lib/components/realtime/README.md).
 
 ### Utility Components
 
 | Component | Selector | Description |
 |-----------|----------|-------------|
-| `ShareModalComponent` | `mj-share-modal` | Resource sharing modal |
+| `ShareModalComponent` | `mj-share-modal` | Generic conversation/collection sharing modal |
+| `ArtifactShareModalComponent` | `mj-artifact-share-modal` | Artifact ACL sharing modal + **Guest Share Link** creation/revocation (Magic Link `/guest/artifact`, `artifact:share` scope, Frozen-only invariant) |
 | `MembersModalComponent` | `mj-members-modal` | Members management |
 | `ExportModalComponent` | `mj-export-modal` | Data export modal |
 | `SearchPanelComponent` | `mj-search-panel` | Search across conversations |
@@ -588,16 +670,31 @@ RxJS `BehaviorSubject` instances for all state, with derived observables using `
 | `@memberjunction/ng-whiteboard` | The generic collaborative whiteboard (consumed by the realtime Whiteboard channel + artifact viewer) |
 | `@memberjunction/ai-realtime-client` | Browser-side realtime drivers (OpenAI / Gemini / ElevenLabs / AssemblyAI) used by `RealtimeSessionService` |
 
-### Kendo UI Packages
+### UI Packages
 
-Uses `@progress/kendo-angular-dialog`, `@progress/kendo-angular-buttons`, `@progress/kendo-angular-inputs`, `@progress/kendo-angular-layout`, `@progress/kendo-angular-indicators`, `@progress/kendo-angular-dropdowns`, `@progress/kendo-angular-notification`, `@progress/kendo-angular-upload`, `@progress/kendo-angular-dateinputs`.
+Uses `@memberjunction/ng-ui-components` for dialogs, buttons, inputs, layout, indicators, dropdowns, notifications, upload and date inputs.
 
 ### Peer Dependencies
 
+- `@angular/animations` ^21.x
+- `@angular/cdk` ^21.x
 - `@angular/common` ^21.x
 - `@angular/core` ^21.x
 - `@angular/forms` ^21.x
-- `@angular/router` ^21.x
+- `@angular/platform-browser` ^21.x
+
+## Personal Agent Instances ("My Agents")
+
+Provides a Grok-Bot-style left-rail experience and interactive studio for creating, tailoring, and chatting with personal derived AI Agent instances (`BaseAgentID != null`).
+
+| Component | Selector | Key Inputs & Outputs |
+| --- | --- | --- |
+| **`MyAgentsSectionComponent`** | `mj-my-agents-section` | `@Input() CurrentUser`, `@Input() ActiveAgentId`, `@Input() Provider`; `@Output() StartChatWithAgent` (reuses latest pinned thread or opens new), `@Output() StartNewChatWithAgent` (explicit `+` fresh thread), `@Output() StartOnboardingWithTemplate`. Styled with `--mj-chat-list-*` tokens to harmonize natively inside the dark-navy Conversations rail, sorting primary and `Required`-template instances first. |
+| **`AgentInstanceEditorModalComponent`** | `mj-agent-instance-editor-modal` | `@Input() Visible` (`[(Visible)]`), `@Input() Mode` (`'create' \| 'edit'`), `@Input() EditingAgent`, `@Input() InitialBaseAgentId`, `@Input() CurrentUser`; `@Output() Saved`, `@Output() Archived`, `@Output() ChatToOnboard`. Supports both **"Chat to Onboard"** and direct editing of icon/avatar (`LogoURL`), voice persona, `StyleOverride` (`Tone` + `SpeakingStyle`), `AdditionalInstructions`, autonomy mode, and `IsPrimaryInstance`. |
+| **`ConversationSidebarComponent`** | `mj-conversation-sidebar` | `@Input() ShowMyAgents` (default `true`); embeds `<mj-my-agents-section>` above the conversation list. |
+| **`ConversationAgentPickerComponent` & `MessageItemComponent`** | `mj-conversation-agent-picker`, `mj-message-item` | Excludes `InstantiationMode === 'Required'` templates, groups `My Agents` above catalog agents, renders `LogoURL` → Persona `PreviewImageURL` → `IconClass`, and live-refreshes when onboarding re-pins `Conversation.DefaultAgentID`. |
+
+Full architecture & diagrams: [Agent Permissions & Inheritance Guide](../../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
 
 ## Build
 

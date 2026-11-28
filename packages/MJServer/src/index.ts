@@ -4,22 +4,25 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo } from '@memberjunction/core';
-import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
-import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed, LimitsConfigResolver } from '@memberjunction/core';
+import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
+import { MJGlobal, MJEventType, IndexByUUID, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
+import { ResolveOriginSessionId } from './requestSessionContext.js';
+import { ImportResolverModules } from './resolverModuleImport.js';
 import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
-import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, selectFieldsToMap } from './integration/EntityMapLifecycle.js';
+import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, SelectFieldsToMap } from './integration/EntityMapLifecycle.js';
 import { RSUPostRestartProgressSession } from './integration/RSUPostRestartProgress.js';
 import type { RSUPostRestartProgress } from './integration/RSUPostRestartProgress.js';
+import { ResolvePostRestartFields, type IntrospectedSchema } from './integration/PostRestartIntrospect.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
 import express, { Application } from 'express';
 import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
-import { createServer } from 'node:http';
+import { createServer, type Server as HttpServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -32,18 +35,29 @@ import { PubSub } from 'graphql-subscriptions';
 import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
+import { ArtifactCollaborationServer, RedisTicketReplayStore, RedisYjsRoomRelay } from './collaboration/index.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions, userEmailMap } from './config.js';
 import { DescribeUserEmailMap } from './auth/loginEmailResolution.js';
 import { TranslateBracketsToPG } from './postgresqlCompat.js';
-import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig } from './postgresqlPoolSettings.js';
+import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig, WarnIfPostgreSQLConnectionBudgetExceeded, ResolvePostgreSQLReadOnlyEndpoints } from './postgresqlPoolSettings.js';
 import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateReadOnlyProvider, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
-import { requireSystemUserDirective, publicDirective } from './directives/index.js';
+import { requireSystemUserDirective, publicDirective, ApplyBuiltInDirectivesTransformer } from './directives/index.js';
+import { ApplyImpersonationRefusalGuards, ApplyScopeLimitedPrincipalGuards } from './auth/scopeLimitedAccess.js';
 import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
+import { MJServerStartupState } from './startupState.js';
+import {
+  BeginServerWakeStartupGuard,
+  CompleteServerWakeStartupGuard,
+  GetServerWakeStartupGuardStatus,
+  ResetServerWakeStartupGuard,
+} from './wakeStartupLifecycle.js';
+import { AssertEntityMetadataLoaded, ENTITY_METADATA_CHECK_PHASE } from './metadataReadiness.js';
+import { CreateStartupGate, ListenOnPort, RejectUpgradeWhileStarting } from './startupGate.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
@@ -62,14 +76,14 @@ import { DataSourceInfo, raiseEvent } from './types.js';
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { IntegrationSyncWorkerService } from './services/IntegrationSyncWorkerService.js';
-import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
+import { InMemoryLocalStorageProvider, LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
 import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { CreateAdhocSQLAuthorizer } from './resolvers/AdhocQueryResolver.js';
-import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WirePushStatusFanOut, WireSharedCacheEvents } from './sharedCache.js';
+import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, PublishEntityInvalidationToPeers, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WireEntityInvalidationFanOut, WirePushStatusFanOut, WireSharedCacheEvents, WrapSharedCacheWithL1 } from './sharedCache.js';
 import { PubSubManager } from './generic/PubSubManager.js';
-import { ReconcileOrphanedConversationDetails } from './generic/OrphanedConversationDetailReconciler.js';
+import { StartOrphanedConversationDetailReconciler } from './generic/OrphanedConversationDetailReconciler.js';
 import {
   HANDOFF_OFFER_FANOUT_CHANNEL,
   HANDOFF_OFFER_TOPIC,
@@ -83,30 +97,57 @@ import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
-import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
+import { ClientToolRequestManager, AgentRunWatchdog, InstallDefaultResumeContinuationDispatcher, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
+import {
+  ConfigureLongRunningAIFetch,
+  IsLongRunningAIFetchConfigured,
+  PrimeNodeBuiltinUndiciDispatcher,
+} from '@memberjunction/ai';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
+import { ApplyHandoffOfferExpirySettings } from './agentSessions/HandoffOfferExpiry.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
+import { RegisterAudienceActionHostBindings } from './services/HostGrantedWorkflowSubmitter.js';
+import { InitializeConversationDetailWritePermissionProviders } from './services/ConversationDetailWritePermissionWiring.js';
+import { RegisterSemanticGraphExpansionService } from './services/RegisterSemanticGraphExpansion.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
+import { ConfigureCommsV2WorkQueue } from './services/CommsWorkQueueHandlers.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
-import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
+import { CronExpressionHelper, SchedulingEngine } from '@memberjunction/scheduling-engine';
+import { EventLoopStallMonitor } from './eventLoopStallMonitor.js';
 import {
   MJCompanyIntegrationEntity,
   MJIntegrationEntity,
   MJCompanyIntegrationEntityMapEntity,
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
+  SetTypedQueryDriftMode,
 } from '@memberjunction/core-entities';
-import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath, GetCorsOwningServerExtensionRoots } from '@memberjunction/server-extensions-core';
+import {
+  ServerExtensionLoader,
+  ServerExtensionConfig,
+  SERVER_EXTENSION_CORE_SERVICE_KEYS,
+  type IServerExtensionHostRuntimeService,
+  mergeServerExtensionConfigs,
+  prepareServerExtensionConfigs,
+  describeServerExtensionMount,
+  InstallMediaUpgradeDispatcher,
+  IsGraphQLWsPath,
+  GetCorsOwningServerExtensionRoots,
+} from '@memberjunction/server-extensions-core';
+import { CreateIsolatedProvider } from './isolatedProvider.js';
+import { ResolveConfiguredPrincipal, ResolveServerPrincipal, ValidateProvisioningPrincipals } from './auth/principals.js';
+import type { ProvisioningPrincipalSetting } from './auth/principals.js';
 import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from './globalCors.js';
 import { CoreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { ApiRoute, ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
 import { MountHealthcheckRoute, MountPublicCoreRoutes, MountExtensionHealthRoute, MountAuthCatalogRoute, MountAuthenticatedCoreRoutes } from './coreRoutes.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 import { CreateMetadataRefreshSignalHandler, METADATA_REFRESH_SIGNAL } from './metadataRefreshSignal.js';
-import { CacheInvalidationBroadcastManager } from './broadcast/index.js';
+import { CacheInvalidationBroadcastManager, RedisStreamBroadcastProvider } from './broadcast/index.js';
+import { AttachRedisClusterPubSub } from './generic/RedisClusterPubSubEngine.js';
 import { ResolveServerRole, ShouldRunBackgroundWorkers } from './serverRoleConfigUnits.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
@@ -170,13 +211,15 @@ export {
 } from './auth/index.js';
 export * from './auth/APIKeyScopeAuth.js';
 export * from './auth/actingContextResolver.js';
+export * from './auth/impersonationGuard.js';
+export * from './userImpersonationConfigUnits.js';
 // The context-user ladder (#4209). Public because `auth/exampleNewUserSubClass.ts` — the template
 // integrators are told to copy into their OWN package — resolves through it, and `package.json`
 // publishes only "."; without this the example compiles here and cannot be reused anywhere else.
 // `ReportedMisconfigurationCount` / `MAX_REPORTED_MISCONFIGURATIONS` are deliberately NOT here:
 // they exist so the LRU's bound is assertable, the tests import them from the module directly, and
 // a published export is a maintenance commitment no caller asked for.
-export { ResolveConfiguredPrincipal, resolvePrincipalFrom } from './auth/principals.js';
+export { ResolveConfiguredPrincipal, resolvePrincipalFrom, ResolveServerPrincipal } from './auth/principals.js';
 export type { ResolvablePrincipal, PrincipalResolution, PrincipalResolutionReason } from './auth/principals.js';
 export { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 
@@ -232,8 +275,11 @@ export * from './resolvers/QueryResolver.js';
 export * from './services/TaskGraphProviderFactory.js';
 export * from './services/TaskGraphAgentRunner.js';
 export * from './services/StartTaskGraphDispatcher.js';
+export * from './services/HostGrantedWorkflowSubmitter.js';
+export * from './services/ConversationDetailWritePermissionWiring.js';
 export * from './services/TaskGraphPromptRunner.js';
 export * from './services/TaskGraphContinuationDeliverer.js';
+export * from './services/isolation/index.js';
 export * from './resolvers/TaskGraphFrameResolver.js';
 export * from './resolvers/TestQuerySQLResolver.js';
 export * from './resolvers/SqlLoggingConfigResolver.js';
@@ -249,14 +295,35 @@ export * from './resolvers/MCPResolver.js';
 export * from './resolvers/ActionResolver.js';
 export * from './resolvers/CacheStatsResolver.js';
 export * from './resolvers/EntityCommunicationsResolver.js';
+export * from './operations/CommsAdminOperations.js';
 export * from './resolvers/FeedbackResolver.js';
 export * from './resolvers/EntityResolver.js';
 export * from './resolvers/ISAEntityResolver.js';
 export * from './resolvers/ArtifactFileResolver.js';
+export * from './resolvers/DocumentCollaborationResolver.js';
+export * from './resolvers/PublicGuestShareResolver.js';
+export { SynthesizeArtifactFromSourcesServerOperation, LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
+export { ArtifactComplianceAuditServerOperation, LoadArtifactComplianceAuditOperation, WriteArtifactComplianceAudit } from './operations/ArtifactComplianceAuditHelper.js';
+export { ArtifactEvaluateAiFormulaServerOperation, LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
+export {
+    CreateGuestShareLinkServerOperation,
+    RevokeGuestShareLinkServerOperation,
+    LoadArtifactGuestShareOperations,
+    ResolveGuestArtifactSnapshotForSession,
+    FindUnfrozenLiveContentReason,
+    SanitizeGuestShareConfiguration,
+    IsGuestShareSupportedArtifactType,
+    SAFE_GUEST_SHARE_DRIVER_CLASSES,
+    type PublicArtifactGuestShareResolution,
+    type PublicGuestShareErrorCode,
+} from './operations/ArtifactGuestShareServerOperations.js';
+export * from './collaboration/index.js';
 export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './rest/MediaAccessKeys.js';
 export * from './rest/MediaStreamHandler.js';
+export * from './rest/UploadTokenManager.js';
+export * from './routeRateLimitConfigUnits.js';
 export * from './rest/RealtimeRecordingHandler.js';
 export * from './resolvers/InfoResolver.js';
 export * from './resolvers/PotentialDuplicateRecordResolver.js';
@@ -264,6 +331,7 @@ export * from './resolvers/DuplicateEntryCheckResolver.js';
 export * from './resolvers/RunTestResolver.js';
 export * from './resolvers/SearchEntitiesResolver.js';
 export * from './resolvers/UserFavoriteResolver.js';
+export * from './resolvers/UserImpersonationResolver.js';
 export * from './resolvers/UserResolver.js';
 export * from './resolvers/UserViewResolver.js';
 export * from './resolvers/VersionHistoryResolver.js';
@@ -284,13 +352,46 @@ export * from './multiTenancy/index.js';
 export * from './middleware/index.js';
 
 import { RegisterDataHook } from '@memberjunction/core';
+import { SetRestrictedFieldClassifierDecisionMode } from '@memberjunction/core-entities-server';
+import { SetTagMatchDecisionMode } from '@memberjunction/tag-engine';
+import { RegisterArtifactPostRunViewProtectedEntities } from './generic/RegisterArtifactProtectedEntities.js';
+import {
+  CreateImpersonationHttpGuardMiddleware,
+  EnsureImpersonationDataHooksRegistered,
+  RegisterImpersonationWebSocket,
+  RunGraphQLOperationWithImpersonationSession,
+  RunWithImpersonationSession,
+  ValidateImpersonationWebSocketSubscribe,
+} from './auth/impersonationGuard.js';
+import { RegisterServerArtifactFileBytesLoader } from './resolvers/ArtifactFileResolver.js';
+export { RegisterArtifactPostRunViewProtectedEntities };
+
+RegisterArtifactPostRunViewProtectedEntities();
+EnsureImpersonationDataHooksRegistered();
+RegisterServerArtifactFileBytesLoader();
+import { LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
+import { LoadArtifactComplianceAuditOperation } from './operations/ArtifactComplianceAuditHelper.js';
+import { LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
+import { LoadArtifactGuestShareOperations } from './operations/ArtifactGuestShareServerOperations.js';
+import { LoadCommsAdminOperations } from './operations/CommsAdminOperations.js';
+LoadSynthesizeArtifactFromSourcesOperation();
+LoadArtifactComplianceAuditOperation();
+LoadArtifactEvaluateAiFormulaOperation();
+LoadArtifactGuestShareOperations();
+LoadCommsAdminOperations();
 import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
-import type { GraphQLSchema } from 'graphql';
-import { BaseServerMiddleware } from './middleware/BaseServerMiddleware.js';
-import { SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
+import { execute, subscribe, type GraphQLSchema } from 'graphql';
+import { BaseServerMiddleware, ServerMiddlewareContext } from './middleware/BaseServerMiddleware.js';
+import { HumanTaskProviderDefaults, SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
+import { NotificationEngine } from '@memberjunction/notifications';
 
 export type MJServerOptions = {
+  /**
+   * Runs at the end of the bootstrap, before any request reaches the app. The port is already bound
+   * by then (Serve binds it first), but until this returns every request is answered by the startup
+   * gate (503, or the health endpoints), never by the app.
+   */
   onBeforeServe?: () => void | Promise<void>;
   restApiOptions?: Partial<RESTApiOptions>; // Options for REST API configuration
   /**
@@ -342,8 +443,21 @@ function resolveServerVersion(): string | undefined {
   }
 }
 
-/** How often to re-check for conversation details left behind by finished runs. */
-const ORPHAN_DETAIL_SWEEP_INTERVAL_MS = 5 * 60_000;
+/**
+ * Labels for the background work executing in THIS process — the suspects named when the event
+ * loop stalls (MJ #5510). Agent runs come from the run watchdog, which tracks every run it guards;
+ * scheduled jobs from the scheduling engine's in-flight set, named where the engine has the job.
+ */
+function describeBackgroundWorkInFlight(): string[] {
+  const agentRuns = AgentRunWatchdog.Instance.TrackedRunIDs.map((id) => `agent run ${id}`);
+  const engine = SchedulingEngine.Instance;
+  const jobsByID = IndexByUUID(engine.ScheduledJobs);
+  const jobs = engine.InflightJobIDs.map((id) => {
+    const job = jobsByID.Get(id);
+    return job ? `scheduled job "${job.Name}" (${id})` : `scheduled job ${id}`;
+  });
+  return [...agentRuns, ...jobs];
+}
 
 /**
  * Replicate handoff-offer updates across server instances over Redis.
@@ -433,7 +547,44 @@ async function wireRealtimeSessionEventFanOut(redisProvider: RedisLocalStoragePr
 // there is no ordering hazard in binding this early.
 GetAttachmentService().BlobStore = new MJStorageBlobStore();
 
+/**
+ * Starts MJServer. The port is bound first, behind a startup gate: until the bootstrap finishes,
+ * `/healthcheck` answers 503 with the current phase, `/healthcheck/live` answers 200, and every
+ * other request gets 503 with `Retry-After`. A port already in use therefore fails at the start of
+ * boot, not the end. A bootstrap that throws marks the server `failed` (the health endpoint keeps
+ * saying so if the process stays up), logs the phase it failed in, and rethrows.
+ */
 export const Serve = async (resolverPaths: Array<string>, app: Application = CreateApp(), options?: MJServerOptions): Promise<void> => {
+  const startup = MJServerStartupState.Instance;
+  startup.Begin();
+  BeginServerWakeStartupGuard('MJServer.Serve');
+  const httpServer = createServer(CreateStartupGate(app, startup));
+  // Until the upgrade router is installed, every WebSocket upgrade is refused with a 503.
+  httpServer.on('upgrade', (_request, socket) => {
+    RejectUpgradeWhileStarting(startup, socket);
+  });
+  try {
+    await ListenOnPort(httpServer, graphqlPort);
+    await serveBehindStartupGate(httpServer, startup, resolverPaths, app, options);
+  } catch (err) {
+    // A throw after the gate opened leaves the server serving, as it did before the gate existed.
+    if (!startup.IsReady) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      startup.MarkFailed(error);
+      console.error(`❌ MJServer startup failed during "${startup.Phase}": ${error.message}`);
+    }
+    throw err;
+  }
+};
+
+/** The bootstrap {@link Serve} runs once its port is bound; requests stay behind the startup gate until it returns. */
+const serveBehindStartupGate = async (
+  httpServer: HttpServer,
+  startup: MJServerStartupState,
+  resolverPaths: Array<string>,
+  app: Application,
+  options?: MJServerOptions
+): Promise<void> => {
   const t0 = performance.now();
   // Name this MJAPI instance by its port before anything stamps a session row with its identity, so the janitor's
   // startup recovery closes only the sessions an earlier boot of this instance left, never those of another MJAPI on
@@ -444,6 +595,10 @@ export const Serve = async (resolverPaths: Array<string>, app: Application = Cre
   // An anonymous visitor may join only the LiveKit agent-session room it owns by scope; the room gate cannot import
   // this package's session-access decision, so it is handed in here, before any resolver runs (MJ#6044).
   RoomAuthorizationService.Instance.SetAnonymousSessionOwnerCheck(AuthorizeAnonymousRoomSessions);
+  // The semantic-graph search lane and the graphExpand pipeline stage expand only through a registered
+  // service; register the engine-backed one before any search configures its providers (GraphEngine
+  // itself loads lazily on first use).
+  RegisterSemanticGraphExpansionService();
   // Level-gated startup logger. Resolves verbosity from telemetry.level (single
   // operator knob). At `standard` (default), per-phase timings are collapsed into
   // the one-line summary; at `verbose`+ each phase prints inline as before.
@@ -471,6 +626,7 @@ export const Serve = async (resolverPaths: Array<string>, app: Application = Cre
 const setupComplete$ = new ReplaySubject(1);
   const dbType = GetDbType();
   const dataSources: DataSourceInfo[] = [];
+  SetTypedQueryDriftMode(configInfo.databaseSettings.typedQueryDrift ?? 'warn');
 
   // Shared cache first: the database provider loads metadata and startup engines through
   // it, so the first server to start fills it and later servers read it instead of each querying
@@ -484,11 +640,19 @@ const setupComplete$ = new ReplaySubject(1);
     // they reach into RoomHandoffEngine and RealtimeSessionEventService, and the cache module should not
     // acquire a dependency on either.
     await WirePushStatusFanOut(sharedCache);
+    await WireEntityInvalidationFanOut(sharedCache);
     await wireHandoffOfferFanOut(sharedCache, startupLog);
     await wireRealtimeSessionEventFanOut(sharedCache);
-    startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
+    ArtifactCollaborationServer.Instance.SetRoomRelay(new RedisYjsRoomRelay(sharedCache));
+    ArtifactCollaborationServer.Instance.SetTicketReplayStore(new RedisTicketReplayStore(sharedCache));
+    const safeRedisUrl = (process.env.REDIS_URL ?? '').replace(/:\/\/[^@]+@/, '://***@');
+    startupLog.LogIf('verbose', `Redis cache provider connected: ${safeRedisUrl}`);
   }
+  const effectiveStorageProvider = sharedCache
+    ? WrapSharedCacheWithL1(sharedCache, configInfo.cacheSettings)
+    : new InMemoryLocalStorageProvider();
   const cacheManagerConfig = CacheManagerConfigFromSettings(configInfo.cacheSettings);
+  await LocalCacheManager.Instance.Initialize(effectiveStorageProvider, cacheManagerConfig);
   const warmupLeaseMs = WarmupLeaseMsFromSettings(configInfo.cacheSettings);
 
   if (dbType === 'postgresql') {
@@ -496,13 +660,15 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.BeginPhase('Connecting to database');
     startupLog.LogIf('verbose', 'Database type: PostgreSQL');
     const pg = await import('pg');
-    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes } = await import('@memberjunction/postgresql-dataprovider');
+    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes, DescribePgSsl } = await import('@memberjunction/postgresql-dataprovider');
 
     const pgEndpoint = ResolvePostgreSQLEndpoint();
     const { Host: pgHost, Port: pgPort, User: pgUser, Database: pgDatabase } = pgEndpoint;
     // Every API pool carries the statement and idle-in-transaction timeouts from connection #1.
     const pgConnectionConfig = BuildPostgreSQLConnectionConfig(pgEndpoint, configInfo.databaseSettings, 'api');
-    const pgPool = new pg.default.Pool(ToPGPoolConfig(pgConnectionConfig));
+    // One API pool, shared by the provider and the MSSQL-compat wrapper below. It carries the
+    // provider's type parsers, since the provider runs its queries on it.
+    const pgPool = new pg.default.Pool({ ...ToPGPoolConfig(pgConnectionConfig), types: MJPostgresTypes });
     // An idle connection the server drops is emitted on the pool; without a listener Node exits.
     pgPool.on('error', (err) => console.error('[PostgreSQL pool] Idle connection error (connection evicted):', err.message));
 
@@ -510,16 +676,22 @@ const setupComplete$ = new ReplaySubject(1);
     const testClient = await pgPool.connect();
     await testClient.query('SELECT 1');
     testClient.release();
-    startupLog.LogIf('verbose', `PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase}`);
+    startupLog.LogIf('verbose', `PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase} (${DescribePgSsl(pgConnectionConfig.SSL)})`);
 
-    // A read-only pool opened with the read-only login, as SQL Server has. Read-only per-request
-    // providers (TestQuerySQL and other caller-supplied SQL) share it instead of the primary pool.
+    // Two distinct read-only pools on the read-only login when configured:
+    // 1. Application read-only pool ('read-only'): sized up to apiMax / connectionPool.readOnlyMax
+    //    so concurrent RunView* traffic is never squeezed through a 10-connection bottleneck.
+    // 2. Bounded ad-hoc read-only pool ('adhoc-read-only'): capped at ADHOC_READ_ONLY_MAX_CONNECTIONS
+    //    for untrusted caller-supplied SQL (ExecuteAdhocQuery, TestQuerySQL, GetDataContextData).
     const pgReadOnlyCredentials = ResolvePostgreSQLReadOnlyCredentials(configInfo);
     if (pgReadOnlyCredentials) {
+      // Both pools use the read-only login; a configured read replica takes the ad-hoc pool (and,
+      // when asked, the application read-only pool).
+      const readOnlyEndpoints = ResolvePostgreSQLReadOnlyEndpoints({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings);
       // A pool a provider runs on must carry the provider's type parsers, so BIGINT and NUMERIC
       // come back as numbers here as they do on the provider's own pool.
       const readOnlyPgPool = new pg.default.Pool({
-        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'read-only')),
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig(readOnlyEndpoints.Application, configInfo.databaseSettings, 'read-only')),
         types: MJPostgresTypes,
       });
       readOnlyPgPool.on('error', (err) => console.error('[PostgreSQL read-only pool] Idle connection error (connection evicted):', err.message));
@@ -532,8 +704,20 @@ const setupComplete$ = new ReplaySubject(1);
         readOnlyTestClient.release();
       }
       PostgreSQLReadOnlyPool.Instance.Pool = readOnlyPgPool;
-      startupLog.LogIf('verbose', 'Read-only PostgreSQL pool has been initialized.');
+
+      const adhocReadOnlyPgPool = new pg.default.Pool({
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig(readOnlyEndpoints.Adhoc, configInfo.databaseSettings, 'adhoc-read-only')),
+        types: MJPostgresTypes,
+      });
+      adhocReadOnlyPgPool.on('error', (err) => console.error('[PostgreSQL adhoc read-only pool] Idle connection error (connection evicted):', err.message));
+      PostgreSQLReadOnlyPool.Instance.AdhocPool = adhocReadOnlyPgPool;
+
+      startupLog.LogIf('verbose', `Read-only PostgreSQL pools initialized (application → ${readOnlyEndpoints.Application.Host}:${readOnlyEndpoints.Application.Port}, ad-hoc → ${readOnlyEndpoints.Adhoc.Host}:${readOnlyEndpoints.Adhoc.Port}).`);
     }
+    await WarnIfPostgreSQLConnectionBudgetExceeded(
+      pgPool, configInfo.databaseSettings, pgReadOnlyCredentials != null,
+      !!(process.env.CODEGEN_DB_USERNAME && process.env.CODEGEN_DB_PASSWORD), LogStatus,
+    );
 
     // Create a DataSourceInfo with a MSSQL-compatible wrapper around pg.Pool
     // This allows existing code (types, util, context) to work without changes
@@ -553,23 +737,29 @@ const setupComplete$ = new ReplaySubject(1);
       mj_core_schema,
       cacheRefreshInterval / 1000, // convert ms to seconds
     );
-    pgConfigData.LocalStorageProvider = sharedCache ?? undefined;
+    pgConfigData.LocalStorageProvider = effectiveStorageProvider;
+    pgConfigData.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
+    pgConfigData.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    pgConfigData.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const provider = new PostgreSQLDataProvider();
-    await provider.Config(pgConfigData);
+    // Share the API pool rather than letting Config() open a second pool of the same size.
+    if (!(await provider.ConfigWithSharedPool(pgConfigData, pgPool))) {
+      throw new Error('PostgreSQL provider configuration failed; see the error logged above.');
+    }
     SetProvider(provider);
 
     // Warm the user cache — dialect-neutral, same call the SQL Server path makes
     await UserCache.Instance.Refresh(provider);
 
     // Run startup actions — same 'full' entry-point default as the SQL Server path
-    const sysUser = UserCache.Instance.GetSystemUser();
-    const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
+    const startupUser = ResolveServerPrincipal('PostgreSQL startup') ?? undefined;
     const pgStartupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
-    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode, cacheManagerConfig, warmupLeaseMs });
+    await StartupManagerImport.Instance.Startup(false, startupUser, provider, { mode: pgStartupMode.mode, cacheManagerConfig, warmupLeaseMs });
 
     // Both provider sources have now had their turn — config/env at module load, metadata via
     // AuthProviderEngine's startup hook — so "no providers at all" is finally a meaningful check.
     validateAuthProvidersRegistered();
+    validateProvisioningPrincipals();
 
     // Monkey-patch SQLServerDataProvider.ExecuteSQLWithPool to support PostgreSQL
     // Generated resolvers call this static method with bracket-quoted SQL.
@@ -583,8 +773,38 @@ const setupComplete$ = new ReplaySubject(1);
         const thePgPool = poolAny._pgPool as import('pg').Pool;
         // Translate SQL Server bracket syntax to PostgreSQL double-quote syntax
         const pgQuery = TranslateBracketsToPG(query);
-        const result = await thePgPool.query(pgQuery);
-        return result.rows;
+        const startTime = performance.now();
+        try {
+          const result = await thePgPool.query(pgQuery);
+          if (!IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+            GenericDatabaseProvider.NotifySqlObservers({
+              ts: Date.now(),
+              sql: pgQuery,
+              parameterSummaries: SummarizeSqlParameters(parameters),
+              durationMs: performance.now() - startTime,
+              rowCount: result.rows?.length ?? 0,
+              isMutation: false,
+              description: 'ExecuteSQLWithPool(PG)',
+              diagnosticContext: GetDiagnosticContext(),
+            });
+          }
+          return result.rows;
+        } catch (err) {
+          if (!IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+            GenericDatabaseProvider.NotifySqlObservers({
+              ts: Date.now(),
+              sql: pgQuery,
+              parameterSummaries: SummarizeSqlParameters(parameters),
+              durationMs: performance.now() - startTime,
+              rowCount: 0,
+              isMutation: false,
+              errorMessage: err instanceof Error ? err.message : String(err),
+              description: 'ExecuteSQLWithPool(PG)',
+              diagnosticContext: GetDiagnosticContext(),
+            });
+          }
+          throw err;
+        }
       }
       return origExecuteSQLWithPool.call(this, pool, query, parameters, contextUser);
     };
@@ -608,20 +828,33 @@ const setupComplete$ = new ReplaySubject(1);
           configInfo.databaseSettings,
           'codegen',
         );
-        const codegenPgPool = new pg.default.Pool(ToPGPoolConfig(codegenPgConnectionConfig));
+        const codegenPgPool = new pg.default.Pool({ ...ToPGPoolConfig(codegenPgConnectionConfig), types: MJPostgresTypes });
         codegenPgPool.on('error', (err) => console.error('[PostgreSQL CodeGen pool] Idle connection error (connection evicted):', err.message));
         const codegenTestClient = await codegenPgPool.connect();
         await codegenTestClient.query('SELECT 1');
         codegenTestClient.release();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
+        // Adopt the already-loaded global Metadata.Provider catalog (ignoreExistingMetadata = false)
+        // so boot does not pay a second full metadata load. The refresh interval stays non-zero on
+        // PostgreSQL on purpose: PostgreSQLDataProvider.AllowRefresh is `CheckRefreshIntervalSeconds > 0`,
+        // so an interval of 0 would make every later codegenPgProvider.Refresh() — the one RSU CodeGen
+        // issues after DDL — return without reloading, leaving this provider frozen at the boot catalog.
+        // (SQL Server's AllowRefresh is independent of the interval, so its codegen provider can use 0.)
         const codegenPgConfigData = new PostgreSQLProviderConfigData(
           codegenPgConnectionConfig,
           mj_core_schema,
           cacheRefreshInterval / 1000, // ms → seconds
+          undefined,
+          undefined,
+          false,
         );
         const codegenPgProvider = new PostgreSQLDataProvider();
-        await codegenPgProvider.Config(codegenPgConfigData); // separate pool (per-instance manager); does NOT touch the global API provider
+        // Shares codegenPgPool (the CodeGen connection below uses it too) rather than opening a second
+        // CodeGen-sized pool. Still separate from the global API provider's pool.
+        if (!(await codegenPgProvider.ConfigWithSharedPool(codegenPgConfigData, codegenPgPool))) {
+          throw new Error('PostgreSQL CodeGen provider configuration failed; see the error logged above.');
+        }
         RuntimeSchemaManager.Instance.SetDDLProvider(codegenPgProvider);
         startupLog.LogIf('verbose', 'RSU DDL provider initialized with CodeGen credentials (PostgreSQL).');
 
@@ -630,7 +863,10 @@ const setupComplete$ = new ReplaySubject(1);
           const { RunCodeGenBase, PostgreSQLCodeGenConnection } = await import('@memberjunction/codegen-lib');
 
           const codegenConnection = new PostgreSQLCodeGenConnection(codegenPgPool);
-          const codegenCurrentUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+          const codegenCurrentUser = ResolveServerPrincipal('RSU CodeGen (PostgreSQL)');
+          if (!codegenCurrentUser) {
+            throw new Error('no active system user or Owner to run in-process CodeGen as');
+          }
 
           const codegenDataSource = {
             provider: codegenPgProvider,
@@ -683,8 +919,8 @@ const setupComplete$ = new ReplaySubject(1);
       }
     }
 
-    const md = new Metadata(); // global-provider-ok: bootstrap
-    const pgEntityCount = md?.Entities ? md.Entities.length : 0;
+    startupLog.BeginPhase(ENTITY_METADATA_CHECK_PHASE);
+    const pgEntityCount = AssertEntityMetadataLoaded(Metadata.Provider, `PostgreSQL ${pgHost}:${pgPort}/${pgDatabase}`); // global-provider-ok: bootstrap
     startupLog.LogIf('verbose', `Data Source has been initialized. ${pgEntityCount} entities loaded.`);
     startupLog.SetDatabaseInfo('PostgreSQL', `${pgHost}:${pgPort}/${pgDatabase}`, pgEntityCount);
   } else {
@@ -727,7 +963,10 @@ const setupComplete$ = new ReplaySubject(1);
 
     // cacheRefreshInterval is configured in ms; checkRefreshIntervalSeconds declares seconds — see providerConfigUnits.ts
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
-    config.LocalStorageProvider = sharedCache ?? undefined;
+    config.LocalStorageProvider = effectiveStorageProvider;
+    config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
+    config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    config.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
     // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
     const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
@@ -736,10 +975,11 @@ const setupComplete$ = new ReplaySubject(1);
     // See the note on the PostgreSQL path above: this is the first point at which both the
     // config/env providers and the metadata catalog have been registered.
     validateAuthProvidersRegistered();
+    validateProvisioningPrincipals();
     lap('Metadata + Provider Setup', tPhase);
+    startupLog.BeginPhase(ENTITY_METADATA_CHECK_PHASE);
+    const entityCount = AssertEntityMetadataLoaded(Metadata.Provider, `SQL Server ${dbHost}:${dbPort}/${dbDatabase}`); // global-provider-ok: bootstrap
     startupLog.BeginPhase('Initializing data provider');
-    const md = new Metadata(); // global-provider-ok: bootstrap
-    const entityCount = md?.Entities ? md.Entities.length : 0;
     startupLog.LogIf('verbose', `Data Source has been initialized. ${entityCount} entities loaded.`);
     startupLog.SetDatabaseInfo('SQL Server', `${dbHost}:${dbPort}/${dbDatabase}`, entityCount);
 
@@ -766,8 +1006,18 @@ const setupComplete$ = new ReplaySubject(1);
         await codegenPool.connect();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
-        // Same ms→seconds seam as the main provider config above — see providerConfigUnits.ts
-        const codegenConfig = new SQLServerProviderConfigData(codegenPool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
+        // Adopt the already-loaded global Metadata.Provider catalog (ignoreExistingMetadata = false)
+        // and disable a duplicate background refresh timer (0): avoids a second full metadata load
+        // on boot while explicit codegenProvider.Refresh() after DDL still reloads from the DB
+        // (SQLServerDataProvider.AllowRefresh does not depend on the interval; PostgreSQL's does — see above).
+        const codegenConfig = new SQLServerProviderConfigData(
+          codegenPool,
+          mj_core_schema,
+          0,
+          undefined,
+          undefined,
+          false,
+        );
         const codegenProvider = new SQLServerDataProvider();
         await codegenProvider.Config(codegenConfig);
         RuntimeSchemaManager.Instance.SetDDLProvider(codegenProvider);
@@ -778,7 +1028,10 @@ const setupComplete$ = new ReplaySubject(1);
           const { RunCodeGenBase, SQLServerCodeGenConnection } = await import('@memberjunction/codegen-lib');
 
           const codegenConnection = new SQLServerCodeGenConnection(codegenPool);
-          const codegenCurrentUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+          const codegenCurrentUser = ResolveServerPrincipal('RSU CodeGen (SQL Server)');
+          if (!codegenCurrentUser) {
+            throw new Error('no active system user or Owner to run in-process CodeGen as');
+          }
 
           const codegenDataSource = {
             provider: codegenProvider,
@@ -830,6 +1083,8 @@ const setupComplete$ = new ReplaySubject(1);
     }
   }
 
+  ArtifactCollaborationServer.Instance.SetDataSources(dataSources);
+
   // Register the post-sync custom-column promotion hook (gaps.md §2). Safe to call regardless of
   // RSU config: the hook self-gates on captured overflow data and uses RSU only at fire time.
   try {
@@ -845,6 +1100,9 @@ const setupComplete$ = new ReplaySubject(1);
   if (configInfo.queryDialects) {
     MJGlobal.Instance.GetGlobalObjectStore()['queryDialects'] = configInfo.queryDialects;
   }
+
+  // Register optional Tier 2 (`MjConfig`) execution limits with LimitsConfigResolver
+  LimitsConfigResolver.Instance.RegisterMjConfigLimits(configInfo.limits ?? null);
 
   // Initialize server telemetry based on config
   const tm = TelemetryManager.Instance;
@@ -864,9 +1122,6 @@ const setupComplete$ = new ReplaySubject(1);
   // handed to it later). Unconditional on purpose: the guard that used to sit here
   // skipped exactly the case that needed it.
   await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheManagerConfig); // global-provider-ok: bootstrap
-  if (sharedCache) {
-    await LocalCacheManager.Instance.SetStorageProvider(sharedCache);
-  }
   // The derived per-entry ceiling, so the boot log says what the largest cacheable entry actually is.
   startupLog.LogIf('verbose', `LocalCacheManager: largest cacheable entry ${Math.floor(LocalCacheManager.Instance.MaxEntrySizeBytes / 1024 / 1024)} MB (maxEntryPercentOfCache: ${configInfo.cacheSettings?.maxEntryPercentOfCache ?? 'auto'})`);
   const engineSweepMs = StartEngineSweeper(configInfo.cacheSettings);
@@ -885,6 +1140,8 @@ const setupComplete$ = new ReplaySubject(1);
   // ExecuteAdhocQuery's table check and timeout limit.
   ActionEngineServer.Instance.SetReadOnlyProviderFactory(() => CreateReadOnlyProvider(dataSources));
   ActionEngineServer.Instance.SetAdhocSQLAuthorizer(CreateAdhocSQLAuthorizer(configInfo.databaseSettings.requestTimeout));
+  RegisterAudienceActionHostBindings();
+  InitializeConversationDetailWritePermissionProviders();
 
   setupComplete$.next(true);
   raiseEvent('setupComplete', dataSources, null,  this);
@@ -907,17 +1164,7 @@ const setupComplete$ = new ReplaySubject(1);
   lap('Telemetry + Cache + APIKey Init', tServe);
   tServe = startupLog.BeginPhase('Discovering resolvers');
 
-  const dynamicModules = await Promise.all(
-    paths.map((modulePath) => {
-      try {
-        const module = import(isWindows ? `file://${modulePath}` : modulePath);
-        return module;
-      } catch (e) {
-        console.error(`Error loading dynamic module at '${modulePath}'`, e);
-        throw e;
-      }
-    })
-  );
+  const dynamicModules = await ImportResolverModules(paths, isWindows, 'Error loading dynamic module');
   const resolvers = dynamicModules.flatMap((module) =>
     Object.values(module).filter((value) => typeof value === 'function')
   ) as BuildSchemaOptions['resolvers'];
@@ -950,8 +1197,9 @@ const setupComplete$ = new ReplaySubject(1);
   }
 
   // Initialize all middleware
+  const middlewareContext: ServerMiddlewareContext = { ApiRoute: (subpath, options) => ApiRoute(subpath, options) };
   for (const mw of middlewares) {
-      await mw.Initialize();
+      await mw.Initialize(middlewareContext);
       startupLog.LogIf('verbose', `  [Middleware] ${mw.Label}`);
   }
 
@@ -973,7 +1221,7 @@ const setupComplete$ = new ReplaySubject(1);
 
       // Express app configuration escape hatch
       if (mw.ConfigureExpressApp) {
-          await mw.ConfigureExpressApp(app);
+          await mw.ConfigureExpressApp(app, middlewareContext);
       }
 
       // Extract hook methods and register in the global hook store
@@ -982,6 +1230,15 @@ const setupComplete$ = new ReplaySubject(1);
       RegisterDataHook('PostRunView', mw.PostRunView.bind(mw));
       RegisterDataHook('PreSave', mw.PreSave.bind(mw));
   }
+  RegisterArtifactPostRunViewProtectedEntities();
+  EnsureImpersonationDataHooksRegistered();
+  RegisterServerArtifactFileBytesLoader();
+  // The restricted-field check runs in MJCoreEntitiesServer, which reads no config of its own.
+  SetRestrictedFieldClassifierDecisionMode(configInfo.decisions?.restrictedFieldClassifier);
+  SetTagMatchDecisionMode(configInfo.decisions?.tagMatch);
+  // Who answers Human steps that name no provider, and agents' questions (`humanTasks.defaultProvider`).
+  // App packages are loaded before serve(), so a configured provider is already registered here.
+  HumanTaskProviderDefaults.Instance.Configure(configInfo.humanTasks?.defaultProvider);
 
   // ─── Resolve middleware-contributed resolver paths and merge into resolvers ───
   let allResolvers = resolvers;
@@ -989,16 +1246,7 @@ const setupComplete$ = new ReplaySubject(1);
       const mwGlobs = mwResolverPaths.flatMap((p) => (isWindows ? p.replace(/\\/g, '/') : p));
       const mwResolverFiles = fg.globSync(mwGlobs);
       if (mwResolverFiles.length > 0) {
-          const mwModules = await Promise.all(
-              mwResolverFiles.map((modulePath) => {
-                  try {
-                      return import(isWindows ? `file://${modulePath}` : modulePath);
-                  } catch (e) {
-                      console.error(`Error loading middleware resolver at '${modulePath}'`, e);
-                      throw e;
-                  }
-              })
-          );
+          const mwModules = await ImportResolverModules(mwResolverFiles, isWindows, 'Error loading middleware resolver');
           const mwResolvers = mwModules.flatMap((module) =>
               Object.values(module).filter((value) => typeof value === 'function')
           );
@@ -1014,7 +1262,12 @@ const setupComplete$ = new ReplaySubject(1);
   if (!pubSub.asyncIterator && typeof pubSub.asyncIterableIterator === 'function') {
     pubSub.asyncIterator = pubSub.asyncIterableIterator;
   }
-  PubSubManager.Instance.SetPubSubEngine(pubSub as unknown as PubSubEngine);
+  let activePubSub = pubSub as unknown as PubSubEngine;
+  if (sharedCache) {
+    const clusterBridge = await AttachRedisClusterPubSub(activePubSub, sharedCache);
+    activePubSub = clusterBridge.Engine;
+  }
+  PubSubManager.Instance.SetPubSubEngine(activePubSub);
 
   // Wire the ClientToolRequestManager so BaseAgent can publish client tool requests
   // via the same PubSub infrastructure used for pipeline progress and cache invalidation.
@@ -1052,7 +1305,19 @@ const setupComplete$ = new ReplaySubject(1);
   // config.ts loads and validates at module scope, so importing it there would pull full config
   // validation into every import chain that touches the resolver, unit tests included.
   ConfigureRecordDataBroadcast(configInfo.cacheSettings?.recordDataBroadcastEntities);
-  CacheInvalidationBroadcastManager.Instance.Configure(configInfo.cacheSettings?.broadcast);
+  const broadcastConfig = { ...configInfo.cacheSettings?.broadcast };
+  if (sharedCache && (!broadcastConfig.provider || broadcastConfig.provider === 'RedisStream')) {
+    broadcastConfig.provider = 'RedisStream';
+  }
+  const broadcastProvider = CacheInvalidationBroadcastManager.Instance.Configure(broadcastConfig);
+  if (sharedCache && broadcastProvider instanceof RedisStreamBroadcastProvider) {
+    await broadcastProvider.BindTransport(sharedCache);
+    broadcastProvider.SetLocalPubSubDeliverer((sequencedPayload) => {
+      if (PubSubManager.Instance.PubSubEngine) {
+        void PubSubManager.Instance.PubSubEngine.publish(CACHE_INVALIDATION_TOPIC, sequencedPayload);
+      }
+    });
+  }
 
   // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
   // ANY BaseEntity save/delete occurs on this server — regardless of whether it
@@ -1064,13 +1329,13 @@ const setupComplete$ = new ReplaySubject(1);
       const beEvent = event.args as BaseEntityEvent;
       if (beEvent.type === 'save' || beEvent.type === 'delete') {
         const entityName = beEvent.baseEntity.EntityInfo.Name;
-        PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
+        const invalidationPayload = {
           entityName,
           primaryKeyValues: JSON.stringify(beEvent.baseEntity.PrimaryKey.KeyValuePairs),
           action: beEvent.type,
           sourceServerId: MJGlobal.Instance.ProcessUUID,
           timestamp: new Date(),
-          originSessionId: null,
+          originSessionId: ResolveOriginSessionId(beEvent.baseEntity),
           // Opt-in only: this event reaches every connected client unfiltered, and this listener
           // fires for server-internal saves too (agents, actions, orchestrator), which are exactly
           // the ones no browser session asked for.
@@ -1079,7 +1344,11 @@ const setupComplete$ = new ReplaySubject(1);
               // fls-guard: MayBroadcastRecordData refuses FLS entities and Record Changes
               ? JSON.stringify(beEvent.baseEntity.GetAll())
               : undefined,
-        });
+        };
+        PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, invalidationPayload);
+        if (typeof CacheInvalidationBroadcastManager.Instance.Provider?.PublishClusterInvalidation !== 'function') {
+          PublishEntityInvalidationToPeers(invalidationPayload);
+        }
       }
     }
   });
@@ -1120,12 +1389,19 @@ const setupComplete$ = new ReplaySubject(1);
     await new Promise<void>((res, rej) => profSession!.post('Profiler.start', (e) => (e ? rej(e) : res())));
   }
 
+  // Attach the scope-limited-principal guard to every root field marked
+  // @RefuseScopeLimitedPrincipals(). Every resolver module is imported by now (MJServer's own,
+  // the dynamic paths, and middleware-contributed ones), and buildSchemaSync reads middleware
+  // metadata, so this must run here.
+  ApplyScopeLimitedPrincipalGuards();
+  ApplyImpersonationRefusalGuards();
+
   const tBuild = performance.now();
   const builtSchema = buildSchemaSync({
     resolvers: allResolvers,
     validate: false,
     scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
-    emitSchemaFile: websiteRunFromPackage !== 1,
+    emitSchemaFile: process.env.MJ_EMIT_SCHEMA_GQL === '1' && websiteRunFromPackage !== 1,
     pubSub,
   });
   const buildMs = performance.now() - tBuild;
@@ -1154,8 +1430,7 @@ const setupComplete$ = new ReplaySubject(1);
 
   const tTransform = performance.now();
   schema = ApplyRootVariablesLoggingMiddleware(schema);
-  schema = requireSystemUserDirective.transformer(schema);
-  schema = publicDirective.transformer(schema);
+  schema = ApplyBuiltInDirectivesTransformer(schema);
 
   // Apply middleware-contributed schema transformers (after built-in directive transformers)
   for (const transformer of mwSchemaTransformers) {
@@ -1176,7 +1451,9 @@ const setupComplete$ = new ReplaySubject(1);
   lap('Schema Build', tServe);
   tServe = startupLog.BeginPhase('Starting HTTP server');
 
-  const httpServer = createServer(app);
+  // The HTTP server was created and bound at the top of Serve (behind the startup gate); the startup
+  // gate's upgrade listener is replaced by the router below, which checks readiness itself.
+  httpServer.removeAllListeners('upgrade');
 
   // `noServer` so we own the HTTP `upgrade` routing ourselves (below) and can dispatch by path between
   // the graphql-ws server and the realtime proxy. (In `{ server, path }` mode, ws destroys any socket whose
@@ -1186,12 +1463,18 @@ const setupComplete$ = new ReplaySubject(1);
   // Single upgrade router: the realtime proxy claims its own path first (an authenticated byte-tunnel that
   // lets self-hosted realtime providers — e.g. HuggingFace speech-to-speech — run the shipped client-direct
   // audio topology without the internal endpoint ever being exposed to the browser); everything on the
-  // graphql path goes to graphql-ws; anything else is rejected. Must be registered before httpServer.listen().
+  // graphql path goes to graphql-ws; anything else is rejected. Until the server is ready, every upgrade is refused (503).
   // Path acceptance (including the bare-root/`/graphql` alias) is centralized in `IsGraphQLWsPath` — see
   // its doc comment for why the alias exists — so this listener and `InstallMediaUpgradeDispatcher`'s
   // telephony-active replacement listener can never disagree on what counts as "the GraphQL path."
   httpServer.on('upgrade', (request, socket, head) => {
+    if (RejectUpgradeWhileStarting(startup, socket)) {
+      return;
+    }
     if (RealtimeProxyServer.Instance.TryHandleUpgrade(request, socket, head as Buffer)) {
+      return;
+    }
+    if (ArtifactCollaborationServer.Instance.TryHandleUpgrade(request, socket, head as Buffer)) {
       return;
     }
     let pathname = graphqlRootPath;
@@ -1216,8 +1499,9 @@ const setupComplete$ = new ReplaySubject(1);
   // conclude from the call site that no server-side heartbeat exists. Value unchanged.
   const WS_SERVER_KEEPALIVE_MS = 12_000;
 
-  // Track per-connection expiry timers so we can clean them up on close
+  // Track per-connection expiry timers and impersonation WS teardown hooks so we can clean them up on close or revocation
   const expiryTimers = new WeakMap<object, ReturnType<typeof setTimeout>>();
+  const impersonationWsDisposers = new WeakMap<object, () => void>();
 
   const serverCleanup = useServer<Record<string, unknown>, { userPayload: UserPayload }>(
     {
@@ -1232,35 +1516,66 @@ const setupComplete$ = new ReplaySubject(1);
           // instead of the quiet, routine 'Missing token' path. A WS client that connects
           // before its auth handshake (extremely common) must land on the quiet path.
           const token = ctx.connectionParams?.Authorization ? String(ctx.connectionParams.Authorization) : '';
-          // Carry API keys from connectionParams so API-key / MCP / Node clients can authenticate the socket
-          // (validated the same way as the HTTP x-mj-api-key / x-mj-user-api-key headers).
+          // Carry API keys from connectionParams so API-key / MCP / Node / impersonated Explorer clients can authenticate the socket
+          // (validated the same way as the HTTP x-mj-api-key / x-api-key / x-mj-user-api-key headers).
           const systemApiKey = ctx.connectionParams?.['x-mj-api-key'] ? String(ctx.connectionParams['x-mj-api-key']) : undefined;
-          const userApiKey = ctx.connectionParams?.['x-mj-user-api-key'] ? String(ctx.connectionParams['x-mj-user-api-key']) : undefined;
+          const wsUserApiKeyPrimary = ctx.connectionParams?.['x-mj-user-api-key'] ? String(ctx.connectionParams['x-mj-user-api-key']).trim() : '';
+          const wsUserApiKeyAlt = ctx.connectionParams?.['x-api-key'] ? String(ctx.connectionParams['x-api-key']).trim() : '';
+          if (wsUserApiKeyPrimary && wsUserApiKeyAlt && wsUserApiKeyPrimary !== wsUserApiKeyAlt) {
+            throw new Error('Conflicting WebSocket user API key connectionParams');
+          }
+          const userApiKey = (wsUserApiKeyPrimary || wsUserApiKeyAlt) || undefined;
           const userPayload = await getUserPayload(token, undefined, dataSources, undefined, systemApiKey, userApiKey);
 
           // Store validated payload on the connection for use in context()
           ctx.extra.userPayload = userPayload;
 
-          // Schedule proactive socket close at token expiry so the client
-          // reconnects with a fresh token instead of spamming errors.
-          const decoded = jwt.decode(token.replace('Bearer ', ''));
-          if (decoded && typeof decoded !== 'string' && decoded.exp) {
-            const msUntilExpiry = decoded.exp * 1000 - Date.now();
-            if (msUntilExpiry > 0) {
-              const timer = setTimeout(() => {
-                console.log(`WebSocket token expiring — closing connection for ${userPayload.email}`);
-                // 4403 = Forbidden — retriable in graphql-ws, signals "get a new token"
-                // (4401 is reserved as fatal/"Unauthorized" in the graphql-ws protocol)
-                try {
-                  ctx.extra.socket.close(4403, 'Token expired');
-                } catch {
-                  // Socket may already be closed; benign
-                }
-              }, msUntilExpiry);
-              // Prevent the timer from keeping the process alive during shutdown
-              timer.unref();
-              expiryTimers.set(ctx, timer);
+          // Register active impersonation WebSocket so MJEndUserImpersonation closes it immediately.
+          if (userPayload.impersonationSession) {
+            const disposeWs = RegisterImpersonationWebSocket(userPayload.impersonationSession.apiKeyId, () => {
+              try {
+                ctx.extra.socket.close(4403, 'Impersonation session ended');
+              } catch {
+                // Socket may already be closed; benign
+              }
+            });
+            impersonationWsDisposers.set(ctx, disposeWs);
+          }
+
+          // Schedule proactive socket close at token OR expiring API key expiry so the client
+          // reconnects (or exits expired impersonation) instead of keeping stale subscriptions open.
+          const decoded = token ? jwt.decode(token.replace('Bearer ', '')) : null;
+          const jwtExpiresAtMs =
+            decoded && typeof decoded !== 'string' && typeof decoded.exp === 'number'
+              ? decoded.exp * 1000
+              : undefined;
+          const credentialExpiresAtMs =
+            jwtExpiresAtMs !== undefined && userPayload.apiKeyExpiresAtMs !== undefined
+              ? Math.min(jwtExpiresAtMs, userPayload.apiKeyExpiresAtMs)
+              : (jwtExpiresAtMs ?? userPayload.apiKeyExpiresAtMs);
+          if (credentialExpiresAtMs !== undefined) {
+            const msUntilExpiry = credentialExpiresAtMs - Date.now();
+            if (msUntilExpiry <= 0) {
+              const disposeEarly = impersonationWsDisposers.get(ctx);
+              if (disposeEarly) {
+                disposeEarly();
+                impersonationWsDisposers.delete(ctx);
+              }
+              return false;
             }
+            const timer = setTimeout(() => {
+              console.log(`WebSocket credential expiring — closing connection for ${userPayload.email}`);
+              // 4403 = Forbidden — retriable in graphql-ws, signals "get a new token"
+              // (4401 is reserved as fatal/"Unauthorized" in the graphql-ws protocol)
+              try {
+                ctx.extra.socket.close(4403, 'Token expired');
+              } catch {
+                // Socket may already be closed; benign
+              }
+            }, msUntilExpiry);
+            // Prevent the timer from keeping the process alive during shutdown
+            timer.unref();
+            expiryTimers.set(ctx, timer);
           }
 
           return true;
@@ -1272,6 +1587,17 @@ const setupComplete$ = new ReplaySubject(1);
           return false;
         }
       },
+      onSubscribe: async (ctx, msg) => {
+        return RunWithImpersonationSession(ctx.extra.userPayload?.impersonationSession, () =>
+          ValidateImpersonationWebSocketSubscribe(
+            ctx.extra.userPayload,
+            msg.payload?.query,
+            msg.payload?.operationName
+          )
+        );
+      },
+      execute: (args) => RunGraphQLOperationWithImpersonationSession(args, execute),
+      subscribe: (args) => RunGraphQLOperationWithImpersonationSession(args, subscribe),
       // context() now just reads the already-validated payload — no I/O, no logging
       context: async (ctx) => {
         // No RequestOrigin here: the upgrade request's Origin is not carried onto subscription contexts.
@@ -1283,6 +1609,11 @@ const setupComplete$ = new ReplaySubject(1);
         if (timer) {
           clearTimeout(timer);
           expiryTimers.delete(ctx);
+        }
+        const disposeWs = impersonationWsDisposers.get(ctx);
+        if (disposeWs) {
+          disposeWs();
+          impersonationWsDisposers.delete(ctx);
         }
       },
       onError: (_ctx, _message, errors) => {
@@ -1324,11 +1655,22 @@ const setupComplete$ = new ReplaySubject(1);
     },
     // High compression level (good balance between CPU and compression ratio)
     level: 6
-  }));
+  }) as object as express.RequestHandler);
 
   // Health check — before every middleware contribution and the auth middleware, so cloud platform
   // probes never generate auth noise. Every core route mounts under MJAPI_BASE_PATH (see apiRoot.ts).
-  MountHealthcheckRoute(app);
+  //
+  // The body carries the latest event-loop sample (MJ #5510) so a probe or poller can tell a server
+  // that just stalled from one that is fine. It cannot answer DURING a stall — nothing on a blocked
+  // loop can — so a timed-out probe is itself the stall signal.
+  const eventLoopMonitor = configInfo.eventLoopMonitor.enabled
+    ? new EventLoopStallMonitor({
+        SampleIntervalMs: configInfo.eventLoopMonitor.sampleIntervalMs,
+        WarnThresholdMs: configInfo.eventLoopMonitor.warnThresholdMs,
+        GetInFlightWork: describeBackgroundWorkInFlight,
+      })
+    : null;
+  MountHealthcheckRoute(app, eventLoopMonitor);
 
   // Apply middleware-contributed pre-auth handlers (after compression, before routes)
   for (const mw of mwPreAuth) {
@@ -1347,6 +1689,19 @@ const setupComplete$ = new ReplaySubject(1);
   // ─── Server extensions loader & shared service registry ───────────────────
   const extensionLoader = new ServerExtensionLoader();
   _currentExtensionLoader = extensionLoader;
+
+  const hostRuntimeService: IServerExtensionHostRuntimeService = {
+    CreateIsolatedProvider,
+    GetSystemUser: () => getSystemUser(),
+    ResolvePrincipal: (configuredEmailOrId, subsystemLabel) => ResolveConfiguredPrincipal(configuredEmailOrId, subsystemLabel),
+  };
+  extensionLoader.Services.RegisterService(SERVER_EXTENSION_CORE_SERVICE_KEYS.HostRuntime, hostRuntimeService);
+  if (coreAuthenticatedRouters.MagicLinkService) {
+    extensionLoader.Services.RegisterService(
+      SERVER_EXTENSION_CORE_SERVICE_KEYS.MagicLink,
+      coreAuthenticatedRouters.MagicLinkService,
+    );
+  }
 
   // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
   // Backwards-compatibility shim: synthesize ServerExtensionConfig entries from legacy configInfo.telephony
@@ -1468,6 +1823,7 @@ const setupComplete$ = new ReplaySubject(1);
     console.warn(userEmailMapWarning);
   }
   app.use(CreateUnifiedAuthMiddleware(dataSources));
+  app.use(CreateImpersonationHttpGuardMiddleware(graphqlRootPath));
 
   // ─── Post-auth middleware from BaseServerMiddleware plugins ─────
   // Middleware here has access to the authenticated user via req.userPayload.
@@ -1523,7 +1879,11 @@ const setupComplete$ = new ReplaySubject(1);
   // media sockets cannot coexist as separate {server} servers — this strips the auto-listeners and
   // routes upgrades by path. No-op when no media routes registered (telephony off).
   InstallMediaUpgradeDispatcher(httpServer, webSocketServer, graphqlRootPath, (req, socket, head) => {
-    return RealtimeProxyServer.Instance.TryHandleUpgrade(req, socket, head);
+    return (
+      RejectUpgradeWhileStarting(startup, socket) ||
+      RealtimeProxyServer.Instance.TryHandleUpgrade(req, socket, head) ||
+      ArtifactCollaborationServer.Instance.TryHandleUpgrade(req, socket, head)
+    );
   });
 
   // ─── REST API endpoints (auth already handled by unified middleware) ─────
@@ -1561,7 +1921,7 @@ const setupComplete$ = new ReplaySubject(1);
   app.use(
     graphqlRootPath,
     cors<cors.CorsRequest>({
-      exposedHeaders: ['X-MJ-Cache-Seq', 'X-MJ-Server-ID'],
+      exposedHeaders: ['X-MJ-Cache-Seq', 'X-MJ-Server-ID', 'X-MJ-Trace-ID', 'X-MJ-Diagnostic-Trigger'],
     }),
     BodyParser.json({ limit: '50mb' }),
     // Express 5 leaves req.body as undefined for non-JSON or empty bodies;
@@ -1603,6 +1963,38 @@ const setupComplete$ = new ReplaySubject(1);
     LogStatus(`[ServerRole] Running in '${serverRole}' mode — background worker services are disabled on this replica.`);
   }
 
+  // Every role runs agents, so every role's watchdog takes the configured intervals (before any run starts).
+  AgentRunWatchdog.Instance.Configure(configInfo.agentRunWatchdog);
+  // Wire default fresh-worker continuation dispatcher for checkpoint-resumed paused runs (CR-14).
+  InstallDefaultResumeContinuationDispatcher();
+  // Configure a scoped long-running fetch wrapper for AI provider SDK calls ONLY (reading
+  // Liveness.HttpHeadersTimeoutMs / HttpBodyTimeoutMs from LimitsConfigResolver) without
+  // mutating Node's process-global undici dispatcher (preserving ProxyAgent/mTLS and standard
+  // timeouts for OAuth, webhooks, and non-AI outbound traffic).
+  try {
+    if (!IsLongRunningAIFetchConfigured()) {
+      await PrimeNodeBuiltinUndiciDispatcher();
+      const livenessLimits = LimitsConfigResolver.Resolve().Limits.Liveness;
+      const longRunningFetchInstall = ConfigureLongRunningAIFetch({
+        headersTimeoutMs: livenessLimits.HttpHeadersTimeoutMs,
+        bodyTimeoutMs: livenessLimits.HttpBodyTimeoutMs,
+      });
+      if (longRunningFetchInstall.Installed) {
+        LogStatus(
+          `[AI Transport] Configured AI-scoped long-running fetch dispatcher (headersTimeout=${longRunningFetchInstall.Options.headersTimeout}ms, bodyTimeout=${longRunningFetchInstall.Options.bodyTimeout}ms)`
+        );
+      } else if (longRunningFetchInstall.SkippedReason) {
+        LogStatus(`[AI Transport] Skipped custom AI fetch dispatcher: ${longRunningFetchInstall.SkippedReason}`);
+      }
+    } else {
+      LogStatus('[AI Transport] Preserving pre-configured host AI fetch dispatcher');
+    }
+  } catch (err) {
+    LogError(`[AI Transport] Failed to configure AI-scoped long-running fetch dispatcher (continuing with default fetch): ${err instanceof Error ? err.message : String(err)}`);
+  }
+  // The handoff offer registry starts its own expiry sweep when it loads, on every role; apply the host's setting.
+  ApplyHandoffOfferExpirySettings(configInfo.agentSessions.handoffOfferExpiry);
+
   // Close out run artifacts a dead process left open, BEFORE anything below can start a new run.
   //
   // A killed process (OOM killer, SIGKILL, host reboot) never writes its run's terminal result, so
@@ -1623,6 +2015,10 @@ const setupComplete$ = new ReplaySubject(1);
     msg => console.warn(msg),
     runBackgroundWorkers ? RSUPostRestartProgressSession.WasKilledAtRestart : undefined
   );
+
+  // Notification delivery providers from mj.config.cjs (env vars and defaults apply when unset)
+  NotificationEngine.EmailProviderName = configInfo.notifications?.emailProvider;
+  NotificationEngine.SMSProviderName = configInfo.notifications?.smsProvider;
 
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;
@@ -1661,7 +2057,9 @@ const setupComplete$ = new ReplaySubject(1);
 
   lap('Apollo + Express Setup', tServe);
 
-  await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
+  // The port was bound at the top of Serve; from here on requests reach the app.
+  startup.MarkReady();
+  CompleteServerWakeStartupGuard();
   // The summary headline reports TRUE wall-clock since process start (see
   // StartupLogger.buildStartupLine), so we don't push a synthetic "total" phase row
   // (that double-counted the headline). Keep a verbose-only line for the serve()-scoped span.
@@ -1677,6 +2075,16 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.SetScheduledJobCount(scheduledJobsService.GetStatus().activeJobs);
   }
   startupLog.PrintSummary();
+
+  // Watch for event-loop stalls (MJ #5510). Started after boot so the synchronous work of startup
+  // itself is not reported as a stall; stopped by the gracefulShutdown drain below.
+  if (eventLoopMonitor) {
+    eventLoopMonitor.Start();
+    ShutdownRegistry.Instance.Register({
+      ShutdownName: 'EventLoopStallMonitor',
+      Shutdown: () => eventLoopMonitor.Stop(),
+    });
+  }
 
   const resumeUser = UserCache.Instance.GetSystemUser();
 
@@ -1702,23 +2110,15 @@ const setupComplete$ = new ReplaySubject(1);
     if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
       const sweepUser = resumeUser;
       const sweepProvider = Metadata.Provider; // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
-      AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser)
+      AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser, configInfo.agentRunWatchdog)
         .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
 
       // The watchdog repairs the RUN; nothing repaired the conversation detail, which is the row the
       // chat actually renders from (MJ #4222). A process that dies mid-run leaves a terminal run
       // beside a message that still claims to be generating, and it spins forever for anyone who
-      // opens it. Runs at boot (closes restart orphans) and on a timer (closes mid-life orphans),
-      // mirroring the watchdog's own two-phase shape.
-      const reconcileOrphans = () =>
-        ReconcileOrphanedConversationDetails(sweepProvider, sweepUser)
-          .catch(err => console.warn(`[OrphanDetailReconciler] Pass failed: ${err}`));
-      void reconcileOrphans();
-      const orphanDetailTimer = setInterval(() => void reconcileOrphans(), ORPHAN_DETAIL_SWEEP_INTERVAL_MS);
-      ShutdownRegistry.Instance.Register({
-        ShutdownName: 'OrphanDetailReconciler',
-        Shutdown: () => { clearInterval(orphanDetailTimer); },
-      });
+      // opens it. Runs at boot (closes restart orphans) and, unless `conversationDetailReconciler.enabled`
+      // is false, on a timer (closes mid-life orphans), mirroring the watchdog's own two-phase shape.
+      StartOrphanedConversationDetailReconciler(sweepProvider, sweepUser, configInfo.conversationDetailReconciler);
     }
 
     // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then a periodic tick
@@ -1726,11 +2126,12 @@ const setupComplete$ = new ReplaySubject(1);
     // crash-recovery shards (storage reads and writes). Self-registers with ShutdownRegistry, so its timer
     // is cleared by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
     if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
-      SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+      // `agentSessions.janitor.enabled: false` keeps the boot recovery and shutdown drain but schedules no tick.
+      SessionJanitor.Instance.StartWithSettings(configInfo.agentSessions.janitor, Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
         .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
       // The bridge engine's orphan reconcile likewise starts only now that this process holds its port, so it can't
       // take the live bridges of another MJAPI still serving that port for its own orphans (#5310).
-      StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+      StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser, configInfo.agentSessions.bridgeReconciler); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
     }
   }
 
@@ -1769,6 +2170,9 @@ const setupComplete$ = new ReplaySubject(1);
   // re-plans on a timer, and self-registers with ShutdownRegistry, so gracefulShutdown's awaited
   // ShutdownAll() drains it (up to 2 × shutdownDrainMs) before the HTTP server closes.
   // Not awaited: a slow engine load must not delay readiness, and a failure never stops the API.
+  // Configure Comms V2 tracking URL, HMAC secret, and WorkQueue enqueue hook on all nodes (including API-only nodes)
+  ConfigureCommsV2WorkQueue(ApiRoute('/comms', { absolute: true }), undefined, Boolean(configInfo.workQueue?.enabled));
+
   const workQueueProvider = Metadata.Provider; // global-provider-ok: server startup — the work-queue host runs on the server's own provider
   if (runBackgroundWorkers && configInfo.workQueue?.enabled && workQueueProvider instanceof DatabaseProviderBase) {
     const workQueuePool = dataSources[0]?.dataSource;
@@ -1912,15 +2316,31 @@ async function ProcessPromoteColumnsPendingWork(
   }
 }
 
+/**
+ * Logs an error at startup for each provisioning setting that resolves to a non-Owner user, so the
+ * misconfiguration surfaces at boot rather than at the first new user's login.
+ */
+function validateProvisioningPrincipals(): void {
+  const settings: ProvisioningPrincipalSetting[] = [
+    { Setting: 'userHandling.contextUserForNewUserCreation', Candidate: configInfo.userHandling?.contextUserForNewUserCreation },
+  ];
+  // Unset, the magic-link setting falls back to the one above, already checked.
+  const magicLinkCandidate = configInfo.magicLink?.contextUserForProvisioning;
+  if (magicLinkCandidate) {
+    settings.push({ Setting: 'magicLink.contextUserForProvisioning', Candidate: magicLinkCandidate });
+  }
+  ValidateProvisioningPrincipals(settings);
+}
+
 async function processRSUPendingWork(): Promise<void> {
   // Dynamic import — schema-engine is not yet published to npm, only exists as a workspace package
   const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
   const rsm = RuntimeSchemaManager.Instance;
 
   // Get system user for server-side operations — needed to read the queue itself
-  const systemUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+  const systemUser = ResolveServerPrincipal('RSU pending work');
   if (!systemUser) {
-    console.warn(`[RSU] No system user found — cannot process pending work`);
+    console.warn(`[RSU] No active system user or Owner — cannot process pending work`);
     return;
   }
 
@@ -2014,13 +2434,33 @@ async function processRSUPendingWork(): Promise<void> {
       const rvPending = new RunView();
       const sourceObjectFields: Record<string, string[] | null> = item.SourceObjectFields ?? {};
 
-      // Introspect schema ONCE for the entire connector, then reuse per object
+      // Resolve every object's fields ONCE, then reuse per object.
+      //
+      // From the connection's PERSISTED catalog first: its active field rows are what the RSU built
+      // the tables from, so the field maps match the columns that exist. The connector is
+      // introspected only for objects with no persisted fields, in the connection's catalog scope
+      // with those objects warm. Introspecting every object instead is a live re-discovery on a
+      // connector whose IntrospectSchema calls the vendor (NetForum: every object, at every restart).
+      // This runs at process start, outside any request, so the resolver enters the scope itself.
       const introspect = connector.IntrospectSchema.bind(connector) as
-        (ci: unknown, u: unknown) => Promise<{ Objects: Array<{ ExternalName: string; Fields: Array<{ Name: string; IsPrimaryKey?: boolean; IsRequired?: boolean }> }> }>;
-      const schema = await introspect(companyIntegration, systemUser);
+        (ci: unknown, u: unknown) => Promise<IntrospectedSchema>;
+      const postRestartFields = await ResolvePostRestartFields(
+        item.CompanyIntegrationID,
+        companyIntegration.IntegrationID,
+        item.SourceObjectNames,
+        () => introspect(companyIntegration, systemUser),
+        systemUser,
+      );
+      console.log(
+        `[RSU] Field maps for ${item.CompanyIntegrationID}: ${postRestartFields.PersistedCount} object(s) from the ` +
+        `persisted catalog, ${postRestartFields.Introspected.length} by introspection`
+      );
 
       const objectsToMap = item.SourceObjectNames.length;
       progress?.BeginEntityMaps(objectsToMap);
+      // Objects whose map ended with no field maps at all. A sync skips such a map (it cannot write
+      // a single column), so they are reported as failed here rather than as created.
+      const withoutFieldMaps: string[] = [];
 
       for (const objName of item.SourceObjectNames) {
         const tableName = objName.replace(/[^A-Za-z0-9_]/g, '_').toLowerCase();
@@ -2084,16 +2524,14 @@ async function processRSUPendingWork(): Promise<void> {
         }
 
         if (isNewMap) createdEntityMapIDs.push(entityMapID);
-        mappedObjectNames.add(objName);
 
         // Create field maps — filter by SourceObjectFields (null = all)
+        let noFieldMaps = false;
         try {
-          const sourceObj = schema.Objects.find(o => o.ExternalName.toLowerCase() === objName.toLowerCase());
-
           const selectedFields = sourceObjectFields[objName]; // null = all, string[] = specific
-          // Always maps the PRIMARY KEY, selected or not — see selectFieldsToMap for why identity
+          // Always maps the PRIMARY KEY, selected or not — see SelectFieldsToMap for why identity
           // cannot be left to the selection.
-          const fieldsToMap = selectFieldsToMap(sourceObj?.Fields ?? [], selectedFields);
+          const fieldsToMap = SelectFieldsToMap(postRestartFields.FieldsByObject.get(objName.toLowerCase()) ?? [], selectedFields);
 
           // Load existing field maps to avoid duplicates
           const existingFieldMaps = await rvPending.RunView<MJCompanyIntegrationFieldMapEntity>({
@@ -2121,19 +2559,47 @@ async function processRSUPendingWork(): Promise<void> {
             fieldMap.Direction = 'SourceToDest';
             fieldMap.Status = item.CreateDisabled ? 'Inactive' : 'Active';
             if (await fieldMap.Save()) fieldCount++;
+            else console.warn(`[RSU] Failed to save field map ${field.Name} for ${objName}: ${fieldMap.LatestResult?.CompleteMessage ?? 'unknown error'}`);
           }
           console.log(`[RSU] Created entity map for ${objName} → ${entity.Name} with ${fieldCount} field maps${isNewMap ? '' : ' (existing map, new fields only)'}`);
+          // A map with no field maps cannot write a single column: the sync skips it. Say so by
+          // name, instead of reporting it as a created map.
+          if (fieldCount === 0 && existingFieldNames.size === 0) {
+            noFieldMaps = true;
+            const why = fieldsToMap.length === 0
+              ? 'neither the persisted catalog nor introspection returned a field for it'
+              : `all ${fieldsToMap.length} of its field map save(s) failed`;
+            console.error(`[RSU] NO FIELD MAPS for ${objName} → ${entity.Name}: ${why}, so a sync cannot write this table.`);
+          }
         } catch (fieldErr) {
           console.warn(`[RSU] Field map creation failed for ${objName}: ${fieldErr}`);
         }
 
+        // Not counted as mapped: the stage reports it as failed, and a retry of this item retries it.
+        if (noFieldMaps) {
+          withoutFieldMaps.push(objName);
+          continue;
+        }
+        mappedObjectNames.add(objName);
         progress?.ObjectMapped(objName, mappedObjectNames.size, objectsToMap);
       }
 
       // The applied rollup for this half of the run, in OBJECTS. `mappedObjectNames` is the same set
       // the retry path narrows against, so what is reported succeeded here is exactly what a retry
       // would NOT redo.
-      progress?.CompleteEntityMaps(objectsToMap, mappedObjectNames.size, objectsToMap - mappedObjectNames.size);
+      //
+      // A map left with no field maps fails the stage, naming the objects: those tables exist and
+      // nothing can sync into them, and this stream is what the client is watching. The healthy
+      // maps still sync below.
+      if (withoutFieldMaps.length > 0) {
+        progress?.FailEntityMaps(
+          `${withoutFieldMaps.length} of ${objectsToMap} object(s) ended with no field maps, so a sync cannot ` +
+          `write their tables. Re-run discovery for this connection, then apply these objects again.`,
+          withoutFieldMaps
+        );
+      } else {
+        progress?.CompleteEntityMaps(objectsToMap, mappedObjectNames.size, objectsToMap - mappedObjectNames.size);
+      }
 
       // Remove-as-disable: entity maps whose object is NOT in this apply's selection
       // are disabled (data kept; re-selection re-enables). 'ignore' opts out for subset applies.
@@ -2214,6 +2680,7 @@ async function processRSUPendingWork(): Promise<void> {
               EntityName: 'MJ: Scheduled Job Types',
               ExtraFilter: `DriverClass='IntegrationSyncScheduledJobDriver'`,
               MaxRows: 1,
+              SkipTotalRowCount: true,
               ResultType: 'simple',
               Fields: ['ID']
             }, systemUser);
@@ -2307,6 +2774,7 @@ async function FindStartedSyncRunID(companyIntegrationID: string, systemUser: Us
       ExtraFilter: `CompanyIntegrationID='${companyIntegrationID.replace(/'/g, "''")}' AND Status='In Progress'`,
       OrderBy: '__mj_CreatedAt DESC',
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'simple',
       Fields: ['ID'],
     }, systemUser);
@@ -2383,7 +2851,30 @@ function mountRealtimeRecordingRoutes(app: Application): boolean {
 // session scoped to one resource). They are the same pieces WidgetSessionService uses; a generic
 // public-widget session mint remains the long-term replacement.
 export { BuildSessionClaims, MagicLinkKeyManager, MagicLinkService, HashToken, GenerateRawToken } from './auth/magicLink/index.js';
-export type { MagicLinkJWTClaims } from './auth/magicLink/index.js';
+export type {
+  MagicLinkJWTClaims,
+  CreateMagicLinkInviteParams,
+  CreateMagicLinkInviteBaseParams,
+  CreateEmailMagicLinkInviteParams,
+  CreateAnonymousMagicLinkInviteParams,
+  CreateMagicLinkInviteResult,
+  MintableMagicLinkInviteKind,
+} from './auth/magicLink/index.js';
 export { VerifyHostAssertion } from './realtimeWidget/host-identity.js';
 export type { HostAssertedIdentity, HostAssertionResult } from './realtimeWidget/host-identity.js';
 export { IsScopeLimitedPrincipal } from './auth/scopeLimitedPrincipal.js';
+export const GetServerStartupSummary = () => StartupLogger.GetLastStartupSnapshot();
+export type { StartupSummarySnapshot } from './logging/StartupLogger.js';
+export { CreateCommsWebhookHandler } from './rest/CommsWebhookHandler.js';
+export type { CommsActivityWorkPayload, CommsWebhookHandlerOptions } from './rest/CommsWebhookHandler.js';
+export { CommsTrackingEventBuffer } from './rest/CommsTrackingEventBuffer.js';
+export type { CommsTrackingEventBufferOptions } from './rest/CommsTrackingEventBuffer.js';
+
+export * from './generic/RedisClusterPubSubEngine.js';
+export { WrapSharedCacheWithL1 } from './sharedCache.js';
+export {
+  BeginServerWakeStartupGuard,
+  CompleteServerWakeStartupGuard,
+  GetServerWakeStartupGuardStatus,
+  ResetServerWakeStartupGuard,
+};

@@ -16,28 +16,36 @@
         </div>
       </div>
 
-      @if (AllNotifications.length > 0) {
-        <div class="header-actions">
-          @if (UnreadNotifications.length > 0) {
-            <button class="action-btn action-btn-ghost"
-                    type="button"
-                    (click)="markAllAsRead()"
-                    aria-label="Mark all notifications as read">
-              <i class="fa-solid fa-check-double" aria-hidden="true"></i>
-              <span class="btn-text">Mark All Read</span>
-            </button>
-          }
-          @if (ReadNotifications.length > 0) {
-            <button class="action-btn action-btn-secondary"
-                    type="button"
-                    (click)="markAllAsUnread()"
-                    aria-label="Mark all notifications as unread">
-              <i class="fa-solid fa-envelope" aria-hidden="true"></i>
-              <span class="btn-text">Mark All Unread</span>
-            </button>
-          }
-        </div>
-      }
+      <div class="header-actions">
+        @if (UnreadNotifications.length > 0) {
+          <button class="action-btn action-btn-ghost"
+                  type="button"
+                  (click)="markAllAsRead()"
+                  aria-label="Mark all notifications as read">
+            <i class="fa-solid fa-check-double" aria-hidden="true"></i>
+            <span class="btn-text">Mark All Read</span>
+          </button>
+        }
+        @if (ReadNotifications.length > 0) {
+          <button class="action-btn action-btn-secondary"
+                  type="button"
+                  (click)="markAllAsUnread()"
+                  aria-label="Mark all notifications as unread">
+            <i class="fa-solid fa-envelope" aria-hidden="true"></i>
+            <span class="btn-text">Mark All Unread</span>
+          </button>
+        }
+        @if (CanOpenPreferences) {
+          <button class="action-btn action-btn-secondary"
+                  type="button"
+                  (click)="OpenNotificationPreferences()"
+                  aria-label="Notification preferences"
+                  title="Notification preferences">
+            <i class="fa-solid fa-gear" aria-hidden="true"></i>
+            <span class="btn-text">Preferences</span>
+          </button>
+        }
+      </div>
     </div>
 
     <!-- Filters Section -->
@@ -57,32 +65,28 @@
                 <span class="stat-count">{{AllNotifications.length}}</span>
               </button>
 
-              @if (UnreadNotifications.length > 0 || ReadNotifications.length === 0) {
-                <button class="stat-pill"
-                        type="button"
-                        [class.active]="radioSelected === 'Unread'"
-                        [class.has-unread]="UnreadNotifications.length > 0"
-                        (click)="selectReadOption('Unread')"
-                        [attr.aria-pressed]="radioSelected === 'Unread'"
-                        aria-label="Show unread notifications">
-                  <span class="stat-label">Unread</span>
-                  <span class="stat-count" [class.unread-count]="UnreadNotifications.length > 0">
-                    {{UnreadNotifications.length}}
-                  </span>
-                </button>
-              }
+              <button class="stat-pill"
+                      type="button"
+                      [class.active]="radioSelected === 'Unread'"
+                      [class.has-unread]="UnreadNotifications.length > 0"
+                      (click)="selectReadOption('Unread')"
+                      [attr.aria-pressed]="radioSelected === 'Unread'"
+                      aria-label="Show unread notifications">
+                <span class="stat-label">Unread</span>
+                <span class="stat-count" [class.unread-count]="UnreadNotifications.length > 0">
+                  {{UnreadNotifications.length}}
+                </span>
+              </button>
 
-              @if (ReadNotifications.length > 0 || UnreadNotifications.length === 0) {
-                <button class="stat-pill"
-                        type="button"
-                        [class.active]="radioSelected === 'Read'"
-                        (click)="selectReadOption('Read')"
-                        [attr.aria-pressed]="radioSelected === 'Read'"
-                        aria-label="Show read notifications">
-                  <span class="stat-label">Read</span>
-                  <span class="stat-count">{{ReadNotifications.length}}</span>
-                </button>
-              }
+              <button class="stat-pill"
+                      type="button"
+                      [class.active]="radioSelected === 'Read'"
+                      (click)="selectReadOption('Read')"
+                      [attr.aria-pressed]="radioSelected === 'Read'"
+                      aria-label="Show read notifications">
+                <span class="stat-label">Read</span>
+                <span class="stat-count">{{ReadNotifications.length}}</span>
+              </button>
             </div>
 
             <!-- Type filter -->
@@ -92,10 +96,11 @@
                         [(ngModel)]="selectedTypeFilter"
                         (change)="onTypeFilterChange(selectedTypeFilter)"
                         aria-label="Filter by notification type">
-                  <option [value]="null">All Types</option>
+                  <option [ngValue]="null">All Types</option>
                   @for (type of notificationTypes; track type.ID) {
-                    <option [value]="type.ID">{{type.Name}}</option>
+                    <option [ngValue]="type.ID">{{type.Name}}</option>
                   }
+                  <option [ngValue]="NoTypeFilter">Other (no type)</option>
                 </select>
               </div>
             }
@@ -201,7 +206,7 @@
                         <mj-markdown class="card-rich-md" [data]="vm.Body" [enableMermaid]="false"></mj-markdown>
                       }
                       @default {
-                        <p class="card-message card-message-full">{{vm.N.Message}}</p>
+                        <p class="card-message card-message-full">{{vm.Body || vm.N.Message}}</p>
                       }
                     }
                   </div>
@@ -222,7 +227,7 @@
                 @if (vm.N.Unread) {
                   <button class="card-action-btn"
                           type="button"
-                          (click)="markAsRead(vm.N, true, null)"
+                          (click)="markAsRead(vm.N, true, null); $event.stopPropagation()"
                           [attr.aria-label]="'Mark ' + vm.N.Title + ' as read'"
                           title="Mark as Read">
                     <i class="fa-solid fa-check" aria-hidden="true"></i>
@@ -231,7 +236,7 @@
                 } @else {
                   <button class="card-action-btn"
                           type="button"
-                          (click)="markAsRead(vm.N, false, null)"
+                          (click)="markAsRead(vm.N, false, null); $event.stopPropagation()"
                           [attr.aria-label]="'Mark ' + vm.N.Title + ' as unread'"
                           title="Mark as Unread">
                     <i class="fa-solid fa-envelope" aria-hidden="true"></i>

@@ -97,7 +97,7 @@ export class DuplicateReasoningAgentProvider extends DuplicateReasoningProvider 
 
         const agentRunID = result.agentRun?.ID ?? null;
         if (!result.success) {
-            const failed = this.failedOutput(result.agentRun?.ErrorMessage ?? 'Agent execution failed');
+            const failed = this.failedOutput(result.agentRun?.ErrorMessage || result.errorMessage || 'Agent execution failed');
             failed.AIAgentRunID = agentRunID;
             return failed;
         }

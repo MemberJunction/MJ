@@ -13,7 +13,10 @@ export * from './ExtractStage.js';
 export * from './TagStage.js';
 export * from './SegmentStage.js';
 export * from './EmbedStage.js';
+export * from './EntityGraphOverlayStore.js';
+export * from './GraphStage.js';
 export * from './DeleteStage.js';
+export * from './SettleItemEmbeddingStage.js';
 
 /** Static import target that keeps the built-in stages out of the bundler's tree-shaker. */
 export function LoadContentPipelineStages(): void {

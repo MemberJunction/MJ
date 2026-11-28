@@ -81,6 +81,7 @@ export class ContentItemTagBridge {
                 ResultType: 'simple',
                 Fields: ['ID', 'EntityRecordDocumentID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser,
         );
@@ -99,6 +100,7 @@ export class ContentItemTagBridge {
                 ResultType: 'simple',
                 Fields: ['EntityID', 'RecordID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 // A one-off lookup by ID; a cached RunView would read every column (DocumentText, VectorJSON).
                 BypassCache: true,
             },

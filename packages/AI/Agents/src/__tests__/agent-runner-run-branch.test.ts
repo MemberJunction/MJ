@@ -42,7 +42,13 @@ const USER = { ID: 'user-1', Email: 'it@example.com' } as unknown as UserInfo;
 /** The instance seams this suite stubs, reached through an explicit shape (no `any`). */
 interface RunnerSeams {
     RunAgent(params: ExecuteAgentParams): Promise<ExecuteAgentResult>;
-    gatherConversationArtifacts(conversationId: string, contextUser: UserInfo, historyFrom?: Date, branchId?: string | null): Promise<InputArtifact[]>;
+    gatherConversationArtifacts(
+        conversationId: string,
+        contextUser: UserInfo,
+        historyFrom?: Date,
+        branchId?: string | null,
+        providerOverride?: IMetadataProvider
+    ): Promise<InputArtifact[]>;
 }
 
 /** A fake conversation-detail entity. */
@@ -86,6 +92,7 @@ function makeParams(over: Partial<ExecuteAgentParams> = {}): ExecuteAgentParams 
 
 interface Stubbed {
     runner: AgentRunner;
+    provider: IMetadataProvider;
     gather: MockInstance<RunnerSeams['gatherConversationArtifacts']>;
     runAgent: MockInstance<RunnerSeams['RunAgent']>;
 }
@@ -98,7 +105,7 @@ function stub(provider: IMetadataProvider): Stubbed {
         success: false,
         agentRun: { ID: 'run-1', Message: 'done' },
     } as unknown as ExecuteAgentResult);
-    return { runner, gather, runAgent };
+    return { runner, provider, gather, runAgent };
 }
 
 function runParams(s: Stubbed): ExecuteAgentParams {
@@ -116,18 +123,18 @@ describe('AgentRunner.RunAgentInConversation — the run reads its branch', () =
     it('reads the branch of a caller-created reply row when the caller names none', async () => {
         const s = stub(makeProvider([makeDetail('reply-1', 'b1')]));
 
-        await s.runner.RunAgentInConversation(makeParams(), { conversationId: 'conv-1', conversationDetailId: 'reply-1' });
+        await s.runner.RunAgentInConversation(makeParams({ provider: s.provider }), { conversationId: 'conv-1', conversationDetailId: 'reply-1' });
 
-        expect(s.gather).toHaveBeenCalledWith('conv-1', USER, undefined, 'b1');
+        expect(s.gather).toHaveBeenCalledWith('conv-1', USER, undefined, 'b1', s.provider);
         expect(runParams(s).ConversationBranchID).toBe('b1');
     });
 
     it('reads the branch of a reply row loaded without a pre-resolved conversation', async () => {
         const s = stub(makeProvider([makeDetail('reply-1', 'b1'), makeDetail('reply-1', 'b1')]));
 
-        await s.runner.RunAgentInConversation(makeParams(), { conversationDetailId: 'reply-1' });
+        await s.runner.RunAgentInConversation(makeParams({ provider: s.provider }), { conversationDetailId: 'reply-1' });
 
-        expect(s.gather).toHaveBeenCalledWith('conv-1', USER, undefined, 'b1');
+        expect(s.gather).toHaveBeenCalledWith('conv-1', USER, undefined, 'b1', s.provider);
         expect(runParams(s).ConversationBranchID).toBe('b1');
     });
 
@@ -136,11 +143,11 @@ describe('AgentRunner.RunAgentInConversation — the run reads its branch', () =
         const replyRow = makeDetail('reply-1', null);
         const s = stub(makeProvider([userRow, replyRow]));
 
-        await s.runner.RunAgentInConversation(makeParams({ ConversationBranchID: 'b1' }), { conversationId: 'conv-1', userMessage: 'hi' });
+        await s.runner.RunAgentInConversation(makeParams({ provider: s.provider, ConversationBranchID: 'b1' }), { conversationId: 'conv-1', userMessage: 'hi' });
 
         expect(userRow.BranchID).toBe('b1');
         expect(replyRow.BranchID).toBe('b1');
-        expect(s.gather).toHaveBeenCalledWith('conv-1', USER, undefined, 'b1');
+        expect(s.gather).toHaveBeenCalledWith('conv-1', USER, undefined, 'b1', s.provider);
         expect(runParams(s).ConversationBranchID).toBe('b1');
     });
 
@@ -149,29 +156,29 @@ describe('AgentRunner.RunAgentInConversation — the run reads its branch', () =
         const replyRow = makeDetail('reply-1', 'stale');
         const s = stub(makeProvider([userRow, replyRow]));
 
-        await s.runner.RunAgentInConversation(makeParams(), { conversationId: 'conv-1', userMessage: 'hi' });
+        await s.runner.RunAgentInConversation(makeParams({ provider: s.provider }), { conversationId: 'conv-1', userMessage: 'hi' });
 
         expect(userRow.BranchID).toBeNull();
         expect(replyRow.BranchID).toBeNull();
-        expect(s.gather).toHaveBeenCalledWith('conv-1', USER, undefined, undefined);
+        expect(s.gather).toHaveBeenCalledWith('conv-1', USER, undefined, undefined, s.provider);
         expect(runParams(s)).not.toHaveProperty('ConversationBranchID');
     });
 
     it('leaves ConversationBranchID absent for a reply row on the trunk', async () => {
         const s = stub(makeProvider([makeDetail('reply-1', null)]));
 
-        await s.runner.RunAgentInConversation(makeParams(), { conversationId: 'conv-1', conversationDetailId: 'reply-1' });
+        await s.runner.RunAgentInConversation(makeParams({ provider: s.provider }), { conversationId: 'conv-1', conversationDetailId: 'reply-1' });
 
-        expect(s.gather).toHaveBeenCalledWith('conv-1', USER, undefined, undefined);
+        expect(s.gather).toHaveBeenCalledWith('conv-1', USER, undefined, undefined, s.provider);
         expect(runParams(s)).not.toHaveProperty('ConversationBranchID');
     });
 
     it('keeps the branch the caller named over the reply row\'s branch', async () => {
         const s = stub(makeProvider([makeDetail('reply-1', 'b1')]));
 
-        await s.runner.RunAgentInConversation(makeParams({ ConversationBranchID: 'b2' }), { conversationId: 'conv-1', conversationDetailId: 'reply-1' });
+        await s.runner.RunAgentInConversation(makeParams({ provider: s.provider, ConversationBranchID: 'b2' }), { conversationId: 'conv-1', conversationDetailId: 'reply-1' });
 
-        expect(s.gather).toHaveBeenCalledWith('conv-1', USER, undefined, 'b2');
+        expect(s.gather).toHaveBeenCalledWith('conv-1', USER, undefined, 'b2', s.provider);
         expect(runParams(s).ConversationBranchID).toBe('b2');
     });
 });

@@ -149,9 +149,33 @@ The server resolver (`ExecuteRemoteOperationResolver`) composes the **existing**
    `Active`, and `AI` ops must additionally be `Approved`, so a registered-but-disabled (or unapproved AI)
    operation is rejected on the wire even though its class is still in code. A code-only op with no row passes.
 4. **System-user gate** (`RequiresSystemUser`) and the entity-permission ceiling, as the operation touches data.
-5. The operation's own **`Authorize(input, user)`** hook.
+5. **Scope-limited gate** (`AllowScopeLimitedPrincipals`) — anonymous magic-link guests and resource-scoped
+   magic-link sessions are refused unless the operation sets `AllowScopeLimitedPrincipals = true`.
+6. The operation's own **`Authorize(input, user)`** hook.
 
 So a logged-in user is bounded by their role/entity permissions; an API-key caller additionally clears the scope.
+
+### Serving magic-link guests
+
+A magic-link session's scope is enforced by row-level security on entity reads. It does not bound what an
+operation does — an operation runs server code, often with more reach than the caller's own reads. So an
+operation serves a scope-limited session only when it opts in, and an operation that opts in **must** check
+the scope itself in `Authorize`:
+
+```typescript
+@RegisterClass(BaseRemotableOperation, 'Forms.SaveResponse')
+export class SaveResponseServerOperation extends FormsSaveResponseOperation {
+    public override readonly AllowScopeLimitedPrincipals = true;
+
+    protected override async Authorize(input: FormsSaveResponseInput, user: UserInfo): Promise<boolean> {
+        const scopeId = user.MagicLinkScope?.ResourceID;
+        if (scopeId) {
+            return UUIDsEqual(scopeId, input.DistributionID); // a scoped guest acts only on its own resource
+        }
+        return !user.IsMagicLinkAnonymous; // an anonymous guest with no resource has nothing to act on
+    }
+}
+```
 
 ## Long-running operations (RO-3)
 

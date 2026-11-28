@@ -877,6 +877,7 @@ async function handleAgentRun(
         PrimaryScopeEntityName: ctx.runScope?.PrimaryScopeEntityName ?? undefined,
         PrimaryScopeRecordID: ctx.runScope?.PrimaryScopeRecordID ?? undefined,
         SecondaryScopes: ctx.runScope?.SecondaryScopes ?? undefined,
+        SearchScopeIDs: ctx.runScope?.SearchScopeIDs ?? undefined,
         maxExecutionTimeMs: args.MaxExecutionTimeMs,
         cancellationToken: ctx.abortSignal
     });

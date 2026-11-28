@@ -1,0 +1,29 @@
+<button
+  type="button"
+  class="mjas-trigger"
+  [class.mjas-trigger--open]="IsOpen"
+  [class.mjas-trigger--rounded]="Shape === 'rounded'"
+  [style.width.px]="Size"
+  [style.height.px]="Size"
+  [style.flex-basis.px]="Size"
+  [style.font-size.px]="IconFontSize"
+  [style.border-color]="AccentColor || null"
+  [style.color]="!PreviewUrl && AccentColor ? AccentColor : null"
+  [disabled]="Disabled"
+  [attr.aria-expanded]="IsOpen"
+  [title]="Title"
+  (click)="OnClick()">
+  @if (PreviewUrl) {
+    <img [src]="PreviewUrl" [alt]="AltText" (error)="PreviewError = true" />
+  } @else {
+    <i [class]="IconClass || 'fa-solid fa-wand-magic-sparkles'" aria-hidden="true"></i>
+  }
+  @if (BadgeLabel) {
+    <span class="mjas-trigger-badge" [style.background-color]="AccentColor || null" aria-hidden="true">
+      @if (BadgeIconClass) {
+        <i [class]="BadgeIconClass"></i>
+      }
+      {{ BadgeLabel }}
+    </span>
+  }
+</button>

@@ -32,9 +32,18 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
     LogStatusEx: vi.fn(),
     Metadata: vi.fn().mockImplementation(() => ({ GetEntityObject: vi.fn(), Provider: {} })),
 }));
-vi.mock('@memberjunction/ai-agents', () => ({ AgentRunner: class {} }));
-vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
-vi.mock('@memberjunction/actions', () => ({ ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } } }));
+vi.mock('@memberjunction/ai-agents', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/ai-agents')>()),
+    AgentRunner: class {},
+}));
+vi.mock('@memberjunction/ai-prompts', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/ai-prompts')>()),
+    AIPromptRunner: class {},
+}));
+vi.mock('@memberjunction/actions', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/actions')>()),
+    ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } },
+}));
 
 import { UserRoutineDispatcherDriver } from '../drivers/UserRoutineDispatcherDriver';
 
@@ -135,7 +144,7 @@ describe('UserRoutineDispatcherDriver run-row status', () => {
         driver.createRunRow = async () => run;
         driver.runAndRecord = async () => { throw new Error('routine row update blew up'); };
 
-        const summary = await driver.executeRoutine({ ID: 'R-1', Name: 'R' }, { ContextUser: { ID: 'u' } });
+        const summary = await driver.executeRoutine({ ID: 'R-1', Name: 'R', UserID: 'u' }, { ContextUser: { ID: 'u' } });
 
         expect(run.Status, 'the committed outcome must survive').toBe('Success');
         expect(summary.RunStatus, 'and the summary must report what is on disk').toBe('Success');
@@ -154,7 +163,7 @@ describe('UserRoutineDispatcherDriver run-row status', () => {
         driver.createRunRow = async () => run;
         driver.runAndRecord = async (_r, runRow) => driver.finalizeRunRow(runRow, OUTCOME, 'summary', 'hash');
 
-        const summary = await driver.executeRoutine({ ID: 'R-1', Name: 'R' }, { ContextUser: { ID: 'u' } });
+        const summary = await driver.executeRoutine({ ID: 'R-1', Name: 'R', UserID: 'u' }, { ContextUser: { ID: 'u' } });
 
         expect(saves.length, 'nothing reached the database').toBe(0);
         expect(persisted(), 'so the row is still Running on disk').toBe('Running');
@@ -167,7 +176,7 @@ describe('UserRoutineDispatcherDriver run-row status', () => {
         driver.createRunRow = async () => run;
         driver.runAndRecord = async () => { throw new Error('exploded before finalize'); };
 
-        const summary = await driver.executeRoutine({ ID: 'R-1', Name: 'R' }, { ContextUser: { ID: 'u' } });
+        const summary = await driver.executeRoutine({ ID: 'R-1', Name: 'R', UserID: 'u' }, { ContextUser: { ID: 'u' } });
 
         expect(run.Status).toBe('Failed');
         expect(summary.RunStatus).toBe('Failed');

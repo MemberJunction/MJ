@@ -18,22 +18,23 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 3
+            "Priority": 4,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "E1F41F9A-38D9-412B-8FEB-A9F1CC7589CC"
           },
           "sync": {
-            "lastModified": "2026-10-13T19:00:04.967Z",
-            "checksum": "1e654541b42064b45efa0b429471c77948f05d1b1d3009997182f1fd1483a820"
+            "lastModified": "2026-11-24T20:27:12.313Z",
+            "checksum": "040721887676535c736e244fa1c2f79e32e24998f332384896e40b8037d680d4"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-6.1 Sol",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 2
           },
@@ -41,14 +42,14 @@
             "ID": "4885E94A-EED1-4312-BDA4-6AC6DF8F66AE"
           },
           "sync": {
-            "lastModified": "2026-10-13T19:00:04.984Z",
-            "checksum": "1633dff7e44b36b1ca43c508b8719a89d5ce78f8c2e9115561b8aee7e36b2851"
+            "lastModified": "2026-11-24T20:27:12.322Z",
+            "checksum": "eca9e932c02a0e9f5b0498f1bb2938124dc7ef856667467239698ea3da2d5e17"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5.5",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 1
           },
@@ -56,18 +57,31 @@
             "ID": "154E2718-B286-400F-9AD3-F2A028109359"
           },
           "sync": {
-            "lastModified": "2026-10-13T19:00:05.002Z",
-            "checksum": "8adea9d03ca208c5615ca3945c0e120909db1d7341a30040219ac2417812264f"
+            "lastModified": "2026-11-24T20:27:12.333Z",
+            "checksum": "992345679e7c1078d1a6a028ea38aca78233a882faf67a26a73ae371bd60a203"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 3,
+            "Status": "Active",
+            "EffortLevel": 20
+          },
+          "primaryKey": {
+            "ID": "6F5B1479-CAC3-4A21-B7F3-BBCBE573862D"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:27:12.350Z",
+            "checksum": "a7fb85a6ea14310a8aaeb88fc54db774defcc6868a5664a6b0543a349d0be754"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "76A47F64-E9D6-40CD-937C-B2EE70BB09C2"
-    },
-    "sync": {
-      "lastModified": "2026-10-13T19:00:04.937Z",
-      "checksum": "f76100f72adb1acdc9ad2d3a419ebb960ea388d2eb69c6366dbca5d7c335b858"
     }
   }
 ]

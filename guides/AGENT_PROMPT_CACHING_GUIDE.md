@@ -6,6 +6,10 @@ How the Loop agent lays out each request so that provider prompt caches survive 
 
 **Ships with**: `@memberjunction/ai-agents`, `@memberjunction/ai`, `@memberjunction/ai-core-plus`, `@memberjunction/ai-prompts`, `@memberjunction/ai-anthropic` (PR #4508). Before-and-after numbers: [`packages/AI/Agents/docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md`](../packages/AI/Agents/docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md).
 
+**Canonical Guides:** [Agent Builder & Extension Guide](AGENT_BUILDER_EXTENSION_GUIDE.md) (see §5 *Prompt Prefix-Cache Discipline*) · [Agent Administrator Guide](AGENT_ADMINISTRATOR_GUIDE.md) · [Agent End-User Guide](AGENT_END_USER_GUIDE.md) · [BaseAgent Rebase Map](BASE_AGENT_REBASE_MAP.md).
+
+> **Refactored Seam Locations:** Following the `BaseAgent` helper decomposition (`base-agent.ts` = 536 lines), prompt assembly and trailing runtime-state logic (`preparePromptParams`, `assembleOutgoingMessages`, `resolvePrefixPromptCache`) live in `BaseAgentPromptHelper` (`packages/AI/Agents/src/helpers/prompt/AgentPromptExecutionHelper.ts` and `AgentNativeToolsAndPrefixCacheHelper.ts`), and the action-failure circuit breaker lives in `BaseAgentActionsHelper` (`packages/AI/Agents/src/helpers/actions/AgentActionCircuitBreakerHelper.ts`). All historical `BaseAgent` method names remain preserved as `@deprecated` delegates throughout `v6.x` (see [BaseAgent Rebase Map](BASE_AGENT_REBASE_MAP.md)).
+
 ---
 
 ## 1. The problem
@@ -72,7 +76,7 @@ The vendor default sits above the model's own bag on purpose: a host's statement
 
 `BaseAgent.resolvePrefixPromptCache(model, vendor)` finds the vendor's *inference-provider* model-vendor row and reads the effective configuration through `AIEngine.GetEffectiveModelConfiguration`, which folds in the `ModelDefaults` of the vendor named by that model-vendor row. `true` ships under `Configuration.ModelDefaults` on the OpenAI and x.ai vendor rows in `metadata/ai-vendors`, so every model they serve inherits it and a new OpenAI model needs no seed of its own. A host that caches differently for one model sets the flag on that model-vendor row in `metadata/ai-models`. Nothing in code knows a provider's name.
 
-The mode is decided **once per run**: from a runtime model override, else from the first iteration's model selection, then frozen so a failover cannot flip the layout mid-run. On turn 1, before any selection is known, the layout is replace-in-place; if turn 2 resolves to append-only, turn 1's fragment is restored at the turn-1 boundary. The prompt's bound models are deliberately not consulted, because prompts bind several vendors for failover.
+The mode is decided **once per run**: a runtime model override that names a vendor, or whose catalog says yes, answers immediately; otherwise the first iteration's model selection decides. The answer is then frozen so a failover cannot flip the layout mid-run. On turn 1, before any selection is known, the layout is replace-in-place; if turn 2 resolves to append-only, turn 1's fragment is restored at the turn-1 boundary. The prompt's bound models are deliberately not consulted, because prompts bind several vendors for failover.
 
 Per-agent override, on the Loop type's prompt params (`trailingStateMode`): `auto` (default), `appendOnly` (a serving path whose rows carry no strategy yet), `replace` (context growth matters more than cache hits).
 

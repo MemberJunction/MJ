@@ -1,11 +1,25 @@
-import { Component, ChangeDetectorRef, NgZone, OnDestroy, OnInit, AfterViewInit, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, NgZone, OnDestroy, OnInit, AfterViewInit, ViewContainerRef, inject } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
-import { MJUserNotificationEntity, MJUserNotificationTypeEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { CompositeKey, TransactionGroupBase } from '@memberjunction/core';
-import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { ApplicationManager, NavItem } from '@memberjunction/ng-base-application';
+import { MJUserNotificationEntity, MJUserNotificationTypeEntity } from '@memberjunction/core-entities';
+import { TransactionGroupBase } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ConversationUtility } from '@memberjunction/ai-core-plus';
+import { ProfileDialogService } from '../shell/services/profile-dialog.service';
+import {
+  BuildNotificationUrl,
+  FormatRelativeNotificationTime,
+  GetNotificationTypeDisplay,
+  GetSortedNotificationTypes,
+  IsNotificationClickable as IsNotificationClickableHelper,
+  MarkNotificationAsRead,
+  NavigateToNotificationTarget,
+  NotificationUrlInfo,
+} from './notification-action.helpers';
 
 /**
  * Radio button filter options for notification read status
@@ -13,7 +27,22 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 type ReadFilterOption = 'All' | 'Unread' | 'Read';
 
 /** How a notification's Message should be rendered. */
-type MessageKind = 'html' | 'markdown' | 'text';
+export type NotificationMessageKind = 'html' | 'markdown' | 'text';
+type MessageKind = NotificationMessageKind;
+
+/** Result of classifying and normalizing a notification message for preview and expanded rendering. */
+export interface ClassifiedNotificationMessage {
+  Kind: NotificationMessageKind;
+  Body: string;
+  Preview: string;
+  Expandable: boolean;
+}
+
+interface MarkdownSegment {
+  text: string;
+  isCode: boolean;
+  fenced: boolean;
+}
 
 /**
  * Render-ready view model for one notification. Built once per data/filter change
@@ -25,7 +54,7 @@ type MessageKind = 'html' | 'markdown' | 'text';
 interface NotificationVM {
   N: MJUserNotificationEntity;
   Kind: MessageKind;
-  /** Rich body: extracted+stripped HTML fragment (html) or the raw message (markdown). Empty for plain text. */
+  /** Rich body: extracted+stripped HTML fragment (html), normalized markdown (markdown), or normalized plain text (text). */
   Body: string;
   /** Plain-text excerpt for the collapsed card. */
   Preview: string;
@@ -44,38 +73,24 @@ interface NotificationGroup {
 }
 
 /**
- * Configuration for record-type resource navigation
+ * Type-filter value for notifications with no NotificationTypeID. Not a UUID, so it cannot
+ * collide with a real type ID.
  */
-interface RecordResourceConfig {
-  Entity?: string;
-}
+export const NO_NOTIFICATION_TYPE_FILTER = '__no-type__';
 
 /**
- * Configuration for conversation-type resource navigation
+ * Whether a notification's type matches the Type dropdown's selection: `null` (All Types)
+ * matches everything, {@link NO_NOTIFICATION_TYPE_FILTER} matches untyped notifications,
+ * and any other value matches that type ID.
  */
-interface ConversationResourceConfig {
-  type: 'conversation';
-  conversationId?: string;
-  messageId?: string;
-  artifactId?: string;
-  versionNumber?: string;
-  taskId?: string;
-}
-
-/**
- * Configuration for agent-request-type resource navigation
- */
-interface AgentRequestResourceConfig {
-  type: 'agent-request';
-  requestId: string;
-}
-
-/**
- * Result of parsing a notification URL
- */
-interface NotificationUrlInfo {
-  urlParts: string[];
-  queryString: string;
+export function MatchesNotificationTypeFilter(notificationTypeId: string | null | undefined, filter: string | null): boolean {
+  if (filter == null) {
+    return true;
+  }
+  if (filter === NO_NOTIFICATION_TYPE_FILTER) {
+    return !notificationTypeId;
+  }
+  return UUIDsEqual(notificationTypeId, filter);
 }
 
 /** Collapsed-preview cap (characters of plain text). */
@@ -83,6 +98,336 @@ const PREVIEW_MAX_CHARS = 240;
 
 /** How often the snapshot relative-time labels refresh. */
 const RELATIVE_REFRESH_MS = 60_000;
+
+function collapseWhitespaceValue(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function excerptValue(text: string): string {
+  return text.length > PREVIEW_MAX_CHARS ? `${text.substring(0, PREVIEW_MAX_CHARS - 1)}…` : text;
+}
+
+/**
+ * Single-pass decoder for legacy Nunjucks-escaped HTML entities in non-HTML notification text.
+ * Decoding in one regex pass ensures `&amp;quot;` becomes `&quot;` rather than double-decoding to `"`.
+ */
+function decodeSafeHtmlEntities(text: string): string {
+  return text.replace(/&(amp|quot|#39|#x27);/gi, (match, entity: string) => {
+    switch (entity.toLowerCase()) {
+      case 'amp':
+        return '&';
+      case 'quot':
+        return '"';
+      case '#39':
+      case '#x27':
+        return "'";
+      default:
+        return match;
+    }
+  });
+}
+
+function findFencedBlockEnd(text: string, start: number): number | null {
+  const lineEndIdx = text.indexOf('\n', start);
+  const firstLine = lineEndIdx === -1 ? text.slice(start) : text.slice(start, lineEndIdx);
+  const openMatch = /^[ \t]{0,3}(`{3,}|~{3,})(.*)$/.exec(firstLine.replace(/\r$/, ''));
+  if (!openMatch) {
+    return null;
+  }
+  const fence = openMatch[1];
+  const fenceChar = fence[0];
+  const infoString = openMatch[2];
+  if (fenceChar === '`' && infoString.includes('`')) {
+    return null;
+  }
+  if (lineEndIdx === -1) {
+    return text.length;
+  }
+  const closePattern = new RegExp(`^[ \\t]{0,3}${fenceChar}{${fence.length},}[ \\t]*$`);
+  let cursor = lineEndIdx + 1;
+  while (cursor < text.length) {
+    const nextNewline = text.indexOf('\n', cursor);
+    const rawLine = nextNewline === -1 ? text.slice(cursor) : text.slice(cursor, nextNewline);
+    if (closePattern.test(rawLine.replace(/\r$/, ''))) {
+      return nextNewline === -1 ? text.length : nextNewline + 1;
+    }
+    if (nextNewline === -1) {
+      return text.length;
+    }
+    cursor = nextNewline + 1;
+  }
+  return text.length;
+}
+
+function findInlineCodeEnd(text: string, start: number, tickCount: number): number | null {
+  let j = start + tickCount;
+  while (j < text.length) {
+    if (text[j] === '\n') {
+      const blankMatch = /^\n[ \t]*\r?\n/.exec(text.slice(j));
+      if (blankMatch) {
+        return null;
+      }
+    }
+    if (text[j] === '`') {
+      let run = 0;
+      while (j + run < text.length && text[j + run] === '`') {
+        run++;
+      }
+      if (run === tickCount) {
+        return j + run;
+      }
+      j += run;
+      continue;
+    }
+    j++;
+  }
+  return null;
+}
+
+function splitMarkdownCodeSegments(text: string): MarkdownSegment[] {
+  const segments: MarkdownSegment[] = [];
+  let proseStart = 0;
+  let i = 0;
+
+  const flushProse = (end: number): void => {
+    if (end > proseStart) {
+      segments.push({ text: text.slice(proseStart, end), isCode: false, fenced: false });
+    }
+  };
+
+  while (i < text.length) {
+    const atLineStart = i === 0 || text[i - 1] === '\n';
+    if (atLineStart) {
+      const fenceEnd = findFencedBlockEnd(text, i);
+      if (fenceEnd !== null) {
+        flushProse(i);
+        segments.push({ text: text.slice(i, fenceEnd), isCode: true, fenced: true });
+        i = fenceEnd;
+        proseStart = i;
+        continue;
+      }
+    }
+    if (text[i] === '`') {
+      let tickCount = 0;
+      while (i + tickCount < text.length && text[i + tickCount] === '`') {
+        tickCount++;
+      }
+      const inlineEnd = findInlineCodeEnd(text, i, tickCount);
+      if (inlineEnd !== null) {
+        flushProse(i);
+        segments.push({ text: text.slice(i, inlineEnd), isCode: true, fenced: false });
+        i = inlineEnd;
+        proseStart = i;
+        continue;
+      }
+      i += tickCount;
+      continue;
+    }
+    i++;
+  }
+
+  flushProse(text.length);
+  return segments;
+}
+
+function cleanNonHtmlMessage(text: string): string {
+  const segments = splitMarkdownCodeSegments(text);
+  return segments
+    .map(seg => (seg.isCode ? seg.text : ConversationUtility.CleanMentions(decodeSafeHtmlEntities(seg.text))))
+    .join('');
+}
+
+function unwrapInlineCode(segment: string): string {
+  const match = /^(`+)([\s\S]*?)\1$/.exec(segment);
+  if (!match) {
+    return segment;
+  }
+  let inner = match[2];
+  if (inner.length >= 2 && inner.startsWith(' ') && inner.endsWith(' ') && inner.trim().length > 0) {
+    inner = inner.slice(1, -1);
+  }
+  return inner;
+}
+
+function findLinkLabelEnd(text: string, openBracket: number, lineEnd: number): { start: number; closeBracket: number } {
+  let start = openBracket;
+  for (let k = openBracket + 1; k < lineEnd; k++) {
+    const ch = text[k];
+    if (ch === '[') {
+      // Outer '[' cannot form a single-bracket link label; jump directly to the inner '['.
+      start = k;
+    } else if (ch === ']') {
+      return { start, closeBracket: k };
+    }
+  }
+  return { start, closeBracket: -1 };
+}
+
+function findBalancedParenEnd(text: string, openParen: number, lineEnd: number): number {
+  let depth = 1;
+  for (let k = openParen + 1; k < lineEnd; k++) {
+    const ch = text[k];
+    if (ch === '(') {
+      depth++;
+    } else if (ch === ')') {
+      depth--;
+      if (depth === 0) {
+        return k;
+      }
+    }
+  }
+  return -1;
+}
+
+/**
+ * Linear-time O(n) single-pass scanner/replacer for Markdown links `[label](url)` —
+ * caches `lineEnd` per line and advances a strictly monotonic cursor so pathological
+ * `[` or `[a](` sequences never rescan overlapping suffixes.
+ */
+function processMarkdownLinks(text: string, mode: 'detect'): boolean;
+function processMarkdownLinks(text: string, mode: 'strip'): string;
+function processMarkdownLinks(text: string, mode: 'detect' | 'strip'): boolean | string {
+  let out = '';
+  let cursor = 0;
+  let lineEnd = -1;
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] !== '[') {
+      i++;
+      continue;
+    }
+    if (i > lineEnd) {
+      const nl = text.indexOf('\n', i + 1);
+      lineEnd = nl === -1 ? text.length : nl;
+    }
+    const { start, closeBracket } = findLinkLabelEnd(text, i, lineEnd);
+    if (closeBracket === -1) {
+      i = lineEnd;
+      continue;
+    }
+    if (closeBracket <= start + 1 || text[closeBracket + 1] !== '(') {
+      i = closeBracket + 1;
+      continue;
+    }
+    const closeParen = findBalancedParenEnd(text, closeBracket + 1, lineEnd);
+    if (closeParen === -1) {
+      // No closing ')' before lineEnd; advance past the scanned suffix so it is never rescanned.
+      i = lineEnd;
+      continue;
+    }
+    if (mode === 'detect') {
+      if (closeParen > closeBracket + 2) {
+        return true;
+      }
+      i = closeParen + 1;
+      continue;
+    }
+    out += text.slice(cursor, start);
+    out += text.slice(start + 1, closeBracket);
+    cursor = closeParen + 1;
+    i = cursor;
+  }
+  return mode === 'detect' ? false : out + text.slice(cursor);
+}
+
+function stripMarkdownSyntaxOutsideTokens(text: string): string {
+  const stripChunk = (chunk: string): string =>
+    processMarkdownLinks(chunk, 'strip')
+      .replace(/(^|\s)#{1,6}(?=\s|$)/g, '$1')
+      .replace(/(^|\s)>+(?=\s|$)/g, '$1')
+      .replace(/\*+/g, '')
+      .replace(/(^|[^\w])_+|_+(?=[^\w]|$)/g, '$1');
+
+  const tokens = ConversationUtility.ParseSpecialContent(text);
+  if (tokens.length === 0) {
+    return stripChunk(text);
+  }
+  let out = '';
+  let cursor = 0;
+  for (const token of tokens) {
+    out += stripChunk(text.slice(cursor, token.startIndex));
+    out += token.originalText;
+    cursor = token.endIndex;
+  }
+  out += stripChunk(text.slice(cursor));
+  return out;
+}
+
+/**
+ * Strips Markdown formatting for collapsed notification previews while:
+ *  - Decoding legacy `&amp;`, `&#39;`, `&#x27;`, `&quot;` entities once in prose
+ *  - Preserving inline code content without decoding/double-decoding and dropping fenced code blocks
+ *  - Converting `@{"_mode":"mention",...}` tokens into readable text with adjacent record title deduplication
+ */
+export function StripNotificationMarkdown(text: string): string {
+  if (!text) {
+    return '';
+  }
+  const segments = splitMarkdownCodeSegments(text);
+  const rendered = segments
+    .map(seg => {
+      if (seg.fenced) {
+        return ' ';
+      }
+      if (seg.isCode) {
+        return unwrapInlineCode(seg.text);
+      }
+      const decoded = decodeSafeHtmlEntities(seg.text);
+      const stripped = stripMarkdownSyntaxOutsideTokens(decoded);
+      return ConversationUtility.CleanMentions(stripped);
+    })
+    .join('');
+  return collapseWhitespaceValue(rendered);
+}
+
+/**
+ * Classifies a notification `Message` for rendering and normalizes non-HTML previews,
+ * Markdown bodies (`&amp;`/`&#39;`/`&#x27;`/`&quot;` single-pass decode outside code blocks
+ * and `@{"_mode":"mention",...}` conversion with adjacent record title deduplication), and
+ * HTML notification bodies via {@link ConversationUtility.CleanHtmlMentions}.
+ */
+export function ClassifyNotificationMessage(message: string): ClassifiedNotificationMessage {
+  const trimmed = (message ?? '').trim();
+  const nonCodeText = splitMarkdownCodeSegments(trimmed)
+    .filter(seg => !seg.isCode)
+    .map(seg => seg.text)
+    .join(' ');
+  const looksHtml = /^<!doctype\s|^<html[\s>]/i.test(trimmed) || /<\/?[a-z][^<>]*>/i.test(nonCodeText);
+  if (looksHtml) {
+    const doc = new DOMParser().parseFromString(trimmed, 'text/html');
+    for (const el of Array.from(doc.querySelectorAll('style, script, link, meta, title'))) {
+      el.remove();
+    }
+    const rawBody = doc.body?.innerHTML?.trim() ?? '';
+    const body = ConversationUtility.CleanHtmlMentions(rawBody);
+    const cleanedDoc = body !== rawBody
+      ? new DOMParser().parseFromString(body, 'text/html')
+      : doc;
+    const text = collapseWhitespaceValue(ConversationUtility.CleanMentions(cleanedDoc.body?.textContent ?? ''));
+    return { Kind: 'html', Body: body, Preview: excerptValue(text), Expandable: true };
+  }
+
+  const looksMarkdown =
+    /^#{1,6}\s/m.test(trimmed) ||
+    /\*\*[^*]+\*\*/.test(trimmed) ||
+    /^[ \t]*[-*][ \t]+/m.test(trimmed) ||
+    trimmed.includes('```') ||
+    /^[ \t]*~~~/m.test(trimmed) ||
+    processMarkdownLinks(trimmed, 'detect');
+  if (looksMarkdown) {
+    const body = cleanNonHtmlMessage(trimmed);
+    const preview = excerptValue(StripNotificationMarkdown(trimmed));
+    return { Kind: 'markdown', Body: body, Preview: preview, Expandable: true };
+  }
+
+  const cleanedText = collapseWhitespaceValue(cleanNonHtmlMessage(trimmed));
+  return {
+    Kind: 'text',
+    Body: cleanedText,
+    Preview: cleanedText,
+    Expandable: cleanedText.length > PREVIEW_MAX_CHARS,
+  };
+}
 
 @Component({
   standalone: false,
@@ -93,6 +438,18 @@ const RELATIVE_REFRESH_MS = 60_000;
 export class UserNotificationsComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone, { optional: true });
+  private profileDialogService = inject(ProfileDialogService, { optional: true });
+  private viewContainerRef = inject(ViewContainerRef, { optional: true });
+
+  public get CanOpenPreferences(): boolean {
+    return Boolean(this.profileDialogService && this.viewContainerRef);
+  }
+
+  public OpenNotificationPreferences(): void {
+    if (this.profileDialogService && this.viewContainerRef) {
+      this.profileDialogService.Open(this.viewContainerRef);
+    }
+  }
 
   public RadioSelected: ReadFilterOption = 'All';
 
@@ -126,6 +483,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
   public SelectedTypeFilter: string | null = null;
 
+  /** Dropdown value for the "Other (no type)" option. */
+  public readonly NoTypeFilter = NO_NOTIFICATION_TYPE_FILTER;
+
   /** @deprecated Use {@link SelectedTypeFilter}. */
   public get selectedTypeFilter(): string | null {
     return this.SelectedTypeFilter;
@@ -152,6 +512,8 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   private groupsKey = '';
   private vmCache = new Map<string, NotificationVM>();
   private relativeTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly destroy$ = new Subject<void>();
+  private cacheVersion = 0;
 
   constructor (
     public SharedService: SharedService,
@@ -172,6 +534,12 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
 
   async ngOnInit() {
     this.loadNotificationTypes();
+    MJNotificationService.Notifications$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.invalidateCaches();
+        this.cdr.markForCheck();
+      });
     // Refresh the snapshot relative-time labels between change-detection passes.
     // Run outside NgZone so the 60s timer only triggers Angular CD when a label actually changes.
     const startTimer = () => {
@@ -206,22 +574,23 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
     if (this.relativeTimer != null) {
       clearInterval(this.relativeTimer);
     }
   }
 
+  private invalidateCaches(): void {
+    this.cacheVersion = (this.cacheVersion ?? 0) + 1;
+    this.notificationsToShowKey = '';
+    this.unreadNotificationsKey = '';
+    this.readNotificationsKey = '';
+    this.groupsKey = '';
+  }
+
   private loadNotificationTypes() {
-    // Get notification types from UserInfoEngine cache, sorted client-side
-    // UserInfoEngine is auto-configured via @RegisterForStartup()
-    this.NotificationTypes = [...UserInfoEngine.Instance.NotificationTypes].sort((a, b) => {
-      const priorityA = a.Priority ?? 999;
-      const priorityB = b.Priority ?? 999;
-      if (priorityA !== priorityB) {
-        return priorityA - priorityB;
-      }
-      return a.Name.localeCompare(b.Name);
-    });
+    this.NotificationTypes = GetSortedNotificationTypes();
     this.LoadingTypes = false;
   }
 
@@ -242,7 +611,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     for (let i = 0; i < all.length; i++) {
       if (all[i].Unread) unreadCount++;
     }
-    const baseKey = `${all.length}|${unreadCount}|${all[0]?.ID ?? ''}|${all[all.length - 1]?.ID ?? ''}`;
+    const baseKey = `${this.cacheVersion ?? 0}|${all.length}|${unreadCount}|${all[0]?.ID ?? ''}|${all[all.length - 1]?.ID ?? ''}`;
     return { all, unreadCount, baseKey };
   }
 
@@ -267,8 +636,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     }
 
     // Apply type filter if selected
-    if (this.SelectedTypeFilter) {
-      temp = temp.filter(n => UUIDsEqual(n.NotificationTypeID, this.SelectedTypeFilter));
+    if (this.SelectedTypeFilter != null) {
+      const typeFilter = this.SelectedTypeFilter;
+      temp = temp.filter(n => MatchesNotificationTypeFilter(n.NotificationTypeID, typeFilter));
     }
 
     // Apply text filter if it is not empty
@@ -316,7 +686,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
 
   private vmFor(n: MJUserNotificationEntity): NotificationVM {
     const cached = this.vmCache.get(n.ID);
-    if (cached) {
+    if (cached && cached.N.Message === n.Message) {
       cached.N = n;
       cached.Clickable = this.IsNotificationClickable(n);
       return cached;
@@ -341,60 +711,28 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
    *    parsed with DOMParser, chrome elements (style/script/link/meta/title) removed,
    *    and the body markup kept for a SANITIZED [innerHTML] binding (Angular's
    *    default sanitizer strips scripts/event handlers on bind).
-   *  - Markdown-looking text → rendered through mj-markdown when expanded.
-   *  - Everything else → plain text.
+   *  - Markdown-looking text → rendered through mj-markdown when expanded, with
+   *    legacy entities decoded and `@{"_mode":"mention",...}` tokens normalized.
+   *  - Everything else → plain text with entities decoded and mentions converted.
    */
   private classifyMessage(message: string): { kind: MessageKind; body: string; preview: string; expandable: boolean } {
-    const trimmed = (message ?? '').trim();
-    const looksHtml = /^<!doctype\s|^<html[\s>]/i.test(trimmed) || /<\/?[a-z][^>]*>/i.test(trimmed);
-    if (looksHtml) {
-      const doc = new DOMParser().parseFromString(trimmed, 'text/html');
-      for (const el of Array.from(doc.querySelectorAll('style, script, link, meta, title'))) {
-        el.remove();
-      }
-      const body = doc.body?.innerHTML?.trim() ?? '';
-      const text = this.collapseWhitespace(doc.body?.textContent ?? '');
-      return { kind: 'html', body, preview: this.excerpt(text), expandable: true };
-    }
-    const looksMarkdown = /(^|\n)#{1,6}\s|\*\*[^*]+\*\*|(^|\n)\s*[-*]\s+|\[[^\]]+\]\([^)]+\)|```/m.test(trimmed);
-    const text = this.collapseWhitespace(trimmed);
-    if (looksMarkdown) {
-      return { kind: 'markdown', body: trimmed, preview: this.excerpt(this.stripMarkdown(text)), expandable: true };
-    }
-    return { kind: 'text', body: '', preview: text, expandable: text.length > PREVIEW_MAX_CHARS };
-  }
-
-  private collapseWhitespace(value: string): string {
-    return value.replace(/\s+/g, ' ').trim();
-  }
-
-  private excerpt(text: string): string {
-    return text.length > PREVIEW_MAX_CHARS ? `${text.substring(0, PREVIEW_MAX_CHARS - 1)}…` : text;
+    const classified = ClassifyNotificationMessage(message);
+    return {
+      kind: classified.Kind,
+      body: classified.Body,
+      preview: classified.Preview,
+      expandable: classified.Expandable,
+    };
   }
 
   /** Light de-noising of markdown syntax for the plain-text preview. */
   private stripMarkdown(text: string): string {
-    return text
-      .replace(/```[\s\S]*?```/g, ' ')
-      .replace(/[#*_`>]+/g, '')
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-      .replace(/\s+/g, ' ')
-      .trim();
+    return StripNotificationMarkdown(text);
   }
 
   /** Compact "just now / 5m ago / 3h ago / 2d ago" label. NEVER call from templates (NG0100) — snapshot only. */
   private relativeTime(value: Date | string | null | undefined): string {
-    if (!value) {
-      return '';
-    }
-    const ms = Date.now() - new Date(value).getTime();
-    const minutes = Math.floor(ms / 60_000);
-    if (minutes < 1) return 'just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return days < 7 ? `${days}d ago` : '';
+    return FormatRelativeNotificationTime(value);
   }
 
   private dayLabel(value: Date | string | null | undefined): string {
@@ -434,24 +772,11 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   // ========================================================================
-  // Clickability + navigation (unchanged behavior)
+  // Clickability + navigation (delegated to notification-action.helpers)
   // ========================================================================
 
   public IsNotificationClickable(notification: MJUserNotificationEntity): boolean {
-    // Check for special types navigated via NavigationService (not a URL)
-    if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
-      const config = SafeJSONParse<AgentRequestResourceConfig>(notification.ResourceConfiguration);
-      if (config && config.type?.trim().toLowerCase() === 'agent-request' && config.requestId) {
-        return true;
-      }
-      const typeName = SafeJSONParse<{ type?: string }>(notification.ResourceConfiguration)?.type?.trim().toLowerCase();
-      if (typeName === 'meet-room') {
-        return true;
-      }
-    }
-
-    const info = this.NotificationUrl(notification);
-    return (info !== null && info.urlParts && info.urlParts.length > 0);
+    return IsNotificationClickableHelper(notification, this.SharedService);
   }
 
   /** @deprecated Use {@link IsNotificationClickable}. */
@@ -460,53 +785,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   public NotificationUrl(notification: MJUserNotificationEntity): NotificationUrlInfo {
-    const url: string[] = [];
-    let queryString = '';
-    if (notification.ResourceRecordID && notification.ResourceRecordID.length > 0 &&
-        notification.ResourceTypeID && notification.ResourceTypeID.length > 0) {
-      // we have a resource here, like a Report, Dashboard, etc
-      // we can generate a url to navigate to it
-      const rt = this.SharedService.ResourceTypeByID(notification.ResourceTypeID);
-      let routeSegment: string | null | undefined;
-      if (rt)
-        routeSegment = this.SharedService.mapResourceTypeNameToRouteSegment(rt.Name);
-
-      if (rt && routeSegment && routeSegment.trim().length > 0) {
-        url.push('resource');
-        url.push(routeSegment);
-        url.push(notification.ResourceRecordID.toString());
-        if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
-          if (rt.Name.trim().toLowerCase() === 'records') {
-            // special handling for records
-            const config = SafeJSONParse<RecordResourceConfig>(notification.ResourceConfiguration);
-            if (config && config.Entity)
-              queryString = `Entity=${config.Entity}`;
-          }
-          else
-            queryString = notification.ResourceConfiguration;
-        }
-      }
-    }
-    else if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
-      // we do NOT have a resource type or resource record id, but we do have a ResourceConfiguration
-      // string, which means we might have information on how to navigate to what we want if we parse the config
-      // HOME screen stuff is done this way
-
-      const config = SafeJSONParse<ConversationResourceConfig>(notification.ResourceConfiguration);
-      if (config && config.type?.trim().toLowerCase() === 'conversation') {
-        url.push('chat');
-        // Build query string with conversation and artifact navigation
-        const queryParams: string[] = [];
-        if (config.conversationId) queryParams.push(`conversationId=${config.conversationId}`);
-        if (config.messageId) queryParams.push(`messageId=${config.messageId}`);
-        if (config.artifactId) queryParams.push(`artifactId=${config.artifactId}`);
-        if (config.versionNumber) queryParams.push(`versionNumber=${config.versionNumber}`);
-        if (config.taskId) queryParams.push(`taskId=${config.taskId}`);
-        queryString = queryParams.join('&');
-      }
-    }
-
-    return { urlParts: url, queryString };
+    return BuildNotificationUrl(notification, this.SharedService);
   }
 
   /** @deprecated Use {@link NotificationUrl}. */
@@ -538,6 +817,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
 
   SelectReadOption(option: ReadFilterOption): void {
     this.RadioSelected = option;
+    this.cdr?.markForCheck();
   }
 
   /** @deprecated Use {@link SelectReadOption}. */
@@ -555,39 +835,19 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   async MarkAsRead(notification: MJUserNotificationEntity, bRead: boolean, transGroup: TransactionGroupBase | null): Promise<boolean> {
-    if (notification) {
-      const notificationId = notification.ID;
-      notification.Unread = !bRead;
-      let notificationEntity: MJUserNotificationEntity;
-      if (notification instanceof MJUserNotificationEntity) {
-        // the passed in param truly is a MJUserNotificationEntity or subclass, so just use it, saves a DB round trip
-        notificationEntity = notification;
+    const saved = await MarkNotificationAsRead(notification, bRead, transGroup, this.ProviderToUse);
+    if (!transGroup) {
+      if (!saved) {
+        this.SharedService?.CreateSimpleNotification(
+          bRead ? 'Unable to mark notification as read' : 'Unable to mark notification as unread',
+          'error',
+          5000
+        );
       }
-      else {
-        // the passed in param is just a plain object, so we need to load the entity
-        const md = this.ProviderToUse;
-        notificationEntity = await md.GetEntityObject<MJUserNotificationEntity>('MJ: User Notifications');
-        await notificationEntity.Load(notificationId);
-        notificationEntity.Unread = !bRead;
-      }
-
-      // part of a transaction group, if so, add it as that will defer the actual network traffic/save
-      if (transGroup) {
-        notificationEntity.TransactionGroup = transGroup;
-        await notificationEntity.Save()
-        return true;
-      }
-      else {
-        // Save the notification (not part of transaction group)
-        await notificationEntity.Save();
-        // Update the observables so badge count refreshes immediately
-        MJNotificationService.UpdateNotificationObservables();
-        return true;
-      }
+      this.invalidateCaches();
+      this.cdr?.markForCheck();
     }
-    else {
-      return false;
-    }
+    return saved;
   }
 
   /** @deprecated Use {@link MarkAsRead}. */
@@ -614,23 +874,50 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   public async MarkAll(bRead: boolean) {
+    const targets = this.AllNotifications.filter(
+      notification => (notification.Unread && bRead) || (!notification.Unread && !bRead)
+    );
+    if (targets.length === 0) {
+      return;
+    }
+
     // Use transaction group for batching - all saves are queued and sent in one round-trip
     const md = this.ProviderToUse;
     const transGroup = await md.CreateTransactionGroup();
+    const previousUnread = new Map<MJUserNotificationEntity, boolean>(
+      targets.map(n => [n, n.Unread])
+    );
 
-    // Queue all saves - no need to await individual saves since transaction group queues them
-    for (const notification of this.AllNotifications) {
-      if (notification.Unread && bRead || !notification.Unread && !bRead) {
-        // Don't await - Save() with transaction group queues the operation immediately
-        this.MarkAsRead(notification, bRead, transGroup);
+    try {
+      // Queue all saves. A grouped Save() runs validation and pre-save hooks before it joins the
+      // group, so wait for every one to be queued; submitting earlier sends an empty group that
+      // reports success and persists nothing. A grouped Save() resolves once queued, not once sent.
+      await Promise.all(targets.map(notification => this.MarkAsRead(notification, bRead, transGroup)));
+
+      // Submit transaction group - this is where the actual network call happens
+      if (!await transGroup.Submit()) {
+        for (const [notification, prev] of previousUnread) {
+          notification.Unread = prev;
+        }
+        this.SharedService.CreateSimpleNotification(
+          bRead ? 'Unable to mark all notifications as read' : 'Unable to mark all notifications as unread',
+          'error',
+          5000
+        );
+      } else {
+        SharedService.RefreshUserNotifications();
       }
+    } finally {
+      // Always detach the completed/failed TransactionGroup from every cached entity so
+      // subsequent single-item Read/Unread toggles persist immediately instead of enqueuing
+      // into a finished group.
+      for (const notification of targets) {
+        notification.TransactionGroup = null;
+      }
+      MJNotificationService.UpdateNotificationObservables();
+      this.invalidateCaches();
+      this.cdr?.markForCheck();
     }
-
-    // Submit transaction group - this is where the actual network call happens
-    if (!await transGroup.Submit())
-      this.SharedService.CreateSimpleNotification('Unable to mark all notifications as read', 'error', 5000);
-    else
-      SharedService.RefreshUserNotifications();
   }
 
   /** @deprecated Use {@link MarkAll}. */
@@ -643,229 +930,18 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       // also mark this as read when we click it
       this.MarkAsRead(notification, true, null);
 
-      // Check for special navigation types that use NavigationService (not router)
-      if (this.navigateToAgentRequest(notification)) {
-        return;
-      }
-      if (this.navigateToConversation(notification)) {
-        return;
-      }
-      if (this.navigateToMeetRoom(notification)) {
-        return;
-      }
-      if (this.navigateToHandoffConsole(notification)) {
-        return;
-      }
-      if (this.navigateToMeeting(notification)) {
-        return;
-      }
-
-      this.navigateToResource(notification);
+      NavigateToNotificationTarget(notification, {
+        SharedService: this.SharedService,
+        NavigationService: this.navigationService,
+        AppManager: this.appManager,
+        Provider: this.ProviderToUse,
+      });
     }
   }
 
   /** @deprecated Use {@link NotificationClicked}. */
   notificationClicked(notification: MJUserNotificationEntity): void {
     return this.NotificationClicked(notification);
-  }
-
-  /**
-   * Opens the Meet app's Live Room in JOIN mode for a `meet-room` invite notification (the
-   * `{ type:'meet-room', room }` ResourceConfiguration), mirroring {@link navigateToConversation}.
-   * Returns `false` (not handled) when the config isn't a meet-room invite or the Meet app is absent.
-   */
-  private navigateToMeetRoom(notification: MJUserNotificationEntity): boolean {
-    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
-      return false;
-    }
-    const config = SafeJSONParse<{ type?: string; room?: string }>(notification.ResourceConfiguration);
-    if (!config || config.type?.trim().toLowerCase() !== 'meet-room') {
-      return false;
-    }
-    const meetApp = this.appManager.GetAppByName('Meet');
-    if (!meetApp) {
-      return false;
-    }
-    const navConfig: Record<string, string> = {};
-    if (config.room) {
-      navConfig['room'] = config.room;
-    }
-    this.navigationService.OpenNavItemByName('Live Room', navConfig, meetApp.ID);
-    return true;
-  }
-
-  /**
-   * Opens the Conversation Console for a `handoff-offer` notification (the `{ type:'handoff-offer', offerId, room }`
-   * ResourceConfiguration the server sends when an AI agent offers a conversation to this person). The nav item is built here
-   * rather than looked up, so it works without an application metadata row; it lands in the Meet app when present, otherwise
-   * in whichever app the person is in. Returns `false` (not handled) for any other notification or when there is no app to host it.
-   */
-  private navigateToHandoffConsole(notification: MJUserNotificationEntity): boolean {
-    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
-      return false;
-    }
-    const config = SafeJSONParse<{ type?: string; offerId?: string }>(notification.ResourceConfiguration);
-    if (!config || config.type?.trim().toLowerCase() !== 'handoff-offer') {
-      return false;
-    }
-    const app = this.appManager.GetAppByName('Meet') ?? this.appManager.GetActiveApp();
-    if (!app) {
-      return false;
-    }
-    const consoleItem: NavItem = {
-      Label: 'Conversation Console',
-      Icon: 'fa-solid fa-headset',
-      ResourceType: 'Custom',
-      DriverClass: 'HumanHandoffConsoleResource',
-      Configuration: config.offerId ? { offer: config.offerId } : {},
-    };
-    this.navigationService.OpenNavItem(app.ID, consoleItem, app.GetColor());
-    return true;
-  }
-
-  /**
-   * Opens the Meet app's Meetings resource for a `meeting` or `meeting-invitation` notification (the
-   * `{ type:'meeting', meetingId }` ResourceConfiguration), or when NotificationType is 'Meeting Invitation'.
-   * Returns `false` (not handled) when the config isn't a meeting invite or the Meet app is absent.
-   */
-  private navigateToMeeting(notification: MJUserNotificationEntity): boolean {
-    let meetingId: string | undefined;
-    if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
-      const config = SafeJSONParse<{ type?: string; meetingId?: string }>(notification.ResourceConfiguration);
-      if (
-        config &&
-        (config.type?.trim().toLowerCase() === 'meeting' ||
-          config.type?.trim().toLowerCase() === 'meeting-invitation')
-      ) {
-        meetingId = config.meetingId;
-      }
-    }
-    const typeName = notification.NotificationType?.trim();
-    if (!meetingId && typeName !== 'Meeting Invitation') {
-      return false;
-    }
-    const app = this.appManager.GetAppByName('Meet') ?? this.appManager.GetActiveApp();
-    if (!app) {
-      return false;
-    }
-    const meetingItem: NavItem = {
-      Label: 'Meetings',
-      Icon: 'fa-solid fa-users',
-      ResourceType: 'Custom',
-      DriverClass: 'MeetingsResource',
-      Configuration: meetingId ? { meeting: meetingId } : {},
-    };
-    this.navigationService.OpenNavItem(app.ID, meetingItem, app.GetColor());
-    return true;
-  }
-
-  /**
-   * Navigate to a resource-based notification using NavigationService methods.
-   * Routes to the correct resource based on the notification's ResourceType.
-   */
-  private navigateToResource(notification: MJUserNotificationEntity): void {
-    if (!notification.ResourceRecordID || !notification.ResourceTypeID) return;
-
-    const rt = this.SharedService.ResourceTypeByID(notification.ResourceTypeID);
-    if (!rt) return;
-
-    const recordId = notification.ResourceRecordID.toString();
-    const rtName = rt.Name.trim().toLowerCase();
-
-    switch (rtName) {
-      case 'records': {
-        const config = SafeJSONParse<RecordResourceConfig>(notification.ResourceConfiguration || '');
-        if (config?.Entity) {
-          const key = new CompositeKey();
-          key.SimpleLoadFromURLSegment(recordId);
-          this.navigationService.OpenEntityRecord(config.Entity, key);
-        }
-        break;
-      }
-      case 'user views':
-      case 'mj: user views':
-        this.navigationService.OpenView(recordId, 'View');
-        break;
-      case 'dashboards':
-        this.navigationService.OpenDashboard(recordId, 'Dashboard');
-        break;
-      default:
-        console.warn(`[UserNotifications] Unhandled resource type for navigation: ${rt.Name}`);
-        break;
-    }
-  }
-
-  /**
-   * Handle navigation to an agent request via NavigationService.
-   * Returns true if the notification was an agent-request type and navigation was attempted.
-   */
-  private navigateToAgentRequest(notification: MJUserNotificationEntity): boolean {
-    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
-      return false;
-    }
-
-    const config = SafeJSONParse<AgentRequestResourceConfig>(notification.ResourceConfiguration);
-    if (!config || config.type?.trim().toLowerCase() !== 'agent-request' || !config.requestId) {
-      return false;
-    }
-
-    // Try the AI app first (has dedicated Agent Requests nav item)
-    const aiApp = this.appManager.GetAppByName('AI');
-    if (aiApp) {
-      this.navigationService.OpenNavItemByName(
-        'Agent Requests',
-        { requestId: config.requestId },
-        aiApp.ID
-      );
-      return true;
-    }
-
-    // Fallback: navigate to Chat app's Conversations with the request context
-    const chatApp = this.appManager.GetAppByName('Chat');
-    if (chatApp) {
-      this.navigationService.OpenNavItemByName(
-        'Conversations',
-        { requestId: config.requestId },
-        chatApp.ID
-      );
-      return true;
-    }
-
-    return false;
-  }
-
-  /**
-   * Handle navigation to a conversation via NavigationService.
-   * Returns true if the notification was a conversation type and navigation was attempted.
-   */
-  private navigateToConversation(notification: MJUserNotificationEntity): boolean {
-    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
-      return false;
-    }
-
-    const config = SafeJSONParse<ConversationResourceConfig>(notification.ResourceConfiguration);
-    if (!config || config.type?.trim().toLowerCase() !== 'conversation') {
-      return false;
-    }
-
-    const chatApp = this.appManager.GetAppByName('Chat');
-    if (!chatApp) {
-      return false;
-    }
-
-    const navConfig: Record<string, string> = {};
-    if (config.conversationId) navConfig['conversationId'] = config.conversationId;
-    if (config.messageId) navConfig['messageId'] = config.messageId;
-    if (config.artifactId) navConfig['artifactId'] = config.artifactId;
-    if (config.versionNumber) navConfig['versionNumber'] = config.versionNumber;
-    if (config.taskId) navConfig['taskId'] = config.taskId;
-
-    this.navigationService.OpenNavItemByName(
-      'Conversations',
-      navConfig,
-      chatApp.ID
-    );
-    return true;
   }
 
   public GetNotificationType(typeId: string | null): MJUserNotificationTypeEntity | null {
@@ -879,8 +955,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   public GetTypeIcon(notification: MJUserNotificationEntity): string {
-    const type = this.GetNotificationType(notification.NotificationTypeID);
-    return type?.Icon || 'fa-bell';
+    return GetNotificationTypeDisplay(notification.NotificationTypeID, this.NotificationTypes).Icon;
   }
 
   /** @deprecated Use {@link GetTypeIcon}. */
@@ -889,8 +964,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   public GetTypeColor(notification: MJUserNotificationEntity): string {
-    const type = this.GetNotificationType(notification.NotificationTypeID);
-    return type?.Color || 'var(--mj-text-muted)';
+    return GetNotificationTypeDisplay(notification.NotificationTypeID, this.NotificationTypes).Color;
   }
 
   /** @deprecated Use {@link GetTypeColor}. */
@@ -899,8 +973,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   public GetTypeName(notification: MJUserNotificationEntity): string {
-    const type = this.GetNotificationType(notification.NotificationTypeID);
-    return type ? type.Name : 'Notification';
+    return GetNotificationTypeDisplay(notification.NotificationTypeID, this.NotificationTypes).Name;
   }
 
   /** @deprecated Use {@link GetTypeName}. */

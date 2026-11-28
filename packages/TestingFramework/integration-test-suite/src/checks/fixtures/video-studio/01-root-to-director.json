@@ -1,0 +1,12 @@
+{
+    "taskComplete": false,
+    "message": "Invoking Director to write the creative brief.",
+    "nextStep": {
+        "type": "Sub-Agent",
+        "subAgent": {
+            "name": "Video Studio - Director",
+            "message": "Write the creative brief, archetype, film settings, data bindings, and asset list.",
+            "terminateAfter": false
+        }
+    }
+}

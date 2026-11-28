@@ -14,7 +14,6 @@ import {
   Query,
   Resolver,
 } from '@memberjunction/server';
-import { UserCache } from '@memberjunction/generic-database-provider';
 
 import { MJUserFavorite_, MJUserFavoriteResolverBase } from '../generated/generated.js';
 import { GetReadOnlyProvider } from '../util.js';
@@ -69,20 +68,37 @@ export class UserFavoriteResult {
 
 @Resolver(MJUserFavorite_)
 export class UserFavoriteResolver extends MJUserFavoriteResolverBase {
+  /**
+   * SECURITY: the client supplies UserID in these operations, so without this check any
+   * authenticated caller could read or set ANOTHER user's favorites (IDOR). Only the caller's own
+   * UserID is accepted, unless the request authenticated as the system user.
+   */
+  private assertCallerMayAccessUserFavorites(requestedUserId: string, userPayload: AppContext['userPayload']): void {
+    if (userPayload.isSystemUser) {
+      return;
+    }
+    if (!UUIDsEqual(userPayload.userRecord?.ID, requestedUserId)) {
+      throw new Error(`Access denied: UserID does not match the authenticated user`);
+    }
+  }
+
   @Query(() => [MJUserFavorite_])
   async UserFavoritesByUserID(@Arg('UserID', () => Int) UserID: number, @Ctx() { providers, userPayload }: AppContext) {
-    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
+    this.assertCallerMayAccessUserFavorites(String(UserID), userPayload);
+    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})
     return await this.findBy(provider, 'MJ: User Favorites', { UserID }, userPayload.userRecord);
   }
 
   @Query(() => [MJUserFavorite_])
   async UserFavoriteSearchByParams(@Arg('params', () => Int) params: UserFavoriteSearchParams, @Ctx() { providers, userPayload }: AppContext) {
-    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
+    this.assertCallerMayAccessUserFavorites(params.UserID, userPayload);
+    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})
     return await this.findBy(provider, 'MJ: User Favorites', params, userPayload.userRecord);
   }
 
   @Query(() => UserFavoriteResult)
   async GetRecordFavoriteStatus(@Arg('params', () => UserFavoriteSearchParams) params: UserFavoriteSearchParams, @Ctx() {providers, userPayload}: AppContext) {
+    this.assertCallerMayAccessUserFavorites(params.UserID, userPayload);
     const p = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
     const pk = new CompositeKey(params.CompositeKey.KeyValuePairs);
 
@@ -100,10 +116,11 @@ export class UserFavoriteResolver extends MJUserFavoriteResolverBase {
 
   @Mutation(() => UserFavoriteResult)
   async SetRecordFavoriteStatus(@Arg('params', () => UserFavoriteSetParams) params: UserFavoriteSetParams, @Ctx() { userPayload, providers }: AppContext) {
+    this.assertCallerMayAccessUserFavorites(params.UserID, userPayload);
     const p = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
     const pk = new CompositeKey(params.CompositeKey.KeyValuePairs);
     const e = p.Entities.find((e) => UUIDsEqual(e.ID, params.EntityID));
-    const u = UserCache.Users.find((u) => UUIDsEqual(u.ID, userPayload.userRecord.ID));
+    const u = this.GetUserFromPayload(userPayload);
     if (e) {
       await p.SetRecordFavoriteStatus(params.UserID, e.Name, pk, params.IsFavorite, u);
       return {

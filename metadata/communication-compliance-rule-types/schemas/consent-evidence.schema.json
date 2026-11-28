@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "requireSource": {
+      "type": "boolean",
+      "default": false,
+      "description": "Require ConsentSource on the principal preference record."
+    },
+    "requireTimestamp": {
+      "type": "boolean",
+      "default": false,
+      "description": "Require ConsentAt timestamp on the principal preference record."
+    },
+    "requireConsentText": {
+      "type": "boolean",
+      "default": false,
+      "description": "Require ConsentText wording on the principal preference record."
+    }
+  },
+  "additionalProperties": false
+}

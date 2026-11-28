@@ -223,7 +223,7 @@ describe('open app client packages check', () => {
     expect(check.Detail).toContain('bizapps-caliber');
     expect(DoctorHasFailures(report)).toBe(true);
     // the point of the fix: every other check still ran
-    expect(report.Checks).toHaveLength(11);
+    expect(report.Checks).toHaveLength(12);
     expect(checkNamed(report, 'member dirs').Severity).toBe('pass');
     expect(checkNamed(report, 'sentinel').Severity).toBe('pass');
   });

@@ -31,7 +31,7 @@
             [variant]="StatusFilter === status ? 'primary' : 'flat'"
             size="sm"
             (click)="OnFilterByStatus(status)">
-            {{ status === 'all' ? 'All' : status }}
+            {{ StatusFilterLabel(status) }}
           </button>
         }
       </div>
@@ -57,12 +57,12 @@
       </mj-empty-state>
     } @else {
       <as-split class="wfr-split" direction="horizontal" unit="percent"
-                [gutterSize]="8" [disabled]="!SelectedRun" (dragEnd)="OnSplitDragEnd($event.sizes)">
-        <as-split-area [size]="SelectedRun ? Layout.SplitSizes[0] : 100" [minSize]="20">
+                [gutterSize]="8" [disabled]="!SelectedRun || RunRailCollapsed" (dragEnd)="OnSplitDragEnd($event.sizes)">
+        <as-split-area
+          [size]="SelectedRun ? (RunRailCollapsed ? 0 : Layout.SplitSizes[0]) : 100"
+          [minSize]="20"
+          [visible]="!SelectedRun || !RunRailCollapsed">
         <div class="wfr-list">
-          <!-- A header row that sorts. Every column a person scans by is sortable, because "the
-               longest run" and "the one that failed this morning" are the two questions this list
-               exists to answer and neither is answerable by scrolling. -->
           <div class="wfr-head" role="row">
             <button type="button" class="wfr-head-cell wfr-col-name" (click)="OnSort('Name')">
               Workflow <i [ngClass]="SortIcon('Name')" aria-hidden="true"></i>
@@ -87,9 +87,14 @@
               class="wfr-row"
               [class.wfr-row-selected]="run.ID === SelectedRunID"
               (click)="OnSelectRun(run)">
-              <span class="wfr-col-name wfr-row-name">{{ run.Name }}</span>
-              <!-- An em dash, never a fabricated time: a run that has not started has no start, and
-                   printing one would read as data. -->
+              <span class="wfr-col-name wfr-row-name">
+                {{ run.Name }}
+                @if (run.HasPendingPersonStep) {
+                  <span class="wfr-person-dot" title="Waiting on a person step">
+                    <i class="fa-solid fa-user-check" aria-hidden="true"></i>
+                  </span>
+                }
+              </span>
               <span class="wfr-col-time">{{ run.StartedAt ? (run.StartedAt | date:'MMM d, h:mm:ss a') : '—' }}</span>
               <span class="wfr-col-time">{{ run.CompletedAt ? (run.CompletedAt | date:'MMM d, h:mm:ss a') : '—' }}</span>
               <span class="wfr-col-duration">{{ run.Duration }}</span>
@@ -99,18 +104,29 @@
         </div>
         </as-split-area>
 
-        <as-split-area [size]="SelectedRun ? Layout.SplitSizes[1] : 0" [minSize]="25" [visible]="!!SelectedRun">
+        <as-split-area
+          [size]="SelectedRun ? (RunRailCollapsed ? 100 : Layout.SplitSizes[1]) : 0"
+          [minSize]="25"
+          [visible]="!!SelectedRun">
         @if (SelectedRun; as selected) {
-          <!-- The canvas lives in the RIGHT PANEL on selection, not nested inside the list row.
-               A graph needs room to be read; inlining one per row turns a scannable list into a
-               stack of diagrams. -->
           <aside class="wfr-detail">
             <header class="wfr-detail-head">
               <div class="wfr-detail-title">
+                <button mjButton variant="flat" size="sm" (click)="ToggleRunRail()"
+                        [title]="RunRailCollapsed ? 'Show run list' : 'Expand flight deck'">
+                  <i class="fa-solid" [class.fa-angles-right]="RunRailCollapsed" [class.fa-angles-left]="!RunRailCollapsed" aria-hidden="true"></i>
+                </button>
                 <span class="wfr-detail-name">{{ selected.Name }}</span>
                 <span class="wfr-row-status" [attr.data-status]="selected.Status">{{ selected.Status }}</span>
               </div>
               <div class="wfr-detail-actions">
+                @if (DetailTab === 'graph') {
+                  <button mjButton [variant]="WaterfallOpen ? 'primary' : 'flat'" size="sm" (click)="ToggleWaterfall()"
+                          title="Toggle synchronized execution waterfall">
+                    <i class="fa-solid fa-bars-staggered" aria-hidden="true"></i>
+                    Waterfall
+                  </button>
+                }
                 @if (selected.AgentRunID) {
                   <button mjButton variant="flat" size="sm" (click)="OnOpenAgentRun(selected)">
                     <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
@@ -141,9 +157,41 @@
               </button>
             </div>
 
+            @if (PendingHumanStep; as humanStep) {
+              <div class="wfr-approval-card" role="region" aria-label="Person approval required">
+                <div class="wfr-approval-head">
+                  <span class="wfr-approval-badge">
+                    <i class="fa-solid fa-user-check" aria-hidden="true"></i>
+                    Waiting on Person
+                  </span>
+                  <strong class="wfr-approval-title">{{ humanStep.Name }}</strong>
+                </div>
+                <div class="wfr-approval-controls">
+                  <input
+                    type="text"
+                    class="wfr-approval-note"
+                    [(ngModel)]="ApprovalNote"
+                    [disabled]="ApprovalBusy"
+                    placeholder="Optional note or decision rationale..." />
+                  <button mjButton variant="primary" size="sm" [disabled]="ApprovalBusy"
+                          (click)="OnCompleteHumanStep(humanStep, true)">
+                    <i class="fa-solid fa-check" aria-hidden="true"></i> Approve &amp; Continue
+                  </button>
+                  <button mjButton variant="danger" size="sm" [disabled]="ApprovalBusy"
+                          (click)="OnCompleteHumanStep(humanStep, false)">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i> Reject
+                  </button>
+                  <button mjButton variant="flat" size="sm" (click)="OnOpenStepTaskRecord(humanStep)">
+                    Open Task
+                  </button>
+                </div>
+                @if (ApprovalError) {
+                  <span class="wfr-editor-error">{{ ApprovalError }}</span>
+                }
+              </div>
+            }
+
             @if (Stall) {
-              <!-- The hardening review's signature failure — "the run strands silently" — made
-                   loud. A held path is now something the operator can answer, not just read. -->
               <div class="wfr-stall" role="status" [attr.data-kind]="Stall.kind">
                 <div class="wfr-stall-body">
                   <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
@@ -176,42 +224,57 @@
             }
 
             @if (DetailTab === 'graph') {
-              <!-- Canvas BESIDE the step it opened, not above it. A JSON record in a strip along the
-                   bottom shows about ten lines, which is not enough of a record to read. -->
               <as-split class="wfr-graph-split" [direction]="InnerSplitDirection" unit="percent"
                         [gutterSize]="8" (dragEnd)="OnStepSplitDragEnd($event.sizes)">
                 <as-split-area [size]="Layout.StepPanelOpen ? Layout.StepSplitSizes[0] : 100" [minSize]="25">
                   <div class="wfr-graph-pane">
-                    <mj-task-graph-debugger
-                      #GraphDebug
-                      [Provider]="ProviderToUse"
-                      [ParentTaskID]="selected.ID"
-                      [WorkflowName]="selected.Name"
-                      [LiveUpdates]="selected.Status === 'Running' || selected.Status === 'In Progress'"
-                      [ReplayAt]="ReplayAt"
-                      [ShowLegend]="Layout.ShowLegend"
-                      [ShowVariables]="false"
-                      Height="100%"
-                      (NodeSelected)="OnGraphNodeSelected($event)"
-                      (ConnectionSelected)="OnGraphConnectionSelected($event)"
-                      (LegendToggled)="OnLegendToggled($event)"
-                      (Settled)="OnCanvasSettled()"
-                      (Frame)="OnFrame($event)"
-                      (PausedChange)="DebugPaused = $event">
-                    </mj-task-graph-debugger>
+                    <div class="wfr-debugger-host">
+                      <mj-task-graph-debugger
+                        #GraphDebug
+                        [Provider]="ProviderToUse"
+                        [ParentTaskID]="selected.ID"
+                        [WorkflowName]="selected.Name"
+                        [LiveUpdates]="selected.Status === 'In Progress'"
+                        [ReplayAt]="ReplayAt"
+                        [ShowReplayScrubber]="true"
+                        [AllowRememberBreakpoints]="true"
+                        [ShowLegend]="Layout.ShowLegend"
+                        [ShowVariables]="false"
+                        Height="100%"
+                        (NodeSelected)="OnGraphNodeSelected($event)"
+                        (ConnectionSelected)="OnGraphConnectionSelected($event)"
+                        (LegendToggled)="OnLegendToggled($event)"
+                        (Settled)="OnCanvasSettled()"
+                        (Frame)="OnFrame($event)"
+                        (PausedChange)="DebugPaused = $event">
+                      </mj-task-graph-debugger>
+                    </div>
 
-                    @if (CanReplay) {
-                      <!-- Replay: scrub through the settled run on the same canvas, reconstructed
-                           from each step's own timestamps. Read-only by construction. -->
-                      <div class="wfr-replay">
-                        <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
-                        <input type="range" min="0" max="100" step="1"
-                               [value]="ReplayPercent ?? 100"
-                               (input)="OnReplayScrub($any($event.target).value)"
-                               aria-label="Replay position" />
-                        @if (ReplayPercent !== null) {
-                          <button mjButton variant="flat" size="sm" (click)="OnReplayReset()">Now</button>
-                        }
+                    @if (WaterfallOpen && WaterfallBars.length > 0) {
+                      <div class="wfr-waterfall" role="region" aria-label="Execution waterfall">
+                        <div class="wfr-waterfall-head">
+                          <span><i class="fa-solid fa-bars-staggered" aria-hidden="true"></i> Execution Waterfall</span>
+                          <span class="wfr-waterfall-sub">{{ WaterfallBars.length }} {{ WaterfallBars.length === 1 ? 'step' : 'steps' }}</span>
+                        </div>
+                        <div class="wfr-waterfall-rows">
+                          @for (bar of WaterfallBars; track bar.ID) {
+                            <button type="button"
+                                    class="wfr-wf-row"
+                                    [class.wfr-wf-row--selected]="bar.ID === SelectedStepID"
+                                    (click)="OnSelectWaterfallStep(bar.ID)">
+                              <span class="wfr-wf-name" [title]="bar.Name">{{ bar.Name }}</span>
+                              <span class="wfr-wf-track">
+                                @if (bar.WidthPct > 0) {
+                                  <span class="wfr-wf-bar"
+                                        [attr.data-status]="bar.Status"
+                                        [style.left.%]="bar.LeftPct"
+                                        [style.width.%]="bar.WidthPct"></span>
+                                }
+                              </span>
+                              <span class="wfr-wf-dur">{{ bar.DurationLabel }}</span>
+                            </button>
+                          }
+                        </div>
                       </div>
                     }
 
@@ -235,8 +298,6 @@
                     }
 
                     @if (EngineTicks.length > 0) {
-                      <!-- The engine strip: one tick per dispatcher pass. A stuck run is a strip
-                           that keeps ticking with nothing moving — the honest visual of a stall. -->
                       <div class="wfr-engine" aria-label="Engine activity">
                         @for (tick of EngineTicks; track tick.passNumber) {
                           <span class="wfr-tick" [class.wfr-tick-held]="(tick.heldCount ?? 0) > 0">
@@ -327,8 +388,6 @@
                                aria-hidden="true"></i>
                           </button>
 
-                          <!-- The inspector: live engine facts about this step, from the frame
-                               stream — claim, path verdicts, runner progress, what-if. -->
                           @if (SelectedStepProgress; as progress) {
                             <div class="wfr-insp-card">
                               <span class="wfr-insp-label">Doing now</span>
@@ -440,6 +499,7 @@
                           }
 
                           <mj-task-graph-variables
+                            [TaskID]="step.ID"
                             [InputPayload]="StepPayload(step, 'InputPayload')"
                             [OutputPayload]="StepPayload(step, 'OutputPayload')"
                             [Invocation]="Invocation">

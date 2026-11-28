@@ -36,6 +36,9 @@ export interface ITaskStepConfiguration {
     /** Settings for a step completed by a system outside MemberJunction. */
     external?: ITaskExternalConfiguration;
 
+    /** Settings for a step that waits for a moment in time before the workflow continues. */
+    wait?: ITaskWaitConfiguration;
+
     /**
      * How this step's inputs are built from the workflow payload, as a JSON object mapping the
      * step's parameter names to payload paths.
@@ -277,6 +280,8 @@ export interface ITaskForEachConfiguration {
     maxConcurrency?: number;
     /** Run this action once per iteration. */
     action?: ITaskLoopActionBody;
+    /** Run an ordered sequence of actions once per iteration. */
+    steps?: ITaskLoopBodyActionStep[];
     /** Run this sub-agent once per iteration. */
     subAgent?: ITaskLoopSubAgentBody;
     /** A prompt run once per loop iteration. */
@@ -302,6 +307,8 @@ export interface ITaskWhileConfiguration {
     delayBetweenIterationsMs?: number;
     /** Run this action once per iteration. */
     action?: ITaskLoopActionBody;
+    /** Run an ordered sequence of actions once per iteration. */
+    steps?: ITaskLoopBodyActionStep[];
     /** Run this sub-agent once per iteration. */
     subAgent?: ITaskLoopSubAgentBody;
     /** A prompt run once per loop iteration. */
@@ -334,6 +341,20 @@ export interface ITaskLoopActionBody {
     outputMapping?: string;
 }
 
+/** One action step inside a multi-step loop body (`steps[]`). */
+export interface ITaskLoopBodyActionStep {
+    /** Optional handle used by later steps in the same pass via `steps.<id>.<OutputField>`. */
+    id?: string;
+    /** Action name. */
+    name: string;
+    /** Parameters passed to the action. */
+    params: Record<string, unknown>;
+    /** Optional boolean expression deciding whether this step runs on the current pass. */
+    condition?: string;
+    /** Optional JSON mapping from this step's outputs into the running payload. */
+    outputMapping?: string;
+}
+
 /** A sub-agent run once per loop iteration. */
 export interface ITaskLoopSubAgentBody {
     /** Sub-agent name. */
@@ -363,6 +384,24 @@ export interface ITaskHumanConfiguration {
      * its author never chose would be worse than one that waits.
      */
     expiresInHours?: number;
+
+    /**
+     * Which human-task provider raises and tracks this step, as its ClassFactory key
+     * (`@RegisterClass(BaseHumanTaskProvider, '<key>')`).
+     *
+     * Omitted, or `'AgentRequest'`, means MJ's built-in provider: an `MJ: AI Agent Requests` row in the
+     * person's inbox, settled when they answer it. Any other key hands the step to that provider — an
+     * Open App's approval system, a ticketing integration — which completes it through
+     * `TaskGraphWaitingSteps.CompleteWaitingStep` when its own record is decided. Core never names
+     * those providers; they register themselves.
+     */
+    provider?: string;
+
+    /**
+     * Provider-specific settings, passed to the provider untouched when the step is raised: a task
+     * type code, an assignee role, a priority. Each provider documents its own keys.
+     */
+    providerConfiguration?: Record<string, unknown>;
 }
 
 /** A step completed by a system outside MemberJunction, which reports back when it is done. */
@@ -371,6 +410,41 @@ export interface ITaskExternalConfiguration {
     domain: string;
     /** That system's own identifier for the work, for correlation. */
     ref?: string;
+
+    /**
+     * The key an outside caller signals this step by, when it does not hold the task's ID.
+     *
+     * A literal (`'sprint-close'`) or a payload path resolved when the step is reached
+     * (`'payload.sprintKey'`). The resolved value is written to `Task.CorrelationKey`, which is
+     * indexed; `TaskGraph.CompleteWaitingStep` with a correlation key completes every reached step
+     * waiting on it, so one signal can release many workflows. A signal that arrives before the step
+     * is reached is held on the step and applied the moment it is.
+     */
+    correlationKey?: string;
+
+    /**
+     * How long to wait for the signal before the step fails, in hours. Omitted means no deadline —
+     * a step that silently timed out on a deadline nobody chose would be worse than one that waits.
+     */
+    expiresInHours?: number;
+}
+
+/**
+ * A step that waits for a moment in time. Exactly one of `until` / `durationSeconds` is set.
+ *
+ * This is what replaces chains of cron jobs offset by fifteen minutes and nightly sweeps that check
+ * whether a cooling-off period has passed: the wait is part of the workflow, durable across restarts,
+ * and visible on the run.
+ */
+export interface ITaskWaitConfiguration {
+    /**
+     * When to continue: an ISO-8601 timestamp, or a payload path resolved when the step is reached
+     * (`'payload.renewal.chargeOn'`). A moment already in the past continues immediately.
+     */
+    until?: string;
+
+    /** How long to wait from the moment the step is reached, in seconds. */
+    durationSeconds?: number;
 }
 
 /** What the dispatcher does about time and failure for a single step. */

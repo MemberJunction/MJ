@@ -37,7 +37,7 @@ import { GmailProvider } from '@memberjunction/communication-gmail';
 import { TwilioProvider } from '@memberjunction/communication-twilio';
 import { MSGraphProvider } from '@memberjunction/communication-ms-graph';
 import { ExpoPushProvider } from '@memberjunction/communication-expo-push';
-import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, settle, SkipCheck } from '@memberjunction/testing-integration';
 import { NotificationEngine } from '@memberjunction/notifications';
 import type { MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity } from '@memberjunction/core-entities';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -96,6 +96,14 @@ function skipIfNoProvider(ctx: IntegrationCheckContext, checkId: string): boolea
         return true;
     }
     return false;
+}
+
+/** Skips the running check (SkipCheck) when no usable provider exists — for checks that assert nothing without one. */
+function requireProvider(ctx: IntegrationCheckContext): void {
+    const f = fx(ctx);
+    if (!f.ProviderName) {
+        SkipCheck(`no usable communication provider: ${f.SkipReason ?? 'unknown reason'} (needs an Active, SupportsSending Communication Provider whose class is registered)`);
+    }
 }
 
 function buildDryRunMessage(f: CommunicationFixture): Message {
@@ -157,9 +165,7 @@ export const CommunicationChecks: NamedCheck[] = [
         Id: 'communication.CM2',
         Name: 'CM2: DryRun send through the real engine succeeds, is DryRun-marked, and writes exactly one audit row',
         Fn: async (ctx: IntegrationCheckContext) => {
-            if (skipIfNoProvider(ctx, 'CM2')) {
-                return;
-            }
+            requireProvider(ctx);
             const f = fx(ctx);
             const engine = CommunicationEngine.Instance;
 
@@ -224,9 +230,7 @@ export const CommunicationChecks: NamedCheck[] = [
         Id: 'communication.CM3',
         Name: 'CM3: the audit row is Complete + error-free and its MessageContent carries the DryRun marker (nothing implies real delivery)',
         Fn: async (ctx: IntegrationCheckContext) => {
-            if (skipIfNoProvider(ctx, 'CM3')) {
-                return;
-            }
+            requireProvider(ctx);
             const f = fx(ctx);
             Assert(f.DryRunResultSuccess === true && f.DryRunResultMarked === true, 'CM2 recorded a successful DryRun-marked send (ordered bundle)');
 
@@ -249,9 +253,7 @@ export const CommunicationChecks: NamedCheck[] = [
         Id: 'communication.CM4',
         Name: 'CM4: previewOnly stays distinct — no provider payload, no DryRun mark, NO audit row',
         Fn: async (ctx: IntegrationCheckContext) => {
-            if (skipIfNoProvider(ctx, 'CM4')) {
-                return;
-            }
+            requireProvider(ctx);
             const f = fx(ctx);
             const engine = CommunicationEngine.Instance;
 

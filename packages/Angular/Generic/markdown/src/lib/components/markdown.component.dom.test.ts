@@ -5,6 +5,7 @@ import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { MarkdownComponent, type ImageClickedEventArgs } from './markdown.component';
 import { MarkdownModule } from '../markdown.module';
+import { UpgradeInlineMediaElements } from '../extensions/inline-media.extension';
 import { MarkdownRenderEvent } from '@memberjunction/markdown-core';
 
 /**
@@ -235,6 +236,142 @@ describe('MarkdownComponent (DOM)', () => {
     });
   });
 
+  describe('OpenLinksInNewTab', () => {
+    const SAMPLE_MARKDOWN =
+      'You can access the invoices site directly at https://invoices.example.com/.\n' +
+      'Most of your billing and invoice needs can be managed through your online account via the [Member Portal](https://portal.example.com/account).';
+
+    it('leaves links in the current tab by default (OpenLinksInNewTab=false)', () => {
+      const f = render({ data: SAMPLE_MARKDOWN });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      for (const link of links) {
+        expect(link.hasAttribute('target')).toBe(false);
+      }
+    });
+
+    it('stamps target="_blank" and rel="noopener noreferrer" on both bare autolinks and markdown links when OpenLinksInNewTab=true', () => {
+      const f = render({ data: SAMPLE_MARKDOWN, OpenLinksInNewTab: true });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      expect(links[0].getAttribute('href')).toBe('https://invoices.example.com/');
+      expect(links[0].getAttribute('target')).toBe('_blank');
+      expect(links[0].getAttribute('rel')).toBe('noopener noreferrer');
+      expect(links[1].getAttribute('href')).toBe('https://portal.example.com/account');
+      expect(links[1].textContent).toBe('Member Portal');
+      expect(links[1].getAttribute('target')).toBe('_blank');
+      expect(links[1].getAttribute('rel')).toBe('noopener noreferrer');
+    });
+
+    it('leaves in-page fragment links (#section) and mailto:/tel:/sms: links in the current tab even when OpenLinksInNewTab=true', () => {
+      const f = render({
+        data:
+          'Jump to [Overview](#overview), email billing@example.com or [Support](mailto:support@example.com), ' +
+          'call [Help Desk](tel:+15550100), or visit [Portal](https://portal.example.com/account).',
+        OpenLinksInNewTab: true,
+      });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(5);
+      expect(links[0].getAttribute('href')).toBe('#overview');
+      expect(links[0].hasAttribute('target')).toBe(false);
+      expect(links[1].getAttribute('href')).toBe('mailto:billing@example.com');
+      expect(links[1].hasAttribute('target')).toBe(false);
+      expect(links[2].getAttribute('href')).toBe('mailto:support@example.com');
+      expect(links[2].hasAttribute('target')).toBe(false);
+      expect(links[3].getAttribute('href')).toBe('tel:+15550100');
+      expect(links[3].hasAttribute('target')).toBe(false);
+      expect(links[4].getAttribute('href')).toBe('https://portal.example.com/account');
+      expect(links[4].getAttribute('target')).toBe('_blank');
+      expect(links[4].getAttribute('rel')).toBe('noopener noreferrer');
+    });
+
+    it('preserves an explicit target on raw HTML links and merges noopener noreferrer into existing rel attributes', () => {
+      const f = render({
+        data:
+          '<a href="https://example.com/same" target="_self">Same</a> ' +
+          '<a href="https://example.com/ext" rel="nofollow">Ext</a>',
+        OpenLinksInNewTab: true,
+        enableHtml: true,
+      });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      expect(links[0].getAttribute('target')).toBe('_self');
+      expect(links[1].getAttribute('target')).toBe('_blank');
+      expect(links[1].getAttribute('rel')).toBe('nofollow noopener noreferrer');
+    });
+
+    it('works when enableSvgRenderer is false (Angular sanitizer path)', () => {
+      const f = render({
+        data: SAMPLE_MARKDOWN,
+        OpenLinksInNewTab: true,
+        enableSvgRenderer: false,
+      });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      for (const link of links) {
+        expect(link.getAttribute('target')).toBe('_blank');
+        expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+      }
+    });
+
+    it('updates rendered links when OpenLinksInNewTab changes dynamically', async () => {
+      const f = render({ data: SAMPLE_MARKDOWN, OpenLinksInNewTab: false });
+      expect(container(f).querySelector('a')?.hasAttribute('target')).toBe(false);
+
+      f.componentRef.setInput('OpenLinksInNewTab', true);
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(container(f).querySelector('a')?.getAttribute('target')).toBe('_blank');
+      expect(container(f).querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
+
+      f.componentRef.setInput('OpenLinksInNewTab', false);
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(container(f).querySelector('a')?.hasAttribute('target')).toBe(false);
+    });
+
+    it('dispatches click events with target="_blank" and rel="noopener noreferrer" when clicking rendered links', () => {
+      const f = render({ data: SAMPLE_MARKDOWN, OpenLinksInNewTab: true });
+      const root = container(f);
+      const clickedLinks: Array<{ href: string | null; target: string; rel: string; defaultPrevented: boolean }> = [];
+
+      root.addEventListener('click', (event: MouseEvent) => {
+        const anchor = (event.target as HTMLElement | null)?.closest('a');
+        if (anchor) {
+          event.preventDefault();
+          clickedLinks.push({
+            href: anchor.getAttribute('href'),
+            target: anchor.target,
+            rel: anchor.rel,
+            defaultPrevented: event.defaultPrevented,
+          });
+        }
+      });
+
+      const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      links[0].click();
+      links[1].click();
+
+      expect(clickedLinks).toEqual([
+        {
+          href: 'https://invoices.example.com/',
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          defaultPrevented: true,
+        },
+        {
+          href: 'https://portal.example.com/account',
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          defaultPrevented: true,
+        },
+      ]);
+    });
+  });
+
   /**
    * Sanitization, as seen through the component. With `enableHtml` or the default
    * `enableSvgRenderer`, Angular's sanitizer is bypassed and the HTML the service returns
@@ -371,5 +508,477 @@ describe('MarkdownComponent (DOM)', () => {
       const c = container(render({ data: 'text <img src="x" onerror="alert(1)">', enableSvgRenderer: false }));
       expect(attributeNamesIn(c).some((n) => n.startsWith('on'))).toBe(false);
     });
+
+    it('upgrades an embedded svg[data-mj-diagram="1"] in the middle of a conversation message into an interactive diagram viewer', async () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" data-mj-diagram="1" data-diagram-kind="workflow">' +
+        '<desc id="mj-diagram-meta">{"version":"1","kind":"workflow","title":"Renewal Flow","lanes":{"member":"Member"}}</desc>' +
+        '<defs><marker id="m1-mk-line"><path d="M0 0L8 4L0 8Z"/></marker></defs>' +
+        '<g class="lanes"><g class="lane" data-lane-id="member"><rect x="20" y="20" width="700" height="120"/></g></g>' +
+        '<g class="edges"><g class="edge" data-edge-id="e1" data-edge-from="n1" data-edge-to="n2" data-main-path="true"><path d="M200 80H400" marker-end="url(#m1-mk-line)"/></g></g>' +
+        '<g class="nodes">' +
+        '<g class="node" data-node-id="n1" data-node-kind="start" data-lane="member" data-label="Start"><rect x="60" y="54" width="140" height="52"/><text class="lbl">Start</text></g>' +
+        '<g class="node" data-node-id="n2" data-node-kind="end" data-lane="member" data-label="Finish"><rect x="400" y="54" width="140" height="52"/><text class="lbl">Finish</text></g>' +
+        '</g></svg>';
+      const markdownMessage = `Here is how certification renewal works:\n\n\`\`\`svg\n${svg}\n\`\`\`\n\nClick any step above to inspect deadlines.`;
+      const c = container(render({ data: markdownMessage, enableSvgRenderer: true }));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(c.querySelector('.mjd-shell')).not.toBeNull();
+      expect(c.querySelector('.mjd-toolbar')).toBeNull();
+      expect(c.querySelector('.mjd-stage')).not.toBeNull();
+      expect(c.querySelector('.mjd-panel')).not.toBeNull();
+      expect(c.querySelector('svg[data-mj-diagram="1"]')).not.toBeNull();
+    });
+
+    it('renders a ```mj-diagram JSON fence into an interactive diagram viewer with intact CSS custom properties', async () => {
+      const spec = JSON.stringify({
+        kind: 'lifecycle',
+        title: 'Invoice Lifecycle',
+        lanes: [{ id: 'billing', label: 'Billing' }],
+        nodes: [
+          { id: 'draft', lane: 'billing', kind: 'start', label: 'Draft' },
+          { id: 'paid', lane: 'billing', kind: 'success', label: 'Paid' },
+        ],
+        edges: [{ from: 'draft', to: 'paid', label: 'Pay', role: 'emphasis' }],
+      });
+      const markdownMessage = `Here is the lifecycle:\n\n\`\`\`mj-diagram\n${spec}\n\`\`\``;
+      const f = render({ data: '', enableSvgRenderer: true, enableSmartypants: true });
+      const done = new Promise<void>((resolve) => {
+        const sub = f.componentInstance.Rendered.subscribe(() => {
+          sub.unsubscribe();
+          resolve();
+        });
+      });
+      f.componentRef.setInput('data', markdownMessage);
+      f.detectChanges();
+      await done;
+      const c = container(f);
+      expect(c.querySelector('.mjd-shell')).not.toBeNull();
+      const svg = c.querySelector('svg[data-mj-diagram="1"]');
+      expect(svg).not.toBeNull();
+      const styleText = svg?.querySelector('style')?.textContent ?? '';
+      expect(styleText).toContain('--bg:var(--mj-bg-surface,#fff)');
+      expect(styleText).not.toContain('\u2013');
+    });
+
+    it('cancels pending diagram viewer upgrades when destroyed before async post-render processing settles', async () => {
+      const spec = JSON.stringify({
+        kind: 'workflow',
+        title: 'Quick Flow',
+        lanes: [{ id: 'l', label: 'L' }],
+        nodes: [
+          { id: 'a', lane: 'l', label: 'A' },
+          { id: 'b', lane: 'l', label: 'B' },
+        ],
+        edges: [{ from: 'a', to: 'b' }],
+      });
+      const comp = render({ data: `\`\`\`mj-diagram\n${spec}\n\`\`\``, enableSvgRenderer: true });
+      const c = container(comp);
+      comp.destroy();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(c.querySelector('.mjd-shell')).toBeNull();
+    });
+
+    it('continues post-render processing and mounts inline SVGs when the diagram renderer chunk fails to load', async () => {
+      const inlineSvg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" data-mj-diagram="1">' +
+        '<g class="nodes"><g class="node" data-node-id="n1" data-label="Step 1"><rect x="10" y="10" width="80" height="40"/></g></g>' +
+        '</svg>';
+      const markdownMessage = `\`\`\`mj-diagram\n{"kind":"workflow"}\n\`\`\`\n\n\`\`\`svg\n${inlineSvg}\n\`\`\``;
+      const f = render({ data: '', enableSvgRenderer: true });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.spyOn(f.componentInstance, 'LoadDiagramRenderer').mockRejectedValueOnce(new Error('ChunkLoadError'));
+      const done = new Promise<void>((resolve) => {
+        const sub = f.componentInstance.Rendered.subscribe(() => {
+          sub.unsubscribe();
+          resolve();
+        });
+      });
+      f.componentRef.setInput('data', markdownMessage);
+      f.detectChanges();
+      await done;
+      warnSpy.mockRestore();
+
+      const c = container(f);
+      expect(c.querySelector('code.language-mj-diagram')).not.toBeNull();
+      expect(c.querySelector('.mjd-shell')).not.toBeNull();
+    });
+
+    it('does not skip the Angular sanitizer just because a message contains the diagram marker', () => {
+      const c = container(render({ data: 'text <span data-mj-diagram="1" style="position:fixed;inset:0">x</span>', enableSvgRenderer: false }));
+      expect(c.querySelector('[style]')).toBeNull();
+    });
+  });
+
+  describe('EnableInlineMedia', () => {
+    it('upgrades /media/:fileId?kind=video markdown images into <video> with <track> and lazy transcript drawer when enabled', () => {
+      const md =
+        'Watch the walkthrough:\n\n' +
+        '![Renewal Demo](/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2#t=42)';
+      const c = container(render({ data: md, EnableInlineMedia: true }));
+
+      expect(c.querySelector('img')).toBeNull();
+      const video = c.querySelector<HTMLVideoElement>('.mj-markdown-video > video.mj-markdown-video__player');
+      expect(video).not.toBeNull();
+      expect(video?.getAttribute('title')).toBe('Renewal Demo');
+      expect(video?.hasAttribute('controls')).toBe(true);
+      expect(video?.getAttribute('preload')).toBe('metadata');
+      expect(video?.getAttribute('crossorigin')).toBe('anonymous');
+
+      const track = video?.querySelector<HTMLTrackElement>('track[kind="captions"]');
+      expect(track).not.toBeNull();
+      expect(track?.getAttribute('src')).toBe('/media/66666666-7777-8888-9999-000000000000?token=tok2');
+
+      const details = c.querySelector<HTMLDetailsElement>('details.mj-markdown-video__transcript');
+      expect(details).not.toBeNull();
+      expect(details?.open).toBe(false);
+
+      // Simulate loadedmetadata to verify #t=42 initial seek fallback
+      video!.dispatchEvent(new Event('loadedmetadata'));
+      expect(video?.currentTime).toBe(42);
+    });
+
+    it('defaults EnableInlineMedia to false so unmodified hosts keep <img> rendering', () => {
+      const md =
+        '![Default Video](/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video)';
+      const c = container(render({ data: md }));
+      expect(c.querySelector('video')).toBeNull();
+      expect(c.querySelectorAll('img')).toHaveLength(1);
+    });
+
+    it('preserves non-root MJAPI_BASE_PATH prefixes only for relative or explicitly allowlisted origins', () => {
+      const md =
+        '![Subpath Clip](https://api.example.test/api/media/11111111-2222-3333-4444-555555555555/demo.mp4?token=tok1&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2) ' +
+        '![Untrusted Clip](https://evil.example.test/api/media/11111111-2222-3333-4444-555555555555/demo.mp4?token=tok1)';
+      const c = container(render({
+        data: md,
+        EnableInlineMedia: true,
+        InlineMediaAllowedOrigins: ['https://api.example.test'],
+      }));
+
+      const videos = c.querySelectorAll('video');
+      expect(videos).toHaveLength(1);
+      expect(c.querySelectorAll('img')).toHaveLength(1);
+      const track = videos[0]?.querySelector<HTMLTrackElement>('track[kind="captions"]');
+      expect(track).not.toBeNull();
+      expect(track?.getAttribute('src')).toBe(
+        'https://api.example.test/api/media/66666666-7777-8888-9999-000000000000?token=tok2',
+      );
+    });
+
+    it('loads cues lazily only when <details> opens, seeks on cue click, and highlights active cue on timeupdate', async () => {
+      const vttBody = [
+        'WEBVTT',
+        '',
+        '00:00:05.000 --> 00:00:12.000',
+        '<v.loud Jane Doe>Welcome to the member portal.',
+        '',
+        '00:00:12.000 --> 00:00:20.000',
+        'Select Invoices from the left navigation.',
+      ].join('\n');
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(vttBody, { status: 200, headers: { 'Content-Type': 'text/vtt' } }),
+      );
+
+      try {
+        const md =
+          '![Portal Clip](/api/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2)';
+        const c = container(render({ data: md, EnableInlineMedia: true }));
+
+        // Closed drawer must NOT fire fetch on initial render
+        expect(fetchSpy).not.toHaveBeenCalled();
+
+        const details = c.querySelector<HTMLDetailsElement>('details.mj-markdown-video__transcript')!;
+        const video = c.querySelector<HTMLVideoElement>('video.mj-markdown-video__player')!;
+        video.play = vi.fn().mockResolvedValue(undefined);
+
+        details.open = true;
+        details.dispatchEvent(new Event('toggle'));
+
+        await vi.waitFor(() => {
+          expect(details.querySelectorAll('button.mj-markdown-video__cue')).toHaveLength(2);
+        });
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        expect(fetchSpy).toHaveBeenCalledWith('/api/media/66666666-7777-8888-9999-000000000000?token=tok2');
+
+        const cueButtons = Array.from(details.querySelectorAll<HTMLButtonElement>('button.mj-markdown-video__cue'));
+        expect(cueButtons[0].querySelector('.mj-markdown-video__cue-time')?.textContent).toBe('00:05');
+        expect(cueButtons[0].querySelector('.mj-markdown-video__cue-text')?.textContent).toBe(
+          'Jane Doe: Welcome to the member portal.',
+        );
+        expect(cueButtons[1].querySelector('.mj-markdown-video__cue-time')?.textContent).toBe('00:12');
+
+        // Click second cue -> seeks to 12s
+        cueButtons[1].click();
+        expect(video.currentTime).toBe(12);
+
+        // Emit timeupdate -> highlights active cue
+        video.currentTime = 7;
+        video.dispatchEvent(new Event('timeupdate'));
+        expect(cueButtons[0].classList.contains('mj-markdown-video__cue--active')).toBe(true);
+        expect(cueButtons[1].classList.contains('mj-markdown-video__cue--active')).toBe(false);
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it('leaves regular/linked/tokenless images untouched, rejects upload-stage captions, and omits crossorigin without captions', async () => {
+      const md =
+        '![Diagram](/media/11111111-2222-3333-4444-555555555555?token=tok1) ' +
+        '[![Linked](/media/22222222-2222-3333-4444-555555555555?token=tok1&kind=video)](https://example.test/watch) ' +
+        '![Tokenless](/media/44444444-2222-3333-4444-555555555555?kind=video) ' +
+        '![UploadStage](/media/55555555-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=upload-stage&vttToken=tok2) ' +
+        '![BadVtt](/media/33333333-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=../evil&vttToken=tok2)';
+      const f = render({ data: md, EnableInlineMedia: true });
+      const c = container(f);
+
+      // Diagram + Linked + Tokenless stay <img>; UploadStage + BadVtt upgrade to <video> WITHOUT <track>, <details>, or crossorigin
+      expect(c.querySelectorAll('img')).toHaveLength(3);
+      const videos = Array.from(c.querySelectorAll<HTMLVideoElement>('video.mj-markdown-video__player'));
+      expect(videos).toHaveLength(2);
+      for (const video of videos) {
+        expect(video.querySelector('track')).toBeNull();
+        expect(video.hasAttribute('crossorigin')).toBe(false);
+      }
+      expect(c.querySelector('details.mj-markdown-video__transcript')).toBeNull();
+
+      // Toggling EnableInlineMedia=false restores <img> rendering for all 5 items
+      f.componentRef.setInput('EnableInlineMedia', false);
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(c.querySelector('video')).toBeNull();
+      expect(c.querySelectorAll('img')).toHaveLength(5);
+    });
+
+    it('rejects backslash origin-bypass paths and invalid file IDs, and renders XSS cue text literally', async () => {
+      // Directly exercise UpgradeInlineMediaElements with a raw backslash protocol-relative bypass
+      // that Markdown/DOMPurify might strip before UpgradeInlineMediaElements runs.
+      const host = document.createElement('div');
+      const bypassImg = document.createElement('img');
+      bypassImg.setAttribute('src', '/\\evil.example/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video');
+      host.appendChild(bypassImg);
+      UpgradeInlineMediaElements(host);
+      expect(host.querySelectorAll('video')).toHaveLength(0);
+      expect(host.querySelectorAll('img')).toHaveLength(1);
+
+      const md =
+        '![InvalidFileId](/media/bad.file/clip.mp4?token=tok1&kind=video) ' +
+        '![ValidClip](/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2)';
+      const xssVtt = [
+        'WEBVTT',
+        '',
+        '00:00:01.000 --> 00:00:03.000',
+        'Before <img src=x onerror=alert(1)> and &lt;img onerror=alert(2)&gt;',
+      ].join('\n');
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(xssVtt, { status: 200, headers: { 'Content-Type': 'text/vtt' } }),
+      );
+
+      try {
+        const c = container(render({ data: md, EnableInlineMedia: true }));
+
+        expect(c.querySelectorAll('img')).toHaveLength(1);
+        const video = c.querySelector<HTMLVideoElement>('video.mj-markdown-video__player')!;
+        expect(video).not.toBeNull();
+        expect(video.getAttribute('src')).toBe(
+          `${window.location.origin}/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2`,
+        );
+
+        const details = c.querySelector<HTMLDetailsElement>('details.mj-markdown-video__transcript')!;
+        details.open = true;
+        details.dispatchEvent(new Event('toggle'));
+
+        await vi.waitFor(() => {
+          expect(details.querySelectorAll('button.mj-markdown-video__cue')).toHaveLength(1);
+        });
+        expect(details.querySelectorAll('img')).toHaveLength(0);
+        expect(details.querySelector('.mj-markdown-video__cue-text')?.textContent).toBe(
+          'Before and <img onerror=alert(2)>',
+        );
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+  });
+
+  describe('incremental block-tail streaming rendering', () => {
+    it('monotonic streaming append reuses cached prefix DOM nodes without tearing down completed elements', () => {
+      const f = render({ data: '# Title\n\nParagraph 1' });
+      const c = container(f);
+
+      const h1Ref = c.querySelector('h1');
+      expect(h1Ref).not.toBeNull();
+      expect(h1Ref?.textContent).toContain('Title');
+
+      // Append Paragraph 2: Paragraph 1 graduates into the stable prefix
+      f.componentRef.setInput('data', '# Title\n\nParagraph 1\n\nParagraph 2');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref); // Title h1 strictly === identical across chunks
+      const p1Ref = c.querySelectorAll('p')[0];
+      expect(p1Ref).not.toBeNull();
+      expect(p1Ref.textContent).toContain('Paragraph 1');
+      expect(c.querySelectorAll('p')[1]?.textContent).toContain('Paragraph 2');
+
+      // Append more text to Paragraph 2 (updating active mutable tail)
+      f.componentRef.setInput('data', '# Title\n\nParagraph 1\n\nParagraph 2 is still streaming...');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref); // Title h1 still strictly === identical
+      expect(c.querySelectorAll('p')[0]).toBe(p1Ref); // Paragraph 1 still strictly === identical
+      expect(c.querySelectorAll('p')[1]?.textContent).toContain('Paragraph 2 is still streaming');
+
+      // Append code block: Paragraph 2 graduates into stable prefix
+      f.componentRef.setInput('data', '# Title\n\nParagraph 1\n\nParagraph 2 is still streaming...\n\n```ts\nconst x = 1;\n```');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref); // Still strictly === identical
+      expect(c.querySelectorAll('p')[0]).toBe(p1Ref); // Still strictly === identical
+      const p2Ref = c.querySelectorAll('p')[1];
+      expect(c.querySelector('pre code')?.textContent).toContain('const x = 1;');
+
+      // Append trailing conclusion: Code block graduates into stable prefix
+      f.componentRef.setInput('data', '# Title\n\nParagraph 1\n\nParagraph 2 is still streaming...\n\n```ts\nconst x = 1;\n```\n\nConclusion');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref); // Title h1 strictly === identical
+      expect(c.querySelectorAll('p')[0]).toBe(p1Ref); // Paragraph 1 strictly === identical
+      expect(c.querySelectorAll('p')[1]).toBe(p2Ref); // Paragraph 2 strictly === identical
+      const preRef = c.querySelector('pre');
+      expect(preRef).not.toBeNull();
+      expect(c.querySelectorAll('p')[2]?.textContent).toContain('Conclusion');
+
+      // Stream more tokens into conclusion: Pre/code block stays strictly === identical
+      f.componentRef.setInput('data', '# Title\n\nParagraph 1\n\nParagraph 2 is still streaming...\n\n```ts\nconst x = 1;\n```\n\nConclusion is continuing to stream.');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref); // Title h1 strictly === identical
+      expect(c.querySelectorAll('p')[0]).toBe(p1Ref); // Paragraph 1 strictly === identical
+      expect(c.querySelectorAll('p')[1]).toBe(p2Ref); // Paragraph 2 strictly === identical
+      expect(c.querySelector('pre')).toBe(preRef); // Pre/code block strictly === identical
+      expect(c.querySelectorAll('p')[2]?.textContent).toContain('Conclusion is continuing to stream');
+    });
+
+    it('open fenced code blocks across multiple chunks render accurately without premature splitting on blank lines inside the fence', () => {
+      const f = render({ data: '# Section\n\nIntroduction text.' });
+      const c = container(f);
+
+      const h1Ref = c.querySelector('h1');
+
+      // Chunk 1: Open fence with initial line
+      f.componentRef.setInput('data', '# Section\n\nIntroduction text.\n\n```ts\nconst a = 1;');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref);
+      const pIntroRef = c.querySelector('p');
+      expect(pIntroRef).not.toBeNull();
+      expect(c.querySelectorAll('pre code').length).toBe(1);
+      expect(c.querySelector('pre code')?.textContent?.trim()).toBe('const a = 1;');
+
+      // Chunk 2: Blank line inside the open code block followed by another line
+      f.componentRef.setInput('data', '# Section\n\nIntroduction text.\n\n```ts\nconst a = 1;\n\nconst b = 2;');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref);
+      expect(c.querySelector('p')).toBe(pIntroRef); // Intro paragraph stays strictly === identical
+      expect(c.querySelectorAll('pre code').length).toBe(1);
+      expect(c.querySelector('pre code')?.textContent?.trim()).toBe('const a = 1;\n\nconst b = 2;');
+
+      // Chunk 3: Closing the fence and appending trailing prose
+      f.componentRef.setInput('data', '# Section\n\nIntroduction text.\n\n```ts\nconst a = 1;\n\nconst b = 2;\n```\n\nTrailing paragraph.');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref);
+      expect(c.querySelector('p')).toBe(pIntroRef); // Still strictly === identical
+      expect(c.querySelectorAll('pre code').length).toBe(1);
+      expect(c.querySelector('pre code')?.textContent?.trim()).toBe('const a = 1;\n\nconst b = 2;');
+      expect(c.querySelectorAll('p').length).toBe(2);
+      expect(c.querySelectorAll('p')[1]?.textContent).toContain('Trailing paragraph.');
+    });
+
+    it('reference-style links arriving in a later chunk seamlessly fall back to full render so links resolve correctly', () => {
+      const f = render({ data: 'Read the [documentation][docs] for setup.\n\nMore info here.' });
+      const c = container(f);
+
+      // Initially, [docs] is undefined, so marked leaves it as literal text
+      expect(c.querySelector('a')).toBeNull();
+      expect(c.textContent).toContain('[documentation][docs]');
+
+      // Later chunk introduces the reference link definition
+      f.componentRef.setInput(
+        'data',
+        'Read the [documentation][docs] for setup.\n\nMore info here.\n\n[docs]: https://example.com/docs'
+      );
+      f.detectChanges();
+
+      // Full render fallback resolves the link
+      const link = c.querySelector('a');
+      expect(link).not.toBeNull();
+      expect(link?.getAttribute('href')).toBe('https://example.com/docs');
+      expect(link?.textContent).toBe('documentation');
+    });
+
+    it('non-monotonic text replacement seamlessly falls back to full render', () => {
+      const f = render({ data: '# Original Document\n\nFirst paragraph here.' });
+      const c = container(f);
+      expect(c.querySelector('h1')?.textContent).toContain('Original Document');
+
+      // Completely replaced content (not monotonic prefix extension)
+      f.componentRef.setInput('data', '# Replaced Document\n\nCompletely different content.');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')?.textContent).toContain('Replaced Document');
+      expect(c.querySelector('p')?.textContent).toContain('Completely different content.');
+      expect(c.textContent).not.toContain('Original Document');
+    });
+
+    it('duplicate headings seamlessly fall back to full render to preserve unique ID slug suffixes', () => {
+      const f = render({ data: '# Overview\n\nInitial overview.' });
+      const c = container(f);
+      expect(c.querySelector('h1')?.id).toBe('overview');
+
+      // Appending a second heading with the exact same name
+      f.componentRef.setInput('data', '# Overview\n\nInitial overview.\n\n# Overview\n\nSecond overview.');
+      f.detectChanges();
+
+      const headings = c.querySelectorAll('h1');
+      expect(headings.length).toBe(2);
+      expect(headings[0].id).toBe('overview');
+      expect(headings[1].id).toBe('overview-1');
+    });
+
+    it('produces 100% identical HTML output to full render across multi-element streamed documents', async () => {
+      const chunks = [
+        '# Main Title\n\nFirst paragraph introduces the topic.',
+        '# Main Title\n\nFirst paragraph introduces the topic.\n\n## Subheading\n\n- item 1\n- item 2',
+        '# Main Title\n\nFirst paragraph introduces the topic.\n\n## Subheading\n\n- item 1\n- item 2\n\n> A thoughtful quote.\n>\n> Second line of quote.',
+        '# Main Title\n\nFirst paragraph introduces the topic.\n\n## Subheading\n\n- item 1\n- item 2\n\n> A thoughtful quote.\n>\n> Second line of quote.\n\n```javascript\nfunction test() {\n  return 42;\n}\n```',
+        '# Main Title\n\nFirst paragraph introduces the topic.\n\n## Subheading\n\n- item 1\n- item 2\n\n> A thoughtful quote.\n>\n> Second line of quote.\n\n```javascript\nfunction test() {\n  return 42;\n}\n```\n\nFinal conclusion paragraph.',
+      ];
+
+      // Stream sequentially through chunks
+      const streamFixture = render({ data: chunks[0] });
+      for (let i = 1; i < chunks.length; i++) {
+        streamFixture.componentRef.setInput('data', chunks[i]);
+        streamFixture.detectChanges();
+      }
+      // Flush microtasks for postRenderProcessing
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // One-shot full render of the final text using a second component instance
+      const fullFixture = TestBed.createComponent(MarkdownComponent);
+      fullFixture.componentRef.setInput('data', chunks[chunks.length - 1]);
+      fullFixture.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(container(streamFixture).innerHTML.trim()).toBe(container(fullFixture).innerHTML.trim());
+    });
   });
 });
+
+
+

@@ -298,4 +298,44 @@ describe('AuditAnalyzer', () => {
             expect(stats.successRate).toBe(100);
         });
     });
+
+    describe('ExtractActionNames', () => {
+        it('extracts deduplicated action names from InputData and StepName', () => {
+            const names = analyzer.ExtractActionNames([
+                { StepType: 'Prompt', StepName: 'Loop Iteration 1', InputData: '{}' },
+                {
+                    StepType: 'Actions',
+                    StepName: 'Execute Action: Run Ad-hoc Query',
+                    InputData: JSON.stringify({ actionName: 'Run Ad-hoc Query', actionParams: {} }),
+                },
+                {
+                    StepType: 'Actions',
+                    StepName: 'Execute Action: Run Ad-hoc Query',
+                    InputData: JSON.stringify({ actionName: 'Run Ad-hoc Query', actionParams: {} }),
+                },
+                {
+                    StepType: 'Actions',
+                    StepName: 'Execute Action: Get Entity Details',
+                    InputData: 'not-json',
+                },
+                {
+                    StepType: 'Tool',
+                    StepName: 'Tool: search_docs',
+                    InputData: '{}',
+                },
+            ]);
+            expect(names).toEqual(['Run Ad-hoc Query', 'Get Entity Details']);
+        });
+
+        it('includes Tool steps when includeToolSteps is true', () => {
+            const names = analyzer.ExtractActionNames(
+                [
+                    { StepType: 'Actions', StepName: 'Execute Action: Run Ad-hoc Query', InputData: '{}' },
+                    { StepType: 'Tool', StepName: 'Tool: search_docs', InputData: '{}' },
+                ],
+                true
+            );
+            expect(names).toEqual(['Run Ad-hoc Query', 'search_docs']);
+        });
+    });
 });

@@ -9,10 +9,13 @@
 ## 📋 Before You Start (Prerequisites)
 
 1. **Docker Desktop** installed and running ([Download Docker Desktop](https://www.docker.com/products/docker-desktop)):
-   - Allocate at least **8–12 GB of RAM** to Docker Desktop in **Settings → Resources** (SQL Server + MJAPI + MJExplorer run together inside the container stack).
-2. **Node.js 20+** installed on your machine ([Download Node.js](https://nodejs.org/)) — required only if you run `npx @memberjunction/cli agent init` directly on your host machine.
+   - Allocate at least **8–12 GB of RAM** to Docker Desktop in **Settings → Resources** for a single workspace (or **16+ GB** if running multiple workspaces simultaneously; stop unused workspaces with `docker compose stop` to free memory).
+2. **Node.js 20+** installed on your machine ([Download Node.js](https://nodejs.org/)) — required only if you run `npx @memberjunction/cli@edge agent init` directly on your host machine.
 3. **One LLM API Key** (OpenAI, Anthropic, Google Gemini, Groq, or Mistral).
-4. **Windows / PowerShell Note**: When running headless test prompts with quotes or multiple lines on Windows PowerShell, pass `-f /work/<prompt-file.txt>` (`--prompt-file`) to `mj ai agents run` instead of inline `-p "..."` strings to avoid PowerShell quote stripping.
+4. **GitHub Token (Recommended for Multi-App Bundles, Required for Private OpenApps)**:
+   - Anonymous GitHub API requests are capped at **60/hour**. Installing or rebuilding multi-app bundles like **More Cheese** repeatedly can hit that cap and return `403 API rate limit exceeded`.
+   - Adding any fine-grained or classic read-only `GITHUB_TOKEN` (even with zero private repo scopes) to `.env` raises the GitHub API limit to **5,000/hour** — and is required if your organization hosts private enterprise OpenApps.
+5. **Windows / PowerShell Note**: When running headless test prompts with quotes or multiple lines on Windows PowerShell, pass `-f /work/<prompt-file.txt>` (`--prompt-file`) to `mj ai agents run` instead of inline `-p "..."` strings to avoid PowerShell quote stripping.
 
 ---
 
@@ -26,7 +29,7 @@ Please review the MemberJunction Citizen Agent Builder guide at:
 https://github.com/MemberJunction/MJ/tree/next/citizen-builder
 
 Follow the instructions in that guide:
-1. Initialize a new MemberJunction agent builder workspace here using `npx @memberjunction/cli agent init .`
+1. Initialize a new MemberJunction agent builder workspace here using `npx @memberjunction/cli@edge agent init .`
 2. Start the local Docker environment and verify services are running.
 3. Review available entities and actions in CAPABILITIES.md.
 4. Build me an AI agent that:
@@ -41,9 +44,9 @@ Your coding agent will read the guide, scaffold the workspace, start the local d
 ### Option B: The Manual / Step-by-Step Path
 If you prefer to initialize the workspace and start the Docker environment yourself before handing off to an agent:
 
-1. **Scaffold the workspace**:
+1. **Scaffold the workspace** (use `@edge` such as `6.3.0-edge.3` for preview/next testing, or `@latest` for certified production LTS):
    ```bash
-   npx @memberjunction/cli agent init ./my-agents
+   npx @memberjunction/cli@edge agent init ./my-agents
    cd ./my-agents
    ```
 2. **Add your LLM API Key**:
@@ -69,11 +72,12 @@ If you prefer to initialize the workspace and start the Docker environment yours
 > **Product Principle:** *Make the human surface simple; keep the agent surface complete.*
 > The business-user experience is a straightforward chat. The agent experience is comprehensive — giving coding agents full machine-readable access to live entity metadata, actions, progressive CLI discovery, diagnostic probes, execution traces, and packaging.
 
-The **Citizen Agent Builder** provides an isolated, local MemberJunction environment that runs entirely inside Docker:
+The **Citizen Agent Builder** provides an isolated, local MemberJunction environment built on **pre-built npm-distributed MemberJunction releases** (`@edge` e.g. `6.3.0-edge.3` for preview testing, `@latest` for certified production LTS) and **pre-built npm-distributed OpenApp packages** — **never compile TypeScript packages or run full `mj codegen`**:
 * **`sqlserver` (Port 1433)**: Microsoft SQL Server 2022.
-* **`mj` (Ports 4000 & 4202)**: A Node 24 container that executes `mj install` on first boot, provisions the database schema, installs business context (More Cheese default, or enterprise apps like Blue Cypress), and serves:
-  * **MJAPI** at `http://localhost:4000` (GraphQL API and agent execution engine).
-  * **MJExplorer** at `http://localhost:4202` (Web UI for testing agents and viewing records; zero-config Local Dev Auth is enabled by default on localhost, and port 4202 is also an authorized redirect URI for Auth0/MSAL).
+* **`mj` (Ports 4000 & 4202 by default)**: A Node 24 container that installs pre-built MemberJunction and OpenApp packages on first boot, provisions the database schema and a read-only `mj_readonly` SQL login for ad-hoc queries, and serves:
+  * **MJAPI** at `http://localhost:${API_PORT:-4000}` (GraphQL API and agent execution engine).
+  * **MJExplorer** at `http://localhost:${EXPLORER_PORT:-4202}` (check `EXPLORER_PORT` in `.env`: defaults to `4202`, or `4203+` if `4202` was busy during `mj agent init`; zero-config Local Dev Auth is enabled by default on localhost, and port 4202 is also an authorized redirect URI for Auth0/MSAL).
+  * **Pre-compiled Runtime**: All `@memberjunction/*` and `@mj-biz-apps/*` packages are pre-compiled npm distributions. Restarting the `mj` container automatically wires installed OpenApp client manifests — **NEVER run full `mj codegen` or compile TypeScript packages**.
 * **Metadata Directory (`./metadata`)**: Local JSON and Markdown files mapped into the container. Pushing metadata to the database is done with a single command (`./scripts/sync-metadata.sh`, which runs `mj sync push --dir /work/metadata`).
 
 ### Available Agent Tools & CLI Commands
@@ -141,9 +145,9 @@ If you have access to the repository (or view them on GitHub at `https://github.
    ```bash
    docker compose logs -f mj
    ```
-   Once the banner appears:
-   * **MJAPI is live at**: `http://localhost:4000`
-   * **MJExplorer is live at**: `http://localhost:4202`
+   Once the banner appears (check `.env` for your resolved `API_PORT` and `EXPLORER_PORT` — `EXPLORER_PORT` defaults to `4202`, or `4203+` if `4202` was busy):
+   * **MJAPI is live at**: `http://localhost:4000` (or `API_PORT` from `.env`)
+   * **MJExplorer is live at**: `http://localhost:4202` (or `EXPLORER_PORT` from `.env`)
 
 ---
 
@@ -196,7 +200,7 @@ Always enforce these constraints when authoring agents:
 ### Step 4: Testing & Autonomous Diagnostics (The Dual Loop)
 
 1. **Interactive Testing (Explorer UI)**:
-   Invite the user to test in their browser at `http://localhost:4202`.
+   Check `EXPLORER_PORT` in `.env` (defaults to `4202`, or `4203+` if `4202` was busy) and invite the user to test in their browser at `http://localhost:<EXPLORER_PORT>`.
 
 2. **Headless Execution**:
    You can trigger test runs directly via CLI with structured output:
@@ -241,14 +245,24 @@ When the user is satisfied, package the agent for promotion to staging or produc
    * Data Footprint (Entities Read vs Entities Written).
    * Bound Tools and Actions.
    * Sample Execution Trace Receipt.
-4. Create the distribution archive:
+4. Create the distribution archive (including `.mj-sync.json` files so `mj sync push --dir <extracted>/metadata` works out of the box):
    ```bash
    mkdir -p dist
-   zip -r "dist/<agent-slug>-package.zip" \
+   AGENT_SLUG="<agent-slug>"
+   ACTIONS_FILES=()
+   if [ -d metadata/actions ]; then
+     [ -f metadata/actions/.mj-sync.json ] && ACTIONS_FILES+=(metadata/actions/.mj-sync.json)
+     ACTIONS_FILES+=(metadata/actions/.*"${AGENT_SLUG}"*.json)
+   fi
+   zip -r "dist/${AGENT_SLUG}-package.zip" \
      AGENT_MANIFEST.md \
-     metadata/agents/.*"<agent-slug>"*.json \
-     metadata/prompts/.*"<agent-slug>"*.json \
-     metadata/prompts/templates/"<agent-slug>"*.md
+     metadata/.mj-sync.json \
+     metadata/agents/.mj-sync.json \
+     metadata/agents/.*"${AGENT_SLUG}"*.json \
+     metadata/prompts/.mj-sync.json \
+     metadata/prompts/.*"${AGENT_SLUG}"*.json \
+     metadata/prompts/templates/"${AGENT_SLUG}"*.md \
+     "${ACTIONS_FILES[@]}"
    ```
 5. Give the user the path to `dist/<agent-slug>-package.zip` and explain how their platform admin can review and deploy it (see `docs/PROMOTION_GUIDE.md`).
 

@@ -4,6 +4,7 @@
  */
 
 import type { APIKeyActingContext, APIKeyRowFilterBinding } from '@memberjunction/core';
+import type { MJAPIKeyEntity } from '@memberjunction/core-entities';
 
 // =========================================================================
 // API KEY GENERATION AND MANAGEMENT INTERFACES
@@ -91,12 +92,17 @@ export interface APIKeyValidationResult {
     User?: import('@memberjunction/core').UserInfo;
     /** The API key ID if valid */
     APIKeyId?: string;
-    /**
-     * The SHA-256 hash of the validated API key.
+    /** The SHA-256 hash of the validated API key.
      * Provided so callers can use it for subsequent Authorize() calls
      * without re-hashing the raw key.
      */
     APIKeyHash?: string;
+    /**
+     * The validated `MJ: API Keys` entity record returned from the single hash lookup
+     * performed during `ValidateAPIKey`. Callers can inspect `Label`, `ExpiresAt`, etc.
+     * directly without a second lookup or TOCTOU race.
+     */
+    APIKey?: MJAPIKeyEntity;
     /** Error message if invalid */
     Error?: string;
 }
@@ -367,7 +373,10 @@ export interface APIKeyEngineConfig {
     loggingEnabled?: boolean;
     /** Default behavior when key has no scopes (default: 'allow') */
     defaultBehaviorNoScopes?: 'allow' | 'deny';
-    /** Cache TTL in milliseconds for scope rules (default: 60000) */
+    /**
+     * Cache TTL in milliseconds (default: 60000). Bounds the key and user validation caches and
+     * the timed re-read of the scope, application and key-binding tables. 0 disables both.
+     */
     scopeCacheTTLMs?: number;
     /**
      * API key generation parameters (prefix, entropy, encoding, hash algorithm).

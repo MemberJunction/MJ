@@ -316,11 +316,13 @@
     <i class="fa-solid fa-plus"></i>
   </button>
 
-  <!-- Export Button -->
-  <button
-    class="vs-icon-btn vs-export-btn"
-    (click)="OnExport()"
-    title="Export">
-    <i class="fa-solid fa-file-excel"></i>
-  </button>
+  <!-- Export Button (suppressed when the active view type provides its own toolbar Export) -->
+  @if (ShowExportButton) {
+    <button
+      class="vs-icon-btn vs-export-btn"
+      (click)="OnExport()"
+      title="Export">
+      <i class="fa-solid fa-file-excel"></i>
+    </button>
+  }
 </div>

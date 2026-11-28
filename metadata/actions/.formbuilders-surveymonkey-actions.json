@@ -2140,7 +2140,10 @@
       "DriverClass": "CreateSurveyMonkeyAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-plus-circle"
+      "IconClass": "fa-solid fa-plus-circle",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2455,8 +2458,8 @@
       "ID": "6D55727D-B21C-4D16-B765-8AA691364A9E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:07.922Z",
-      "checksum": "47e225a4625f45891066394be96e5b4bbfc98131bf5c87b7000af4e434851de0"
+      "lastModified": "2026-11-10T23:41:29.506Z",
+      "checksum": "97499598a75c5698d21fb734d1b05b233c5767e194d1933fa4de23d6358772f1"
     }
   },
   {
@@ -2467,7 +2470,10 @@
       "DriverClass": "UpdateSurveyMonkeyAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-pen-to-square"
+      "IconClass": "fa-solid fa-pen-to-square",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2765,8 +2771,8 @@
       "ID": "381C8C15-E5A5-4909-9FA2-818921839786"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:07.923Z",
-      "checksum": "19b3a2f2099f0909659ffd8e39bc7e319f79b63996bdbaa528c3e50f06bb5a1a"
+      "lastModified": "2026-11-10T23:41:29.519Z",
+      "checksum": "7344b56585ba84e9e1ea5e5cb26463e1da9b5284132ddc1856ef4298e104eccf"
     }
   }
 ]

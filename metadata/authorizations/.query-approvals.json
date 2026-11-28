@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "Queries: Approve",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Lets a user approve a saved query, which makes it MJ canon: offered to agents, search and pickers. Anyone with Create on MJ: Queries can save a query as a draft (Pending); approving it needs this authorization."
+    },
+    "primaryKey": {
+      "ID": "536259E7-C10B-4BAD-8A53-32ED95DBF3F8"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.949Z",
+      "checksum": "40941521f8262004b396e494e60858dfc462262f62fddb96962de9c4aa4b1af4"
+    }
+  }
+]

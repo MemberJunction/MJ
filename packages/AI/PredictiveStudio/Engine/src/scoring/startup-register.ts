@@ -49,16 +49,17 @@ export class PredictiveStudioScoringStartup extends BaseSingleton<PredictiveStud
 
   /**
    * Boot entry point (per {@link IStartupSink}). Registers the ML scoring processor for the
-   * `'ML Model'` work type with the production deps bundle. No-op-safe to call more than once
-   * (the registry last-wins), and needs neither the `contextUser` nor `provider` — the deps are
-   * constructed without them and take a `provider`/`user` per scoring call.
+   * `'ML Model'` work type with the production deps bundle (a bound process's challenger is `ScoringService`'s live mirror).
+   * No-op-safe to call more than once (the registry last-wins), and needs neither the `contextUser`
+   * nor `provider` — the deps are constructed without them and take a `provider`/`user` per scoring call.
    *
    * @param _contextUser unused — the registration is provider/user-agnostic at construction time
    * @param _provider unused — see above
    */
   public async HandleStartup(_contextUser?: UserInfo, _provider?: IMetadataProvider): Promise<void> {
+    const deps = BuildProductionMLInferenceDeps();
     // The auto-trainer only acts for Record Processes that declare `Configuration.autoTrain`.
-    RegisterMLScoringProcessor(BuildProductionMLInferenceDeps(), new PipelineAutoTrainer());
+    RegisterMLScoringProcessor(deps, new PipelineAutoTrainer());
     // Routine boot registration — only surface it under verbose logging to keep startup quiet.
     LogStatusEx({
       message: '[PredictiveStudioScoringStartup] Registered ML Model scoring processor for Record Set Processing.',

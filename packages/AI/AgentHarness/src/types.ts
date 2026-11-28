@@ -1,6 +1,76 @@
 import { MJAIAgentHarnessEntity } from '@memberjunction/core-entities';
 import { SandboxExecutor } from './sandbox/SandboxExecutor.js';
 
+/** Sandbox execution provider kind. */
+export type HarnessSandboxProviderType = 'local' | 'docker' | 'cloud';
+
+/**
+ * Authentication mode for local CLI harness sessions.
+ * - `'auto'` — prefer local CLI subscription login on local CLI adapters when no explicit API-key grant is bound.
+ * - `'cli-login'` — strictly use the user's logged-in local CLI subscription (strips all API-key env vars).
+ * - `'api-key'` — use granted `MJ: AI Agent Credentials` or server fallback API keys.
+ */
+export type HarnessAuthMode = 'auto' | 'cli-login' | 'api-key';
+
+/** Outbound network posture inside a cloud agent sandbox. */
+export type CloudNetworkAccess = 'none' | 'restricted' | 'egress';
+
+/** Waiting strategy while a remote cloud agent turn is executing. */
+export type CloudWaitMode = 'bounded-poll' | 'adaptive-wake';
+
+/** Normalized execution state of a remote cloud agent session or interaction. */
+export type CloudExecutionState = 'completed' | 'running' | 'failed' | 'cancelled';
+
+/**
+ * Cloud-specific runtime options when `sandbox.provider === 'cloud'`.
+ */
+export interface CloudSandboxOptions {
+    endpointUrl?: string;
+    region?: string;
+    projectId?: string;
+    environmentId?: string;
+    repositoryUrl?: string;
+    gitRef?: string;
+    gitBranch?: string;
+    networkAccess?: CloudNetworkAccess;
+    waitMode?: CloudWaitMode;
+    turnWaitBudgetMs?: number;
+    pollIntervalMs?: number;
+    mcpExternalServerUrl?: string;
+    extraHeaders?: Record<string, string>;
+}
+
+/**
+ * Normalized cloud workspace and execution settings attached to a provisioned `SandboxHandle`.
+ */
+export interface CloudSandboxMetadata {
+    Provider: 'cloud';
+    SessionKey: string;
+    EndpointUrl?: string;
+    Region?: string;
+    ProjectId?: string;
+    EnvironmentId?: string;
+    RepositoryUrl?: string;
+    GitRef?: string;
+    GitBranch?: string;
+    NetworkAccess: CloudNetworkAccess;
+    WaitMode: CloudWaitMode;
+    TurnWaitBudgetMs: number;
+    PollIntervalMs: number;
+    McpExternalServerUrl?: string;
+    ExtraHeaders?: Record<string, string>;
+}
+
+/**
+ * Additive cloud execution capability flags layered onto `AIAgentHarness.CapabilitySettings`.
+ */
+export interface HarnessCloudCapabilities {
+    /** Whether the adapter executes remotely over HTTP against a cloud agent service rather than spawning a local/container CLI process. */
+    SupportsCloudExecution?: boolean;
+    /** Whether the adapter supports detaching cleanly from an in-flight cloud session (`adaptive-wake`) and re-attaching on the next `AgentWake`. */
+    SupportsAsyncWakeHandoff?: boolean;
+}
+
 /**
  * What a harness adapter can do, mirrored from `AIAgentHarness.CapabilitySettings`.
  *
@@ -8,7 +78,8 @@ import { SandboxExecutor } from './sandbox/SandboxExecutor.js';
  * lockstep with the interface CodeGen emits from `IHarnessCapabilitySettings.ts`. Restating the
  * shape by hand is the value-list drift trap in a different costume.
  */
-export type HarnessCapabilities = NonNullable<MJAIAgentHarnessEntity['CapabilitySettingsObject']>;
+export type HarnessCapabilities = NonNullable<MJAIAgentHarnessEntity['CapabilitySettingsObject']> &
+    HarnessCloudCapabilities;
 
 /**
  * Everything an adapter needs to launch a harness session.
@@ -64,7 +135,22 @@ export interface HarnessSessionConfig {
     Model?: string;
     /** Aborts in-flight work; honoured mid-turn only when `CapabilitySettings.MidTurnCancellation`. */
     CancellationToken?: AbortSignal;
+    /** Optional system instructions supplied at session initialization. */
+    SystemPrompt?: string;
+    /** Cloud runtime configuration when `sandbox.provider === 'cloud'`. */
+    CloudOptions?: CloudSandboxOptions;
+    /** Normalized cloud metadata produced by `CloudSandboxProvider.Provision`. */
+    SandboxMetadata?: CloudSandboxMetadata;
+    /** When true, instructs a resumed cloud session to harvest an already-submitted background turn without posting a duplicate turn. */
+    ReattachPendingTurn?: boolean;
+    /** Extra host directories exposed to CLI harnesses via `--add-dir`. */
+    AdditionalDirectories?: string[];
+    /** Effective authentication mode resolved for this harness session. */
+    AuthMode?: HarnessAuthMode;
 }
+
+/** Alias for {@link HarnessSessionConfig} used by cloud session initialization callers. */
+export type HarnessSessionInit = HarnessSessionConfig;
 
 /**
  * Events an adapter emits while a turn is in flight.
@@ -77,16 +163,40 @@ export interface HarnessSessionConfig {
 export type HarnessTurnEvent =
     /** Streamed narration, surfaced to `onProgress` and never persisted as a step. */
     | { Type: 'assistant-text'; Text: string }
+    /** Streamed model reasoning/thinking tokens for live observability. */
+    | { Type: 'thinking-delta'; Text: string }
+    /** Structured tool invocation start emitted by CLI or cloud harnesses for live observability. */
+    | { Type: 'tool-use-start'; ToolCallId: string; ToolName: string; ArgumentsJson?: string }
+    /** Structured tool execution result emitted by CLI or cloud harnesses for live observability. */
+    | { Type: 'tool-result'; ToolCallId: string; ToolName?: string; Output: string; IsError?: boolean }
     /** Informational in-sandbox activity (file edit, shell command) for live view only. */
     | { Type: 'sandbox-activity'; Description: string }
+    /** Throttled liveness pulse emitted on raw stdout/stderr or unmapped adapter activity. */
+    | { Type: 'liveness-heartbeat'; Source?: 'stdout' | 'stderr' | 'event'; Timestamp?: string }
     /** The harness wants to do something the posture gates; becomes an `MJ: AI Agent Requests` row. */
     | { Type: 'permission-request'; RequestId: string; Description: string; Command?: string }
     /** Token/cost usage for the turn. Without this the run cannot be accounted for — see below. */
-    | { Type: 'usage'; InputTokens: number; OutputTokens: number; CostUsd?: number }
+    | {
+          Type: 'usage';
+          InputTokens: number;
+          OutputTokens: number;
+          PromptTokens?: number;
+          CompletionTokens?: number;
+          ThinkingTokens?: number;
+          CostUsd?: number;
+      }
     /** The turn ended. `RawText` is expected to carry the Loop next-step JSON envelope. */
-    | { Type: 'turn-complete'; RawText: string }
+    | {
+          Type: 'turn-complete';
+          RawText: string;
+          CloudExecutionState?: CloudExecutionState;
+          AsyncWakePending?: boolean;
+          SessionId?: string;
+          ArtifactUrls?: string[];
+          PullRequestUrl?: string;
+      }
     /** The session failed. Terminal for the turn; the run decides whether to retry. */
-    | { Type: 'session-error'; Error: string };
+    | { Type: 'session-error'; Error: string; CloudExecutionState?: CloudExecutionState };
 
 /**
  * The accumulated outcome of one harness turn, assembled by {@link HarnessAgentBase} from the
@@ -98,9 +208,16 @@ export interface HarnessTurnResult {
     /** Summed usage for the turn. Zeros when the harness reports none — which is itself a finding. */
     InputTokens: number;
     OutputTokens: number;
+    ThinkingTokens?: number;
     CostUsd?: number;
     /** Set when the turn failed rather than completed. */
     ErrorMessage?: string;
+    /** True when the turn was stopped because it exceeded limits.maxWallClockSeconds. */
+    TimedOut?: boolean;
+    /** True when the turn was stopped by the inactivity watchdog or repeated tool-loop detector. */
+    Stalled?: boolean;
+    /** Descriptive diagnostic explaining why the turn was marked stalled. */
+    StallReason?: string;
     /** Vendor session id, persisted to `AIAgentRun.ExternalSessionID` for resume and log correlation. */
     SessionId?: string;
     /**
@@ -111,6 +228,14 @@ export interface HarnessTurnResult {
      * are not the same price.
      */
     ReportedModel?: string;
+    /** Terminal or detached cloud execution state when driven by a `BaseCloudHarnessAdapter`. */
+    CloudExecutionState?: CloudExecutionState;
+    /** True when the turn detached cleanly in `adaptive-wake` mode and awaits the next `AgentWake`. */
+    AsyncWakePending?: boolean;
+    /** Optional artifact URLs reported by a cloud agent run. */
+    ArtifactUrls?: string[];
+    /** Optional pull request URL created or updated by a cloud agent run. */
+    PullRequestUrl?: string;
 }
 
 /** Where a harness workspace lives and how long it survives. */
@@ -163,3 +288,93 @@ export interface HarnessPermissionPolicy {
     /** Tool patterns the agent must never use. Takes precedence over {@link AllowedTools}. */
     DisallowedTools?: string[];
 }
+
+/**
+ * Runtime bounds and watchdog limits applied to a harness turn.
+ */
+export interface HarnessTurnLimits {
+    /** Hard wall-clock ceiling for a single turn, in seconds. */
+    maxWallClockSeconds?: number;
+    /**
+     * Rolling inactivity timeout in seconds. Reset on every emitted {@link HarnessTurnEvent}
+     * (including `liveness-heartbeat` pulses from raw stdout/stderr activity).
+     */
+    maxIdleSeconds?: number;
+    /**
+     * Maximum consecutive identical `(ToolName, canonical ArgumentsJson)` tool calls allowed
+     * before aborting the turn as stalled.
+     */
+    maxConsecutiveIdenticalToolCalls?: number;
+    /**
+     * Minimum interval in seconds between {@link HarnessActivityHeartbeatCallback} invocations
+     * while live events are streaming. Defaults to 60 seconds.
+     */
+    heartbeatIntervalSeconds?: number;
+}
+
+/**
+ * Activity heartbeat payload delivered to {@link HarnessActivityHeartbeatCallback} during a turn.
+ */
+export interface HarnessActivityHeartbeatInfo {
+    /** Wall-clock milliseconds elapsed since the current turn began. */
+    ElapsedMs: number;
+    /** Event `Type` of the latest {@link HarnessTurnEvent} observed. */
+    LastEventType: string;
+}
+
+/**
+ * Optional callback invoked periodically on live turn activity so callers can renew external
+ * run leases or publish liveness telemetry without polling.
+ */
+export type HarnessActivityHeartbeatCallback = (
+    info: HarnessActivityHeartbeatInfo,
+) => void | Promise<void>;
+
+/** Canonical CLI vendor keys supported by the multi-account subscription pool. */
+export type HarnessPoolVendor = 'claude' | 'agy' | 'codex' | 'gemini';
+
+/** Balancing strategy used by {@link HarnessAccountPoolService} to select a healthy CLI account slot. */
+export type HarnessAccountSelectionStrategy =
+    | 'least-in-flight'
+    | 'round-robin'
+    | 'weighted'
+    | 'priority-failover';
+
+/**
+ * Per-run multi-account CLI subscription pool options.
+ *
+ * Enabled automatically whenever effective `authMode` resolves to `'cli-login'` and at least one
+ * healthy pool or OS-default slot exists for the harness vendor.
+ */
+export interface HarnessAccountPoolExecutionOptions {
+    /** Explicitly enable (`true`) or disable (`false`) account pooling for this run. */
+    enabled?: boolean;
+    /** Override the pool's default slot selection strategy for this run. */
+    strategy?: HarnessAccountSelectionStrategy;
+    /** Pin execution to a specific enrolled or OS-default slot ID. */
+    slotId?: string;
+    /** Maximum automatic mid-run account failovers on quota/rate-limit errors. Defaults to 3. */
+    maxAccountSwitchesPerRun?: number;
+    /** Optional lease TTL in milliseconds. */
+    leaseTtlMs?: number;
+    /** Optional pool directory override (defaults to `MJ_HARNESS_ACCOUNT_POOL_DIR` or `~/.mj/harness-accounts`). */
+    poolDir?: string;
+}
+
+/**
+ * Per-run execution limits, liveness hooks, and multi-account pool controls for a harness turn.
+ */
+export interface HarnessRunConfig {
+    /** Wall-clock, idle watchdog, repeated tool-loop, and heartbeat cadence limits. */
+    limits?: HarnessTurnLimits;
+    /** Optional hook invoked periodically on live turn activity. */
+    onActivityHeartbeat?: HarnessActivityHeartbeatCallback;
+    /** Optional multi-account CLI subscription pool controls. */
+    accountPool?: HarnessAccountPoolExecutionOptions;
+}
+
+/**
+ * Execution options accepted by {@link HarnessAgentBase} runs and callers configuring limits,
+ * liveness heartbeats, and multi-account CLI subscription pooling.
+ */
+export type HarnessExecutionOptions = HarnessRunConfig;

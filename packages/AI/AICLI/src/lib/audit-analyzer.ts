@@ -280,4 +280,93 @@ export class AuditAnalyzer {
   } {
     return this.CalculateAggregateStats(runs);
   }
+
+  /**
+   * Extract deduplicated action names executed across agent run steps.
+   * Checks `InputData` JSON (`actionName`, `ActionName`, `name`) first, then falls back
+   * to `StepName` with any `"Execute Action: "` or `"Action: "` prefix stripped.
+   */
+  ExtractActionNames(
+    steps: ReadonlyArray<Pick<MJAIAgentRunStepEntity, 'StepType' | 'StepName' | 'InputData'>>,
+    includeToolSteps = false
+  ): string[] {
+    const seen = new Set<string>();
+    const names: string[] = [];
+
+    for (const step of steps) {
+      const stepType = step.StepType as string | undefined;
+      const isActionStep = stepType === 'Actions' || stepType === 'Action';
+      const isToolStep = includeToolSteps && stepType === 'Tool';
+      if (!isActionStep && !isToolStep) {
+        continue;
+      }
+
+      const name = this.extractActionNameFromStep(step);
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        names.push(name);
+      }
+    }
+
+    return names;
+  }
+
+  /**
+   * Extract deduplicated sub-agent names invoked across `Sub-Agent` steps.
+   */
+  ExtractSubAgentNames(
+    steps: ReadonlyArray<Pick<MJAIAgentRunStepEntity, 'StepType' | 'StepName' | 'InputData'>>
+  ): string[] {
+    const seen = new Set<string>();
+    const names: string[] = [];
+
+    for (const step of steps) {
+      if ((step.StepType as string | undefined) !== 'Sub-Agent') {
+        continue;
+      }
+      let name = '';
+      if (step.InputData) {
+        try {
+          const parsed = JSON.parse(step.InputData) as Record<string, unknown>;
+          const candidate = parsed.subAgentName ?? parsed.agentName ?? parsed.name;
+          if (typeof candidate === 'string' && candidate.trim().length > 0) {
+            name = candidate.trim();
+          }
+        } catch {
+          // Ignore malformed InputData and fall back to StepName
+        }
+      }
+      if (!name && step.StepName) {
+        name = step.StepName.replace(/^(?:Execute\s+Sub-?Agent|Sub-?Agent):\s*/i, '').trim();
+      }
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        names.push(name);
+      }
+    }
+
+    return names;
+  }
+
+  private extractActionNameFromStep(
+    step: Pick<MJAIAgentRunStepEntity, 'StepName' | 'InputData'>
+  ): string {
+    if (step.InputData) {
+      try {
+        const parsed = JSON.parse(step.InputData) as Record<string, unknown>;
+        const candidate = parsed.actionName ?? parsed.ActionName ?? parsed.toolName ?? parsed.name;
+        if (typeof candidate === 'string' && candidate.trim().length > 0) {
+          return candidate.trim();
+        }
+      } catch {
+        // Ignore malformed JSON and fall back to StepName
+      }
+    }
+
+    if (step.StepName) {
+      return step.StepName.replace(/^(?:Execute\s+Action|Action|Execute\s+Tool|Tool):\s*/i, '').trim();
+    }
+
+    return '';
+  }
 }

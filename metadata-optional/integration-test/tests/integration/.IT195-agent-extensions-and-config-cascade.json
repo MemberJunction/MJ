@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT195 - Agent Extensions, Configuration Cascade, and Sandbox Enforcement",
+    "Description": "Real-database deterministic checks for Phase 2 BaseAgent Refactor (AEC1-AEC5). AEC1 verifies MJ: AI Agent Step Types DB persistence (14 built-ins + custom row), StepTypeID FK round-trip on AIAgentStep and AIAgentRunStep, and custom DB-backed BaseAgentStepHandler execution via AgentStepTypeRegistry. AEC2 verifies SQL-level 3-table IAgentConfiguration cascade (AIAgent.Configuration -> BaseAgentID chain -> AIAgentCategory.DefaultConfiguration -> AIAgentType.DefaultAgentConfiguration) and narrow-only security invariant clamping. AEC3 verifies bidirectional dirty-field Save() sync in MJAIAgentEntityServer and MJAIAgentTypeEntityServer. AEC4 verifies admin-only Configuration.helperPlugins and code-only seam (limits, actionPolicy) rejection in live Save(). AEC5 verifies #6852 UI-role ownership/RLS enforcement and non-admin sandbox rejection (BaseAgentID, CanRun, DriverClass, Isolation, MaxCostPerRun, TypeConfiguration.helperPlugins, and cross-user isolation) on both SQL Server and PostgreSQL. Self-cleaning throwaway fixtures.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "All 5 Agent Extensions & Configuration Cascade checks (AEC1-AEC5) pass against a real database with zero leaked fixture rows."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent-extensions-and-config-cascade"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "CD97F7FC-2DFB-4CF2-BDD3-E8EF41A1EBC6"
+  }
+}

@@ -1,10 +1,65 @@
 import { Resolver, Query, Arg, Ctx } from 'type-graphql';
-import { Metadata, IMetadataProvider } from '@memberjunction/core';
-import { MJArtifactVersionEntity, MJFileEntity } from '@memberjunction/core-entities';
+import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import {
+    ArtifactPermissionEngine,
+    DocumentLiveBlockEngine,
+    MJArtifactVersionEntity,
+    MJFileEntity,
+} from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { GetReadWriteProvider } from '../util.js';
+import { AssertNotImpersonationSession } from '../auth/impersonationGuard.js';
+import { RefuseImpersonationSessions } from '../auth/scopeLimitedAccess.js';
+
+export const ARTIFACT_FILE_ACCESS_DENIED_MESSAGE = 'You do not have permission to view this artifact file.';
+
+type ResolvedStorageFile = NonNullable<Awaited<ReturnType<FileStorageEngine['ResolveFileObject']>>>;
+
+/**
+ * Loads an `MJ: Files` record as `user` and resolves its underlying storage driver & object key
+ * through `FileStorageEngine.ResolveFileObject` (`'Read'` permission check).
+ */
+export async function ResolveArtifactStorageFile(
+    fileId: string,
+    user: UserInfo,
+    provider: IMetadataProvider,
+): Promise<ResolvedStorageFile> {
+    const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
+    const fileLoaded = await fileEntity.Load(fileId);
+    if (!fileLoaded) {
+        throw new Error(`File record ${fileId} not found`);
+    }
+
+    // Resolve the storage account for this file's provider, gated for the caller (throws on refusal)
+    const resolved = await FileStorageEngine.Instance.ResolveFileObject(fileEntity, user, 'Read', provider);
+    if (!resolved) {
+        throw new Error(`No FileStorageAccount found for ProviderID ${fileEntity.ProviderID}. Cannot resolve file object.`);
+    }
+    return resolved;
+}
+
+/**
+ * Loads raw file bytes for a `ContentMode = 'File'` artifact's backing `MJ: Files` row as `user`.
+ * Used by `DocumentLiveBlockEngine.LoadArtifactFileBytes` for live `Embed` / `=MJ.IMPORTRANGE` blocks.
+ */
+export async function LoadArtifactFileStorageBytes(
+    fileId: string,
+    user: UserInfo,
+    provider: IMetadataProvider,
+): Promise<Uint8Array | ArrayBuffer | null> {
+    const resolved = await ResolveArtifactStorageFile(fileId, user, provider);
+    return resolved.Driver.GetObject({ fullPath: resolved.ObjectKey });
+}
+
+/**
+ * Registers the server-side storage bytes loader with `DocumentLiveBlockEngine.Instance` so
+ * live `Embed` / `=MJ.IMPORTRANGE` blocks targeting `ContentMode = 'File'` artifacts work in MJServer.
+ */
+export function RegisterServerArtifactFileBytesLoader(): void {
+    DocumentLiveBlockEngine.Instance.RegisterArtifactFileBytesLoader(LoadArtifactFileStorageBytes);
+}
 
 /**
  * GraphQL resolver that produces a short-lived download URL for an artifact version
@@ -16,14 +71,19 @@ import { GetReadWriteProvider } from '../util.js';
 @Resolver()
 export class ArtifactFileResolver extends ResolverBase {
 
+    @RefuseImpersonationSessions()
     @Query(() => String, { description: 'Returns a pre-authenticated download URL for an artifact version whose ContentMode is "File".' })
     async ArtifactFileDownloadUrl(
         @Arg('artifactVersionId', () => String) artifactVersionId: string,
         @Ctx() context: AppContext,
     ): Promise<string> {
+        AssertNotImpersonationSession(context.userPayload, 'ArtifactFileDownloadUrl');
         const user = this.GetUserFromPayload(context.userPayload);
         if (!user) {
             throw new Error('Unauthorized');
+        }
+        if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            throw new Error(ARTIFACT_FILE_ACCESS_DENIED_MESSAGE);
         }
 
         const p = GetReadWriteProvider(context.providers);
@@ -35,6 +95,18 @@ export class ArtifactFileResolver extends ResolverBase {
             throw new Error(`Artifact version ${artifactVersionId} not found`);
         }
 
+        // Gate 1: Verify the caller has read permission on the parent MJ: Artifacts record
+        // and enforce API key scope authorization on the artifact resource.
+        const artifactPermissions = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            p,
+            artifactVersion.ArtifactID,
+            user,
+        );
+        if (!artifactPermissions.CanRead) {
+            throw new Error(ARTIFACT_FILE_ACCESS_DENIED_MESSAGE);
+        }
+        await this.CheckAPIKeyScopeAuthorization('artifact:read', artifactVersion.ArtifactID, context.userPayload);
+
         if (artifactVersion.ContentMode !== 'File') {
             throw new Error(`Artifact version ${artifactVersionId} is not a file artifact (ContentMode=${artifactVersion.ContentMode})`);
         }
@@ -43,6 +115,7 @@ export class ArtifactFileResolver extends ResolverBase {
             throw new Error(`Artifact version ${artifactVersionId} has no associated file`);
         }
 
+        // Gate 2: Resolve the underlying MJ: Files object through the storage account & tracked-file gate.
         return this.buildDownloadUrl(artifactVersion.FileID, user, p);
     }
 
@@ -56,17 +129,10 @@ export class ArtifactFileResolver extends ResolverBase {
         user: ReturnType<ResolverBase['GetUserFromPayload']>,
         provider: IMetadataProvider,
     ): Promise<string> {
-        const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
-        const fileLoaded = await fileEntity.Load(fileId);
-        if (!fileLoaded) {
-            throw new Error(`File record ${fileId} not found`);
+        if (!user) {
+            throw new Error('Unauthorized');
         }
-
-        // Resolve the storage account for this file's provider, gated for the caller (throws on refusal)
-        const resolved = await FileStorageEngine.Instance.ResolveFileObject(fileEntity, user!, 'Read', provider);
-        if (!resolved) {
-            throw new Error(`No FileStorageAccount found for ProviderID ${fileEntity.ProviderID}. Cannot generate download URL.`);
-        }
+        const resolved = await ResolveArtifactStorageFile(fileId, user, provider);
         return resolved.Driver.CreatePreAuthDownloadUrl(resolved.ObjectKey);
     }
 }

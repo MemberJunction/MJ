@@ -1,0 +1,96 @@
+<section
+  class="mj-embedded-doc"
+  [class.mj-embedded-doc--compact]="IsCompactMode"
+  [class.mj-embedded-doc--full]="!IsCompactMode"
+  data-testid="mj-embedded-doc-panel"
+  [attr.data-mode]="Mode"
+>
+  <header class="mj-embedded-doc__header" data-testid="embedded-doc-header">
+    <div class="mj-embedded-doc__meta">
+      <i class="fa-solid fa-file-lines mj-embedded-doc__icon" aria-hidden="true"></i>
+      <h4 class="mj-embedded-doc__title" data-testid="embedded-doc-title">
+        {{ ArtifactName || 'Document' }}
+      </h4>
+      <span class="mj-embedded-doc__version" data-testid="embedded-doc-version">
+        v{{ CurrentVersionNumber }}
+      </span>
+      @if (!CanEdit) {
+        <span class="mj-embedded-doc__readonly-badge" data-testid="embedded-doc-readonly-badge">
+          <i class="fa-solid fa-lock" aria-hidden="true"></i>
+          Read-only
+        </span>
+      } @else {
+        <span
+          class="mj-embedded-doc__autosave-status"
+          [class.mj-embedded-doc__autosave-status--pending]="AutosaveStatus === 'pending' || AutosaveStatus === 'saving'"
+          [class.mj-embedded-doc__autosave-status--error]="AutosaveStatus === 'error'"
+          data-testid="embedded-doc-autosave-status"
+        >
+          {{ AutosaveStatusLabel }}
+        </span>
+      }
+    </div>
+
+    <div class="mj-embedded-doc__actions">
+      @if (CanEdit) {
+        <button
+          type="button"
+          mjButton
+          variant="primary"
+          size="sm"
+          [disabled]="IsSavingVersion || IsLoading || !HasPendingChanges"
+          data-testid="embedded-doc-save-version-btn"
+          (click)="OnSaveVersion()"
+        >
+          <i class="fa-solid" [class.fa-spinner]="IsSavingVersion" [class.fa-spin]="IsSavingVersion" [class.fa-floppy-disk]="!IsSavingVersion" aria-hidden="true"></i>
+          <span>{{ IsSavingVersion ? 'Saving…' : 'Save Version' }}</span>
+        </button>
+      }
+      <button
+        type="button"
+        mjButton
+        variant="outline"
+        size="sm"
+        [disabled]="!ArtifactID"
+        data-testid="embedded-doc-open-studio-btn"
+        (click)="OnOpenFullStudio()"
+      >
+        <i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i>
+        <span>Open Full Studio</span>
+      </button>
+    </div>
+  </header>
+
+  @if (ErrorMessage) {
+    <div class="mj-embedded-doc__error" role="alert" data-testid="embedded-doc-error">
+      <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+      <span>{{ ErrorMessage }}</span>
+    </div>
+  }
+
+  <div class="mj-embedded-doc__body">
+    @if (IsLoading) {
+      <div class="mj-embedded-doc__loading" data-testid="embedded-doc-loading">
+        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+        <span>Loading document…</span>
+      </div>
+    } @else if (CurrentVersion) {
+      <mj-markdown-artifact-viewer
+        [Provider]="Provider"
+        [artifactVersion]="CurrentVersion"
+        [readonly]="!CanEdit"
+        [CompactMode]="IsCompactMode"
+        [CollaborationWsUrl]="CollaborationWsUrl"
+        (DraftContentChanged)="OnDraftContentChanged($event)"
+        (ContentCommitted)="OnViewerContentCommitted($event)"
+        (OpenEntityRecord)="OpenEntityRecord.emit($event)"
+      >
+      </mj-markdown-artifact-viewer>
+    } @else if (!ErrorMessage) {
+      <div class="mj-embedded-doc__empty" data-testid="embedded-doc-empty">
+        <i class="fa-regular fa-file-lines" aria-hidden="true"></i>
+        <span>No document version available.</span>
+      </div>
+    }
+  </div>
+</section>

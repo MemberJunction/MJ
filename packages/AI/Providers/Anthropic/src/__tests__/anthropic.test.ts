@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as actualChatTypes from '../../../../Core/src/generic/chat.types';
 
 // Hoisted mock variables
 const mockStream = vi.hoisted(() => vi.fn());
@@ -35,6 +36,8 @@ vi.mock('@memberjunction/global', () => ({
     // success path throws and every result-shape assertion silently sees the error result instead.
     ToJSONSafe: (value: unknown) => value
 }));
+
+const mockGetLongRunningAIFetch = vi.hoisted(() => vi.fn<() => ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined>(() => undefined));
 
 // Mock @memberjunction/ai
 vi.mock('@memberjunction/ai', () => {
@@ -137,7 +140,9 @@ vi.mock('@memberjunction/ai', () => {
                 return { mediaType: match[1], data: match[2] };
             }
             return null;
-        }
+        },
+        NormalizeFinishReason: actualChatTypes.NormalizeFinishReason,
+        GetLongRunningAIFetch: mockGetLongRunningAIFetch,
     };
 });
 
@@ -161,6 +166,19 @@ describe('AnthropicLLM', () => {
         it('should expose the Anthropic client via getter', () => {
             expect(instance.AnthropicClient).toBeDefined();
             expect(instance.AnthropicClient.messages).toBeDefined();
+        });
+
+        it('should forward GetLongRunningAIFetch to the Anthropic SDK constructor when configured (B6 / R2-15)', async () => {
+            const scopedFetch = vi.fn(async () => new Response('ok'));
+            mockGetLongRunningAIFetch.mockReturnValueOnce(scopedFetch);
+            vi.clearAllMocks();
+            new AnthropicLLM('test-key');
+            expect(MockAnthropic).toHaveBeenCalledTimes(1);
+            const passedOptions = MockAnthropic.mock.calls[0]?.[0] as { apiKey?: string; fetch?: (url: RequestInfo | URL, init?: RequestInit) => Promise<Response> };
+            expect(passedOptions.apiKey).toBe('test-key');
+            expect(passedOptions.fetch).toBeTypeOf('function');
+            await passedOptions.fetch!('https://api.anthropic.com/v1/messages', { method: 'POST' });
+            expect(scopedFetch).toHaveBeenCalledWith('https://api.anthropic.com/v1/messages', { method: 'POST' });
         });
     });
 
@@ -1285,11 +1303,28 @@ describe('AnthropicLLM — native tool calling', () => {
             expect(result.data.choices[0].message.toolCalls).toHaveLength(1);
         });
 
-        it('leaves toolCalls undefined and finish_reason untouched on an ordinary turn', async () => {
+        it("leaves toolCalls undefined and reports 'stop' on an ordinary turn", async () => {
             const result = await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }] });
 
             expect(result.data.choices[0].message.toolCalls).toBeUndefined();
-            expect(result.data.choices[0].finish_reason).toBe('completed');
+            expect(result.data.choices[0].finish_reason).toBe('stop');
+        });
+
+        it("normalizes stop_reason max_tokens to 'length' (#4335)", async () => {
+            stubResponse({ content: [{ type: 'text', text: 'cut off' }], stop_reason: 'max_tokens' });
+            const result = await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }] });
+
+            expect(result.data.choices[0].finish_reason).toBe('length');
+        });
+
+        it("reads the streamed message_delta stop_reason (max_tokens -> 'length')", () => {
+            const driver = instance as unknown as {
+                processStreamingChunk(chunk: unknown): unknown;
+                finalizeStreamingResponse(content: string, last: unknown, usage: unknown): { data: { choices: Array<{ finish_reason: string }> } };
+            };
+            driver.processStreamingChunk({ type: 'message_delta', delta: { stop_reason: 'max_tokens' }, usage: { output_tokens: 4 } });
+            const result = driver.finalizeStreamingResponse('cut off', null, null);
+            expect(result.data.choices[0].finish_reason).toBe('length');
         });
 
         it('normalizes a malformed tool_use input to an empty argument set rather than passing a non-object', async () => {

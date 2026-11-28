@@ -155,3 +155,15 @@ export interface SqlLoggingSession {
   /** Dispose method to stop logging and clean up resources */
   dispose(): Promise<void>;
 }
+
+/** Connection pool counts measured from the provider's live pool. */
+export interface DatabasePoolStats {
+  /** Connections the pool holds, idle or in use */
+  TotalConnections: number;
+  /** Connections lent out to callers */
+  ActiveConnections: number;
+  /** Connections waiting in the pool */
+  IdleConnections: number;
+  /** Callers queued for a connection */
+  WaitingRequests: number;
+}

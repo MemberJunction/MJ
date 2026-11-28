@@ -725,6 +725,10 @@ mj app install https://github.com/acme/mj-crm --version 1.2.0
 mj app upgrade acme-crm
 mj app upgrade acme-crm --version 2.0.0
 
+# Development only: check installed apps against their default branches
+mj app install https://github.com/acme/mj-crm --dependencies-from-head mj-common
+mj app upgrade acme-crm --dependencies-from-head all
+
 # Remove an installed app
 mj app remove acme-crm
 mj app remove acme-crm --keep-data    # Preserve database schema
@@ -1089,7 +1093,7 @@ An app **that ships database objects** owns a dedicated SQL Server schema (e.g.,
 When app A depends on app B:
 1. The CLI performs a topological sort of the dependency graph
 2. Dependencies are installed depth-first before the dependent app
-3. Dependency versions are checked with semver satisfaction
+3. Dependency versions are checked with semver satisfaction. An installed app is held to the dependencies of the version that is installed (the manifest recorded for it), not to the `mj-app.json` on its default branch. When that record cannot be read, the manifest at the installed version is used; when neither can be read, the CLI warns that the app's dependencies are not checked. A developer whose apps follow their default branches can pass `--dependencies-from-head <app>` (repeatable, or `all`) to `mj app install` or `mj app upgrade`: for that run, the dependencies of those installed apps are read from their default branches, and the record is used (with a warning) when a branch cannot be read. The flag installs dependencies that are missing; it does not update the installed apps or their records
 4. Removal of a depended-upon app is blocked unless `--force` is used
 
 ### Version Compatibility

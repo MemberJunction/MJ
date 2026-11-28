@@ -1,4 +1,4 @@
-import { RunActionParams } from "@memberjunction/actions-base";
+import type { RunActionParams } from "@memberjunction/actions-base";
 import { Metadata } from "@memberjunction/core";
 import type { EntitySearchResult, IRunViewProvider, SearchEntityParams } from "@memberjunction/core";
 

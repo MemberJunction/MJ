@@ -20,11 +20,14 @@ import {
   TemplateRef
 } from '@angular/core';
 import { MJConversationDetailEntity, MJConversationEntity, RatingJSON } from '@memberjunction/core-entities';
-import { Subscription } from 'rxjs';
-import { UserInfo, CompositeKey } from '@memberjunction/core';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { Observable, Subscription, merge } from 'rxjs';
+import { debounceTime, filter, map, skip } from 'rxjs/operators';
+import { BaseEntity, BaseEntityEvent, UserInfo, CompositeKey } from '@memberjunction/core';
+import { MJEvent, MJEventType, MJGlobal, NormalizeUUID, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent, MessageAttachment, MessageArtifactRef, MessagePendingArtifactRef } from './message-item.component';
+import type { MJChatCitationTransform } from '../slots/slot-interfaces';
 import {
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
@@ -47,6 +50,11 @@ import {
     type DateJumpOutcome
 } from '../../utils/date-jump';
 import { EMPTY_FORK_CHIPS, type ForkChipOpenRequest, type ForkViewLayout, type LatestTurn, type MessageForkChip } from '../../utils/conversation-forks';
+import type { MessageHandoffInfo } from './agent-handoff-card.component';
+import {
+  LookupHandoffByDetailId,
+  ResolveHandedOffFromForMessage,
+} from '../../utils/agent-handoff-map';
 
 /** Context handed to the `messageRenderer` slot template per message. */
 interface MessageRendererContext {
@@ -232,6 +240,76 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   }
   @Input() public ShowMessageRating: boolean = true;
 
+  /** Show the Cited Sources footer bar beneath AI messages containing citations. */
+  @Input()
+  public set ShowCitedSources(value: boolean) {
+    if (value === this._showCitedSources) {
+      return;
+    }
+    this._showCitedSources = value;
+    this.restampAssistantIdentity();
+  }
+  public get ShowCitedSources(): boolean {
+    return this._showCitedSources;
+  }
+  private _showCitedSources = true;
+
+  /** Transform `[[Entity|ID|Label]]` tokens into inline clickable chips inside message text. */
+  @Input()
+  public set EnableInlineCitations(value: boolean) {
+    if (value === this._enableInlineCitations) {
+      return;
+    }
+    this._enableInlineCitations = value;
+    this.restampAssistantIdentity();
+  }
+  public get EnableInlineCitations(): boolean {
+    return this._enableInlineCitations;
+  }
+  private _enableInlineCitations = true;
+
+  /** Optional per-message hook to filter, reorder, relabel, or append custom citations. */
+  @Input()
+  public set CitationTransform(value: MJChatCitationTransform | undefined) {
+    if (value === this._citationTransform) {
+      return;
+    }
+    this._citationTransform = value;
+    this.restampAssistantIdentity();
+  }
+  public get CitationTransform(): MJChatCitationTransform | undefined {
+    return this._citationTransform;
+  }
+  private _citationTransform?: MJChatCitationTransform;
+
+  /** Optional slot template replacing `<mj-cited-sources-bar>` (forwarded from `mjChatSlot="citedSources"`). */
+  @Input()
+  public set CitedSourcesTemplate(value: TemplateRef<unknown> | null) {
+    if (value === this._citedSourcesTemplate) {
+      return;
+    }
+    this._citedSourcesTemplate = value;
+    this.restampAssistantIdentity();
+  }
+  public get CitedSourcesTemplate(): TemplateRef<unknown> | null {
+    return this._citedSourcesTemplate;
+  }
+  private _citedSourcesTemplate: TemplateRef<unknown> | null = null;
+
+  /** Optional slot template customizing individual source pills (forwarded from `mjChatSlot="citedSourcePill"`). */
+  @Input()
+  public set CitedSourcePillTemplate(value: TemplateRef<unknown> | null) {
+    if (value === this._citedSourcePillTemplate) {
+      return;
+    }
+    this._citedSourcePillTemplate = value;
+    this.restampAssistantIdentity();
+  }
+  public get CitedSourcePillTemplate(): TemplateRef<unknown> | null {
+    return this._citedSourcePillTemplate;
+  }
+  private _citedSourcePillTemplate: TemplateRef<unknown> | null = null;
+
   /** @deprecated Use {@link ShowMessageRating}. */
   @Input() public set showMessageRating(value: boolean) {
     this.ShowMessageRating = value;
@@ -306,6 +384,51 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     return this._inFlightCount;
   }
   private _inFlightCount = 0;
+
+  /**
+   * The in-flight replies the viewer may stop (the host decides: its own runs, or every run when
+   * it owns the conversation). An in-flight reply outside this set shows no Stop. Changes as runs
+   * start and finish, so it is restamped onto rendered items.
+   */
+  @Input()
+  public set StoppableDetailIds(value: string[] | null | undefined) {
+    const next = value ? new UUIDSet(value) : null;
+    const prev = this._stoppableDetailIds;
+    const same = prev === next || (!!prev && !!next && prev.Size === next.Size && value!.every((id) => prev.Has(id)));
+    if (same) {
+      return;
+    }
+    this._stoppableDetailIds = next;
+    this.restampAssistantIdentity();
+  }
+  public get StoppableDetailIds(): string[] {
+    return this._stoppableDetailIds ? [...this._stoppableDetailIds] : [];
+  }
+  /** Null until the host binds the input: then every in-flight reply is stoppable, as before. */
+  private _stoppableDetailIds: UUIDSet | null = null;
+
+  /** Whether the host lets the viewer stop this reply's run. */
+  private stopAllowedFor(detailId: string): boolean {
+    return this._stoppableDetailIds?.Has(detailId) ?? true;
+  }
+
+  /**
+   * Whether inline markdown links in messages open in a new browser tab (`target="_blank"`).
+   * In-page fragment links (`#heading`) and `mailto:` / `tel:` / `sms:` links stay in the
+   * current tab. Default `true`.
+   */
+  @Input()
+  public set OpenLinksInNewTab(value: boolean) {
+    if (value === this._openLinksInNewTab) {
+      return;
+    }
+    this._openLinksInNewTab = value;
+    this.restampAssistantIdentity();
+  }
+  public get OpenLinksInNewTab(): boolean {
+    return this._openLinksInNewTab;
+  }
+  private _openLinksInNewTab = true;
 
   // ── Windowed-transcript paging state ────────────────────────────────────────
   // The list renders only the LOADED window, not the whole conversation. These two
@@ -459,6 +582,18 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   public get agentRunMap(): Map<string, MJAIAgentRunEntityExtended> {
     return this.AgentRunMap;
   }
+
+  /** Map of source ConversationDetail.ID -> MessageHandoffInfo for rendering handoff cards and target provenance. */
+  @Input()
+  public set HandoffMap(value: ReadonlyMap<string, MessageHandoffInfo> | null) {
+    this._handoffMap = value ?? new Map<string, MessageHandoffInfo>();
+    this.applyHandoffs();
+  }
+  public get HandoffMap(): ReadonlyMap<string, MessageHandoffInfo> {
+    return this._handoffMap;
+  }
+  private _handoffMap: ReadonlyMap<string, MessageHandoffInfo> = new Map();
+
   @Input() public RatingsMap: Map<string, RatingJSON[]> = new Map();
 
   /** @deprecated Use {@link RatingsMap}. */
@@ -1070,9 +1205,11 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
   // Track whether initial render has happened
   private _initialRenderComplete = false;
+  private _agentAvatarChangesSub: Subscription | null = null;
 
   ngOnInit() {
     // Initial render will happen in ngAfterViewInit when ViewContainerRef is available
+    this.subscribeToAgentAvatarChanges();
   }
 
   ngAfterViewInit() {
@@ -1273,6 +1410,52 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
         entry.ref.changeDetectorRef.markForCheck();
       }
     }
+  }
+
+  private subscribeToAgentAvatarChanges(): void {
+    const entityEvents$ = MJGlobal.Instance.GetEventListener(false).pipe(
+      filter((event: MJEvent) => {
+        if (
+          event.event !== MJEventType.ComponentEvent ||
+          event.eventCode !== BaseEntity.BaseEventCode ||
+          !event.args
+        ) {
+          return false;
+        }
+        const args = event.args as BaseEntityEvent;
+        const entityName =
+          args.type === 'remote-invalidate'
+            ? args.entityName
+            : args.baseEntity?.EntityInfo?.Name;
+        const norm = entityName?.trim().toLowerCase() ?? '';
+        return norm === 'mj: ai agents' || norm === 'mj: ai agent personas';
+      })
+    );
+
+    const engine = AIEngineBase.Instance;
+    const streams: Observable<void>[] = [entityEvents$.pipe(map(() => undefined))];
+    if (typeof engine?.ObserveProperty === 'function') {
+      streams.push(
+        engine.ObserveProperty('_agents').pipe(skip(1), map(() => undefined)),
+        engine.ObserveProperty('_agentPersonas').pipe(skip(1), map(() => undefined))
+      );
+    }
+
+    this._agentAvatarChangesSub = merge(...streams)
+      .pipe(debounceTime(40))
+      .subscribe(() => {
+        this.refreshRenderedAgentAvatars();
+      });
+  }
+
+  private refreshRenderedAgentAvatars(): void {
+    for (const entry of this._renderedMessages.values()) {
+      if (entry.kind === 'component') {
+        entry.ref.instance.AssistantAvatarFailed = false;
+        entry.ref.changeDetectorRef.markForCheck();
+      }
+    }
+    this.cdRef.markForCheck();
   }
 
   ngAfterViewChecked() {
@@ -1520,6 +1703,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   }
 
   ngOnDestroy() {
+    this._agentAvatarChangesSub?.unsubscribe();
+    this._agentAvatarChangesSub = null;
     this.detachScrollListener();
     this._olderObserver?.disconnect();
     this._olderObserver = undefined;
@@ -2089,12 +2274,15 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.isProcessing = this.IsProcessing;
     instance.userAvatarMap = this.UserAvatarMap;
     instance.isLastMessage = (index === messages.length - 1);
+    instance.IsLatestMessage = (index === messages.length - 1);
     instance.messageExtraTemplate = this.MessageExtraTemplate;
     this.applyMessageItemFeatureFlags(instance);
 
     instance.agentRun = this.AgentRunMap.get(message.ID) || null;
     instance.ratings = this.RatingsMap.get(message.ID);
     instance.attachments = this.AttachmentsMap.get(message.ID) || [];
+    instance.Handoff = LookupHandoffByDetailId(this._handoffMap, message.ID);
+    instance.HandedOffFrom = ResolveHandedOffFromForMessage(message, this._handoffMap);
     instance.ForkChips = this.chipsFor(message.ID);
     instance.ForkRail = this.railFor(message.ID);
     instance.ForkMarkerText = this.markerFor(message.ID);
@@ -2116,6 +2304,29 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     }
   }
 
+  /** Pushes updated handoff cards and target provenance onto already-rendered message items. */
+  private applyHandoffs(): void {
+    for (const entry of this._renderedMessages.values()) {
+      if (entry.kind !== 'component') {
+        continue;
+      }
+      const instance = entry.ref.instance;
+      const msg = instance.message;
+      if (!msg?.ID) {
+        continue;
+      }
+      const nextHandoff = LookupHandoffByDetailId(this._handoffMap, msg.ID);
+      const nextHandedOffFrom = ResolveHandedOffFromForMessage(msg, this._handoffMap);
+      if (instance.Handoff !== nextHandoff || instance.HandedOffFrom !== nextHandedOffFrom) {
+        instance.Handoff = nextHandoff;
+        instance.HandedOffFrom = nextHandedOffFrom;
+        if (!this.isViewDestroyed(entry.ref.changeDetectorRef)) {
+          entry.ref.changeDetectorRef.detectChanges();
+        }
+      }
+    }
+  }
+
   /** Sets a row's latest-turn flag and its edit state. */
   private applyRowTurnState(instance: MessageItemComponent, isLatestTurn: boolean): void {
     instance.IsLatestTurn = isLatestTurn;
@@ -2133,12 +2344,20 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.showAgentRunDetails = this.ShowAgentRunDetails;
     instance.showReactions = this.ShowReactions;
     instance.showMessageRating = this.ShowMessageRating;
+    instance.ShowCitedSources = this.ShowCitedSources;
+    instance.EnableInlineCitations = this.EnableInlineCitations;
+    instance.CitationTransform = this.CitationTransform;
+    instance.CitedSourcesTemplate = this.CitedSourcesTemplate;
+    instance.CitedSourcePillTemplate = this.CitedSourcePillTemplate;
     instance.allowPinning = this.AllowPinning;
     instance.allowMessageEdit = this.AllowMessageEdit;
     instance.allowMessageDelete = this.AllowMessageDelete;
     instance.ReadOnly = this.ReadOnly;
     instance.AllowStopRun = this.AllowStopRun;
     instance.InFlightCount = this.InFlightCount;
+    // `message` is set after the flags on the create path (and absent in prototype-built specs).
+    instance.StopAllowed = instance.message ? this.stopAllowedFor(instance.message.ID) : true;
+    instance.OpenLinksInNewTab = this.OpenLinksInNewTab;
     instance.CanFork = this.CanFork;
     instance.assistantDisplayName = this.AssistantDisplayName;
     instance.assistantAvatarUrl = this.AssistantAvatarUrl;
@@ -2184,12 +2403,15 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.isProcessing = this.IsProcessing;
     instance.userAvatarMap = this.UserAvatarMap;
     instance.isLastMessage = (index === messages.length - 1);
+    instance.IsLatestMessage = (index === messages.length - 1);
     instance.messageExtraTemplate = this.MessageExtraTemplate;
     this.applyMessageItemFeatureFlags(instance);
 
     instance.agentRun = this.AgentRunMap.get(message.ID) || null;
     instance.ratings = this.RatingsMap.get(message.ID);
     instance.attachments = this.AttachmentsMap.get(message.ID) || [];
+    instance.Handoff = LookupHandoffByDetailId(this._handoffMap, message.ID);
+    instance.HandedOffFrom = ResolveHandedOffFromForMessage(message, this._handoffMap);
     instance.ForkChips = this.chipsFor(message.ID);
     instance.ForkRail = this.railFor(message.ID);
     instance.ForkMarkerText = this.markerFor(message.ID);

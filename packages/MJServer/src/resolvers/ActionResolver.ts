@@ -12,6 +12,8 @@ import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IsScopeLimitedPrincipal } from "../auth/scopeLimitedPrincipal.js";
 import { EvaluateActionRunAuthorization, IsOwner } from "../auth/actionAuthorization.js";
+import { RefuseImpersonationSessions, RefuseScopeLimitedPrincipals } from "../auth/scopeLimitedAccess.js";
+import { AssertNotImpersonationSession } from "../auth/impersonationGuard.js";
 import { EntityObjectDataBinding, ProjectActionParamsForCaller } from "../generic/actionOutputFieldSecurity.js";
 import type { EntityActionResult } from "@memberjunction/actions-base";
 
@@ -190,11 +192,13 @@ export class ActionResolver extends ResolverBase {
    * @param ctx The GraphQL context containing user authentication information
    * @returns The result of running the action
    */
+  @RefuseImpersonationSessions()
   @Mutation(() => ActionResultOutput)
   async RunAction(
     @Arg("input") input: RunActionInput,
     @Ctx() ctx: AppContext
   ): Promise<ActionResultOutput> {
+    AssertNotImpersonationSession(ctx.userPayload, 'RunAction');
     try {
       const user = this.getRunActionPrincipal(ctx);
 
@@ -377,10 +381,23 @@ export class ActionResolver extends ResolverBase {
                            p.Type.trim().toLowerCase() === 'both');
     const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }) ?? undefined;
     const projected = ProjectActionParamValuesForUser(outputs, user, provider, { UnreadableEntityObjects: 'keep' }) ?? outputs;
+    const receipt = result.ChatReceipt;
+    if (receipt) {
+      const safeProjected = projected.map((p) => CopyScalarsAndArrays(p));
+      return {
+        Success: result.Success,
+        Message: receipt.Summary,
+        ResultCode: result.Result?.ResultCode ?? result.ResultCode,
+        ResultData: JSON.stringify({
+          ChatReceipt: receipt,
+          Params: safeProjected,
+        }),
+      };
+    }
     return {
       Success: result.Success,
       Message: result.Message,
-      ResultCode: result.Result?.ResultCode,
+      ResultCode: result.Result?.ResultCode ?? result.ResultCode,
       ResultData: projected.length > 0 ? JSON.stringify(CopyScalarsAndArrays(projected)) : undefined
     };
   }
@@ -406,11 +423,14 @@ export class ActionResolver extends ResolverBase {
    * @param ctx The GraphQL context containing user authentication information
    * @returns The result of running the entity action
    */
+  @RefuseImpersonationSessions()
+  @RefuseScopeLimitedPrincipals()
   @Mutation(() => ActionResultOutput)
   async RunEntityAction(
     @Arg("input") input: EntityActionInput,
     @Ctx() ctx: AppContext
   ): Promise<ActionResultOutput> {
+    AssertNotImpersonationSession(ctx.userPayload, 'RunEntityAction');
     try {
       // Check API key scope authorization for entity action execution
       await this.CheckAPIKeyScopeAuthorization('action:execute', input.EntityActionID, ctx.userPayload);

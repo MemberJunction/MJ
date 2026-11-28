@@ -26,6 +26,10 @@ x-db-env: &db-env
   DB_DATABASE: MemberJunction_Test
   DB_TRUST_SERVER_CERTIFICATE: "true"
   MJ_BASE_ENCRYPTION_KEY: "${MJ_BASE_ENCRYPTION_KEY:-}"
+  MJ_ARTIFACT_COLLAB_HMAC_SECRET: "${MJ_ARTIFACT_COLLAB_HMAC_SECRET:-}"
+  MJ_COLLABORATION_TICKET_SECRET: "${MJ_COLLABORATION_TICKET_SECRET:-}"
+  MJ_FROZEN_BLOCK_HMAC_SECRET: "${MJ_FROZEN_BLOCK_HMAC_SECRET:-}"
+  MJ_FROZEN_SNAPSHOT_SECRET: "${MJ_FROZEN_SNAPSHOT_SECRET:-}"
 
 # ─── Compose profiles ────────────────────────────────────────────────────────
 # - "full"          → Mode A: self-contained MJ regression stack (all services)
@@ -39,8 +43,9 @@ x-db-env: &db-env
 services:
   sqlserver:
     # Also active during the gen-forms profile since form-generator runs
-    # codegen against this DB. (The gen-forms profile tears the temp stack
-    # down afterward, so this doesn't conflict with a parallel `full` run.)
+    # codegen against this DB. Both profiles share this one container, so
+    # gen-forms.sh removes it when it finishes — do not run gen-forms while a
+    # `full` stack is up.
     profiles: ["full", "gen-forms"]
     image: mcr.microsoft.com/mssql/server:2022-latest
     platform: linux/amd64
@@ -49,7 +54,9 @@ services:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
     ports:
-      - "11433:1433"
+      # Bind to loopback only — this is an SA-enabled test SQL Server, not something
+      # to expose on every interface of the host machine.
+      - "127.0.0.1:11433:1433"
     healthcheck:
       test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -C -No
       interval: 10s
@@ -69,6 +76,11 @@ services:
       <<: *db-env
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+      # CodeGen's advanced generation parses CHECK constraints into field
+      # validators with these keys. Demo email/URL field types do not come from
+      # here — scripts/set-demo-field-types.cjs sets them.
+      AI_VENDOR_API_KEY__GeminiLLM: "${AI_VENDOR_API_KEY__GeminiLLM:-}"
+      AI_VENDOR_API_KEY__AnthropicLLM: "${AI_VENDOR_API_KEY__AnthropicLLM:-}"
 
   # Form generator — opt-in service (profile: gen-forms) that runs codegen
   # against a temporary DB and writes Angular entity-form components to a
@@ -87,6 +99,11 @@ services:
       <<: *db-env
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+      # CodeGen's advanced generation parses CHECK constraints into field
+      # validators with these keys. Demo email/URL field types do not come from
+      # here — scripts/set-demo-field-types.cjs sets them.
+      AI_VENDOR_API_KEY__GeminiLLM: "${AI_VENDOR_API_KEY__GeminiLLM:-}"
+      AI_VENDOR_API_KEY__AnthropicLLM: "${AI_VENDOR_API_KEY__AnthropicLLM:-}"
     entrypoint: ["/bin/bash", "/app/form-gen-entrypoint.sh"]
     volumes:
       - ./form-gen-entrypoint.sh:/app/form-gen-entrypoint.sh:ro
@@ -212,6 +229,9 @@ services:
       # entrypoint; overridden by `mj test regression remote` via the target
       # profile's "suite" field. Used by the BYO overlay too.
       TEST_SUITE_NAME: "${TEST_SUITE_NAME:-}"
+      # Comma-separated exact test names. When set, only those suite tests run
+      # (`mj test regression up --test`).
+      TEST_NAMES: "${TEST_NAMES:-}"
       EXTRA_METADATA_DIRS: "${EXTRA_METADATA_DIRS:-}"
       # Variable-substitution payload for `{{baseUrl}}`, `{{authUsername}}`,
       # etc. inside test JSONs. Mode A leaves these empty; the entrypoint

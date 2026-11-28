@@ -2454,4 +2454,49 @@ describe('AutotagBaseEngine', () => {
       }
     });
   });
+
+  describe('GetContentSourceLastRunDate & read-only vector DB guards', () => {
+    it("filters MJ: Content Process Runs by Status = 'Completed' AND ProcessedItems > 0 with SQL-escaped SourceID", async () => {
+      const cutoffDate = new Date('2026-06-15T12:00:00Z');
+      mockRunViewFn.mockResolvedValueOnce({
+        Success: true,
+        Results: [{ __mj_CreatedAt: cutoffDate }],
+      });
+
+      const result = await engine.GetContentSourceLastRunDate("src-id'1", {} as never);
+
+      expect(mockRunViewFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          EntityName: 'MJ: Content Process Runs',
+          ExtraFilter: "SourceID='src-id''1' AND Status = 'Completed' AND ProcessedItems > 0",
+          OrderBy: 'EndTime DESC',
+        }),
+        expect.anything(),
+      );
+      expect(result).toEqual(cutoffDate);
+    });
+
+    it('short-circuits deleteChunkVectors without calling DeleteRecords when vectorDB.IsReadOnly is true', async () => {
+      const deleteRecordsSpy = vi.fn();
+      const deleteChunkVectors = (engine as unknown as {
+        deleteChunkVectors(
+          batch: unknown[],
+          infra: { vectorDB: { IsReadOnly: boolean; DeleteRecords: typeof deleteRecordsSpy }; indexName: string },
+          itemById: Map<string, unknown>,
+        ): Promise<boolean>;
+      }).deleteChunkVectors.bind(engine);
+
+      const ok = await deleteChunkVectors(
+        [{ VectorRecordID: 'vec-1', ContentItemID: 'item-1' }],
+        {
+          vectorDB: { IsReadOnly: true, DeleteRecords: deleteRecordsSpy },
+          indexName: 'test-idx',
+        },
+        new Map(),
+      );
+
+      expect(ok).toBe(true);
+      expect(deleteRecordsSpy).not.toHaveBeenCalled();
+    });
+  });
 });

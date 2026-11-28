@@ -19,7 +19,6 @@ const seamClient = {
 RunLLMToolCallingConformanceSuite({
     ProviderName: 'OpenAI',
     SupportsTools: true,
-    OrdinaryFinishReason: 'stop',
     CreateLLM: () => {
         const llm = new OpenAILLM('conformance-test-key');
         (llm as unknown as { _openAI: typeof seamClient })._openAI = seamClient;

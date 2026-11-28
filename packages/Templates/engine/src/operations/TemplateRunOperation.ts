@@ -43,6 +43,7 @@ export class TemplateRunServerOperation extends TemplateRunOperation {
             ExtraFilter: `TemplateID = '${input.templateID}'`,
             OrderBy: 'Priority ASC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object',
         }, user);
         if (!contentResult.Results?.length) {

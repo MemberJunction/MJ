@@ -40,6 +40,12 @@ export interface FeatureValueKeyInput {
     ParametersHash: string | null;
     InputHash: string | null;
     Source: FeatureValueSource;
+    /**
+     * The scoring binding of a Human row with no Record Process; null or absent on every Record-Process-scoped row. It
+     * keeps two bindings' Human rows of one record and feature apart on `UQ_FeatureValue_ValueKey (RecordProcessID,
+     * ValueKeyHash)`, where their null Record Processes compare equal.
+     */
+    MLModelScoringBindingID?: string | null;
 }
 
 /** The pipeline pin's selection and hashes. Every method is static and takes plain data (pins are built as literals). */
@@ -101,7 +107,7 @@ export class FeatureValueKey {
         return value.normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase();
     }
 
-    /** SHA-256 of a Feature Value key; stored as `ValueKeyHash`, unique per pipeline. */
+    /** SHA-256 of a Feature Value key; stored as `ValueKeyHash`, unique per pipeline (or, with no Record Process, per binding). */
     public static async ComputeHash(key: FeatureValueKeyInput): Promise<string> {
         return ComputeContentHashAsync({
             EntityID: NormalizeUUID(key.EntityID),
@@ -110,6 +116,8 @@ export class FeatureValueKey {
             PipelineVersion: key.PipelineVersion,
             PromptVersionHash: key.PromptVersionHash,
             AIModelID: key.AIModelID ? NormalizeUUID(key.AIModelID) : null,
+            // only when present, so every Record-Process-scoped key keeps the hash it had before bindings existed
+            ...(key.MLModelScoringBindingID ? { MLModelScoringBindingID: NormalizeUUID(key.MLModelScoringBindingID) } : {}),
             ParametersHash: key.ParametersHash,
             InputHash: key.InputHash,
             Source: key.Source,

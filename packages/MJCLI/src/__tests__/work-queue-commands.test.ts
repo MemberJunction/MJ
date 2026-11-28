@@ -8,6 +8,7 @@ import QueuePartitions from '../commands/queue/partitions.js';
 import QueuePublish from '../commands/queue/publish.js';
 import QueueReplay from '../commands/queue/replay.js';
 import QueueStats from '../commands/queue/stats.js';
+import QueueSweep from '../commands/queue/sweep.js';
 import QueueValidateBindings from '../commands/queue/validate-bindings.js';
 import QueueWork from '../commands/queue/work.js';
 
@@ -26,7 +27,8 @@ const COMMANDS: Array<[string, CommandSurface, string[], string[]]> = [
     ['replay', QueueReplay, ['delivery', 'note', 'subscription'], ['delivery', 'subscription']],
     ['discard', QueueDiscard, ['delivery', 'reason', 'subscription'], ['delivery', 'reason', 'subscription']],
     ['backlog', QueueBacklog, ['json', 'subscription'], ['subscription']],
-    ['work', QueueWork, ['concurrency', 'idle-exit-ms', 'max', 'max-duration-ms', 'once', 'shutdown-drain-ms', 'subscription'], ['subscription']],
+    ['work', QueueWork, ['concurrency', 'idle-exit-ms', 'max', 'max-duration-ms', 'once', 'reconcile-interval-ms', 'shutdown-drain-ms', 'subscription', 'sweeper-interval-ms'], ['subscription']],
+    ['sweep', QueueSweep, ['json'], []],
     ['export-topology', QueueExportTopology, ['output', 'transport'], ['transport']],
     ['import-bindings', QueueImportBindings, ['json'], []],
     ['validate-bindings', QueueValidateBindings, ['json', 'transport'], []],
@@ -57,6 +59,6 @@ describe('mj queue command surface', () => {
     it('keeps only the text-only pages light', async () => {
         const { LIGHT_COMMANDS } = await import('../light-commands.js');
         expect(['queue', 'queue usage', 'queue:usage'].every(id => LIGHT_COMMANDS.has(id))).toBe(true);
-        expect(['queue stats', 'queue work', 'queue backlog'].some(id => LIGHT_COMMANDS.has(id))).toBe(false);
+        expect(['queue stats', 'queue work', 'queue backlog', 'queue sweep'].some(id => LIGHT_COMMANDS.has(id))).toBe(false);
     });
 });

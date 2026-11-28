@@ -2,10 +2,13 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import {
   BaseEmbeddings,
+  EmbedContentParams,
+  EmbedContentResult,
   EmbedTextsParams,
   EmbedTextsResult,
   EmbedTextParams,
   EmbedTextResult,
+  EmbeddingDimensionsError,
   ModelUsage,
 } from '@memberjunction/ai';
 import { UserInfo } from '@memberjunction/core';
@@ -217,8 +220,12 @@ interface DriverScript {
   ConstructedWith: string[];
   /** Every EmbedTexts call, in order. */
   Calls: EmbedTextsParams[];
+  /** Every EmbedContent call, in order. */
+  ContentCalls: EmbedContentParams[];
   /** Replaces the default answer: one 3-wide (or `dimensions`-wide) vector per text. */
   Answer?: (params: EmbedTextsParams) => Promise<EmbedTextsResult>;
+  /** Replaces the default EmbedContent answer. */
+  ContentAnswer?: (params: EmbedContentParams) => Promise<EmbedContentResult>;
 }
 
 const scripts = new Map<string, DriverScript>();
@@ -257,6 +264,21 @@ abstract class ScriptedEmbeddings extends BaseEmbeddings {
       model: params.model ?? '',
       ModelUsage: new ModelUsage(params.texts.length * 10, 0, 0.0002, 'USD'),
       vectors: params.texts.map(() => Array<number>(width).fill(0.1)),
+    };
+  }
+
+  public override async EmbedContent(params: EmbedContentParams): Promise<EmbedContentResult> {
+    const script = scriptFor(this.driverKey);
+    script.ContentCalls.push(params);
+    if (script.ContentAnswer) {
+      return script.ContentAnswer(params);
+    }
+    const width = params.dimensions ?? 3;
+    return {
+      object: 'object',
+      model: params.model ?? '',
+      ModelUsage: new ModelUsage(15, 0, 0.0005, 'USD'),
+      vector: Array<number>(width).fill(0.25),
     };
   }
 }
@@ -396,7 +418,7 @@ describe('AIEmbeddingRunner', () => {
     h.state.runs = [];
     h.state.failRunSaves = false;
     for (const key of [DRIVER_1, DRIVER_1B, DRIVER_2, DRIVER_LOCAL]) {
-      scripts.set(key, { ConstructedWith: [], Calls: [] });
+      scripts.set(key, { ConstructedWith: [], Calls: [], ContentCalls: [] });
     }
     loadCatalog();
     runner = new AIEmbeddingRunner();
@@ -638,6 +660,51 @@ describe('AIEmbeddingRunner', () => {
     expect(result.Vectors[0]).toHaveLength(512);
   });
 
+  it('a driver that degrades to an empty result fails the call instead of answering with no vectors', async () => {
+    // BaseEmbeddings drivers answer a failed request with `vectors: []` (graceful degrade) rather than
+    // throwing; OpenAI does this when a model rejects `dimensions` (#5234). Read as a success, that empty
+    // answer would leave every caller querying with no vector and reporting no matches.
+    const degraded = async (params: EmbedTextsParams): Promise<EmbedTextsResult> =>
+      ({ object: 'list', model: params.model ?? '', ModelUsage: new ModelUsage(0, 0), vectors: [] });
+    for (const key of [DRIVER_1, DRIVER_1B, DRIVER_2, DRIVER_LOCAL]) {
+      scriptFor(key).Answer = degraded;
+    }
+
+    const result = await runner.RunEmbedding({
+      Texts: ['degraded embedding text'],
+      ContextUser: mockUser,
+      PromptID: PROMPT_ID,
+      Dimensions: 1536,
+    });
+
+    expect(result.Success).toBe(false);
+    expect(result.ErrorMessage).toContain('No vectors returned');
+    expect(result.Vectors).toEqual([]);
+  });
+
+  it('a width the model can\'t produce fails at once with the cause, without retrying or failing over', async () => {
+    // A driver whose model table says the model can't produce the requested width refuses before any
+    // API call (#5234). Every vendor of that model would refuse too, so the runner must not try one,
+    // unlike the 503 case above, where a second vendor of the same model answers.
+    addSecondVendorToModel1();
+    scriptFor(DRIVER_1).Answer = (params) =>
+      Promise.reject(new EmbeddingDimensionsError(params.model ?? '', params.dimensions ?? 0, 'only 1536'));
+
+    const result = await runner.RunEmbedding({
+      Texts: ['impossible width text'],
+      ContextUser: mockUser,
+      PromptID: PROMPT_ID,
+      Dimensions: 3072,
+    });
+
+    expect(result.Success).toBe(false);
+    expect(result.ErrorMessage).toContain("can't produce 3072-dimension vectors");
+    expect(result.Vectors).toEqual([]);
+    expect(scriptFor(DRIVER_1).Calls).toHaveLength(1);
+    expect(scriptFor(DRIVER_1B).Calls).toHaveLength(0);
+    expect(scriptFor(DRIVER_2).Calls).toHaveLength(0);
+  });
+
   describe('keyless drivers', () => {
     it('a pinned call to a model whose driver needs no key succeeds with no key configured', async () => {
       h.state.configuredDrivers.clear();
@@ -697,6 +764,54 @@ describe('AIEmbeddingRunner', () => {
       });
 
       expect(result.Success).toBe(true);
+      await runner.WaitForPendingPromptRunSaves();
+      expect(lastRun()?.PromptID).toBe(PROMPT_ID);
+    });
+
+    /** Adds an active Embedding prompt with no model bindings, as the carrier prompts ship. */
+    const addEmbeddingPrompt = (id: string, name: string, atFront = false): void => {
+      const prompt = { ...h.state.prompts[0], ID: id, Name: name };
+      if (atFront) {
+        h.state.prompts.unshift(prompt);
+      } else {
+        h.state.prompts.push(prompt);
+      }
+    };
+
+    it("prefers 'Content Embedding' when no prompt is named, whatever order the prompts loaded in (#4923)", async () => {
+      const contentID = 'E0000000-0000-0000-0000-0000000000C1';
+      addEmbeddingPrompt('E0000000-0000-0000-0000-0000000000A1', 'Another Embedding', true);
+      addEmbeddingPrompt(contentID, 'Content Embedding');
+
+      await runner.RunEmbedding({ Texts: ['x'], ContextUser: mockUser, ModelID: MODEL_1_ID });
+      await runner.WaitForPendingPromptRunSaves();
+      expect(lastRun()?.PromptID).toBe(contentID);
+    });
+
+    it('without Content Embedding, falls back to the first active Embedding prompt by name', async () => {
+      const alphaID = 'E0000000-0000-0000-0000-0000000000A1';
+      addEmbeddingPrompt('E0000000-0000-0000-0000-0000000000Z1', 'Zeta Embedding', true);
+      addEmbeddingPrompt(alphaID, 'Alpha Embedding');
+
+      await runner.RunEmbedding({ Texts: ['x'], ContextUser: mockUser, ModelID: MODEL_1_ID });
+      await runner.WaitForPendingPromptRunSaves();
+      expect(lastRun()?.PromptID).toBe(alphaID);
+    });
+
+    it('books the run under the prompt named by PromptName (#4923)', async () => {
+      const carrierID = 'E0000000-0000-0000-0000-0000000000V1';
+      addEmbeddingPrompt('E0000000-0000-0000-0000-0000000000C1', 'Content Embedding');
+      addEmbeddingPrompt(carrierID, 'Vector Sync Embedding');
+
+      const result = await runner.RunEmbedding({ Texts: ['x'], ContextUser: mockUser, ModelID: MODEL_1_ID, PromptName: 'Vector Sync Embedding' });
+      expect(result.Success).toBe(true);
+      await runner.WaitForPendingPromptRunSaves();
+      expect(lastRun()?.PromptID).toBe(carrierID);
+      expect(lastRun()?.ModelID).toBe(MODEL_1_ID);
+    });
+
+    it('falls back as if no prompt were named when PromptName is unknown', async () => {
+      await runner.RunEmbedding({ Texts: ['x'], ContextUser: mockUser, ModelID: MODEL_1_ID, PromptName: 'No Such Prompt' });
       await runner.WaitForPendingPromptRunSaves();
       expect(lastRun()?.PromptID).toBe(PROMPT_ID);
     });
@@ -928,5 +1043,411 @@ describe('AIEmbeddingRunner', () => {
     expect(result.Vectors).toHaveLength(1);
     await legacyRunner.WaitForPendingPromptRunSaves();
     expect(lastRun()?.Status).toBe('Completed');
+  });
+
+  describe('multimodal Contents embedding', () => {
+    it('routes Contents entries through driver.EmbedContent with dimensions and aggregates usage in input order', async () => {
+      scriptFor(DRIVER_1).ContentAnswer = async (params) => {
+        const blocks = Array.isArray(params.content) ? params.content : [];
+        const marker = blocks.some(b => b.type === 'video_url') ? 0.9 : 0.4;
+        return {
+          object: 'object',
+          model: params.model ?? '',
+          ModelUsage: new ModelUsage(20, 0, 0.001, 'USD'),
+          vector: Array<number>(params.dimensions ?? 3).fill(marker),
+        };
+      };
+
+      const result = await runner.RunEmbedding({
+        Contents: [
+          [
+            { type: 'text', content: 'Clip 1 overview' },
+            { type: 'video_url', content: 'AAAA', mimeType: 'video/mp4' },
+          ],
+          [
+            { type: 'image_url', content: 'BBBB', mimeType: 'image/png' },
+          ],
+        ],
+        Dimensions: 768,
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+        Description: 'Multimodal video & image embed',
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.Vectors).toHaveLength(2);
+      expect(result.Vectors[0]).toHaveLength(768);
+      expect(result.Vectors[0][0]).toBe(0.9);
+      expect(result.Vectors[1][0]).toBe(0.4);
+      expect(result.TokensUsed).toBe(40);
+      expect(result.Cost).toBeCloseTo(0.002);
+      expect(scriptFor(DRIVER_1).Calls).toHaveLength(0);
+      expect(scriptFor(DRIVER_1).ContentCalls).toHaveLength(2);
+      expect(scriptFor(DRIVER_1).ContentCalls[0].dimensions).toBe(768);
+      await runner.WaitForPendingPromptRunSaves();
+      expect(lastRun()?.Status).toBe('Completed');
+    });
+
+    it('rejects requests that provide both Texts and Contents', async () => {
+      const result = await runner.RunEmbedding({
+        Texts: ['hello'],
+        Contents: [[{ type: 'image_url', content: 'AAAA', mimeType: 'image/png' }]],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('not both');
+    });
+
+    it('fails cleanly when EmbedContent returns an empty vector instead of succeeding with []', async () => {
+      scriptFor(DRIVER_1).ContentAnswer = async (params) => ({
+        object: 'object',
+        model: params.model ?? '',
+        ModelUsage: new ModelUsage(0, 0),
+        vector: [],
+      });
+
+      const result = await runner.RunEmbedding({
+        Contents: [[{ type: 'video_url', content: 'AAAA', mimeType: 'video/mp4' }]],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('No vectors returned');
+      expect(result.Vectors).toEqual([]);
+    });
+
+    it('rejects empty entries inside Contents', async () => {
+      const result = await runner.RunEmbedding({
+        Contents: [[]],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('empty entry');
+    });
+
+    it('stops remaining workers on empty vector and fails over to the next vendor as ModelError', async () => {
+      addSecondVendorToModel1();
+      let vendor1Calls = 0;
+      scriptFor(DRIVER_1).ContentAnswer = async (params) => {
+        vendor1Calls++;
+        return {
+          object: 'object',
+          model: params.model ?? '',
+          ModelUsage: new ModelUsage(0, 0),
+          vector: [],
+        };
+      };
+      scriptFor(DRIVER_1B).ContentAnswer = async (params) => ({
+        object: 'object',
+        model: params.model ?? '',
+        ModelUsage: new ModelUsage(10, 0),
+        vector: [0.5, 0.5, 0.5],
+      });
+
+      const items = Array.from({ length: 10 }, (_, i) => [{ type: 'text' as const, content: `item ${i}` }]);
+      const result = await runner.RunEmbedding({
+        Contents: items,
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.Vectors).toHaveLength(10);
+      expect(vendor1Calls).toBeLessThan(10);
+      expect(scriptFor(DRIVER_1B).ContentCalls).toHaveLength(10);
+    });
+
+    it('fails over to the next vendor on Contents timeout rather than misclassifying as user cancellation', async () => {
+      addSecondVendorToModel1();
+      scriptFor(DRIVER_1).ContentAnswer = () => new Promise(() => { /* never settles */ });
+      scriptFor(DRIVER_1B).ContentAnswer = async (params) => ({
+        object: 'object',
+        model: params.model ?? '',
+        ModelUsage: new ModelUsage(5, 0),
+        vector: [0.1, 0.2, 0.3],
+      });
+
+      const result = await runner.RunEmbedding({
+        Contents: [
+          [{ type: 'text', content: 'first' }],
+          [{ type: 'text', content: 'second' }],
+        ],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+        TimeoutMS: 30,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.Vectors).toHaveLength(2);
+      expect(scriptFor(DRIVER_1B).ContentCalls).toHaveLength(2);
+    });
+
+    it('aborts in-flight sibling calls and stops claiming new entries when a Contents call throws before failover', async () => {
+      addSecondVendorToModel1();
+      const vendor1Signals: Array<AbortSignal | undefined> = [];
+      let vendor2SawAllVendor1Aborted = false;
+
+      scriptFor(DRIVER_1).ContentAnswer = (params) => {
+        const callIndex = vendor1Signals.length;
+        vendor1Signals.push(params.CancellationToken);
+        if (callIndex === 0) {
+          return Promise.reject(Object.assign(new Error('503 Service Unavailable'), { status: 503 }));
+        }
+        return new Promise((_resolve, reject) => {
+          params.CancellationToken?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+        });
+      };
+
+      scriptFor(DRIVER_1B).ContentAnswer = async (params) => {
+        if (!vendor2SawAllVendor1Aborted) {
+          vendor2SawAllVendor1Aborted = vendor1Signals.length > 0 && vendor1Signals.every(s => s?.aborted === true);
+        }
+        return {
+          object: 'object',
+          model: params.model ?? '',
+          ModelUsage: new ModelUsage(5, 0),
+          vector: [0.3, 0.4, 0.5],
+        };
+      };
+
+      const items = Array.from({ length: 12 }, (_, i) => [{ type: 'image_url' as const, content: `IMG_${i}`, mimeType: 'image/png' }]);
+      const result = await runner.RunEmbedding({
+        Contents: items,
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.Vectors).toHaveLength(12);
+      expect(scriptFor(DRIVER_1).ContentCalls.length).toBeLessThanOrEqual(4);
+      expect(vendor2SawAllVendor1Aborted).toBe(true);
+      expect(scriptFor(DRIVER_1B).ContentCalls).toHaveLength(12);
+    });
+
+    it('preserves input order when Contents calls resolve out of order', async () => {
+      const delays = [30, 10, 0];
+      const markers = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+      scriptFor(DRIVER_1).ContentAnswer = async (params) => {
+        const blocks = Array.isArray(params.content) ? params.content : [];
+        const text = blocks.find(b => b.type === 'text')?.content ?? '0';
+        const idx = Number(text);
+        await new Promise(resolve => setTimeout(resolve, delays[idx]));
+        return {
+          object: 'object',
+          model: params.model ?? '',
+          ModelUsage: new ModelUsage(1, 0),
+          vector: markers[idx],
+        };
+      };
+
+      const result = await runner.RunEmbedding({
+        Contents: [
+          [{ type: 'text', content: '0' }],
+          [{ type: 'text', content: '1' }],
+          [{ type: 'text', content: '2' }],
+        ],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.Vectors).toEqual([[1, 0, 0], [0, 1, 0], [0, 0, 1]]);
+    });
+
+    it('applies the model catalog InputType prefix to the leading text block without altering media blocks', async () => {
+      h.engine.PrepareEmbeddingInput.mockImplementationOnce((_model, texts) => ({
+        texts: texts.map(t => `doc-prefix: ${t}`),
+        maxInputTokens: undefined,
+      }));
+      scriptFor(DRIVER_1).ContentAnswer = async (params) => ({
+        object: 'object',
+        model: params.model ?? '',
+        ModelUsage: new ModelUsage(4, 0),
+        vector: [0.2, 0.3],
+      });
+
+      const result = await runner.RunEmbedding({
+        Contents: [
+          [
+            { type: 'image_url', content: 'AAAA', mimeType: 'image/png' },
+            { type: 'text', content: 'diagram caption' },
+          ],
+        ],
+        InputType: 'document',
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(scriptFor(DRIVER_1).ContentCalls[0].content).toEqual([
+        { type: 'image_url', content: 'AAAA', mimeType: 'image/png' },
+        { type: 'text', content: 'doc-prefix: diagram caption' },
+      ]);
+      expect(h.engine.PrepareEmbeddingInput).toHaveBeenCalledWith(
+        expect.anything(),
+        ['diagram caption'],
+        'document',
+        expect.anything()
+      );
+    });
+
+    it('stops claiming new Contents entries and skips failover when caller cancels mid-batch', async () => {
+      addSecondVendorToModel1();
+      const controller = new AbortController();
+      scriptFor(DRIVER_1).ContentAnswer = async (params) => {
+        if (!controller.signal.aborted) {
+          controller.abort('user pressed stop');
+        }
+        return {
+          object: 'object',
+          model: params.model ?? '',
+          ModelUsage: new ModelUsage(1, 0),
+          vector: [0.1, 0.2],
+        };
+      };
+
+      const items = Array.from({ length: 10 }, (_, i) => [{ type: 'text' as const, content: `entry ${i}` }]);
+      const result = await runner.RunEmbedding({
+        Contents: items,
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+        CancellationToken: controller.signal,
+      });
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(result.Success).toBe(false);
+      expect(scriptFor(DRIVER_1).ContentCalls.length).toBeLessThan(10);
+      expect(scriptFor(DRIVER_1B).ContentCalls).toHaveLength(0);
+      expect(lastRun()?.Status).toBe('Cancelled');
+    });
+
+    it('marks unsupported media content errors as Fatal VendorValidationError on EmbeddingRunResult.ErrorInfo', async () => {
+      scriptFor(DRIVER_1).ContentAnswer = async () => {
+        throw new Error("OpenAIEmbedding cannot embed content of type 'video/mp4'. Supported: text only.");
+      };
+
+      const result = await runner.RunEmbedding({
+        Contents: [[{ type: 'video_url', content: 'AAAA', mimeType: 'video/mp4' }]],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorInfo?.severity).toBe('Fatal');
+      expect(result.ErrorInfo?.errorType).toBe('VendorValidationError');
+    });
+
+    it('returns Cancelled with zero vectors when the token aborts during credential resolution before any Contents call starts', async () => {
+      const controller = new AbortController();
+      const credSpy = vi
+        .spyOn(runner as unknown as { ResolveCredentialForExecution: (...args: unknown[]) => Promise<string> }, 'ResolveCredentialForExecution')
+        .mockImplementationOnce(async () => {
+          controller.abort('stage budget expired');
+          return 'test-api-key';
+        });
+      try {
+        const result = await runner.RunEmbedding({
+          Contents: [
+            [{ type: 'image_url', content: 'IMG_1', mimeType: 'image/png' }],
+            [{ type: 'image_url', content: 'IMG_2', mimeType: 'image/png' }],
+            [{ type: 'image_url', content: 'IMG_3', mimeType: 'image/png' }],
+          ],
+          ContextUser: mockUser,
+          PromptID: PROMPT_ID,
+          CancellationToken: controller.signal,
+        });
+        await runner.WaitForPendingPromptRunSaves();
+
+        expect(result.Success).toBe(false);
+        expect(result.Vectors).toEqual([]);
+        expect(result.ErrorInfo?.errorType).toBe('Cancelled');
+        expect(scriptFor(DRIVER_1).ContentCalls).toHaveLength(0);
+        expect(lastRun()?.Status).toBe('Cancelled');
+      } finally {
+        credSpy.mockRestore();
+      }
+    });
+
+    it('races in-flight Contents calls against the attempt abort so failover completes even when a driver ignores its signal', async () => {
+      addSecondVendorToModel1();
+      let vendor1Calls = 0;
+      scriptFor(DRIVER_1).ContentAnswer = () => {
+        if (vendor1Calls++ === 0) {
+          return Promise.reject(Object.assign(new Error('503 Service Unavailable'), { status: 503 }));
+        }
+        // Intentionally ignores CancellationToken — never settles on its own.
+        return new Promise(() => undefined);
+      };
+      scriptFor(DRIVER_1B).ContentAnswer = async (params) => ({
+        object: 'object',
+        model: params.model ?? '',
+        ModelUsage: new ModelUsage(2, 0),
+        vector: [0.6, 0.7],
+      });
+
+      const result = await runner.RunEmbedding({
+        Contents: [
+          [{ type: 'image_url', content: 'A', mimeType: 'image/png' }],
+          [{ type: 'image_url', content: 'B', mimeType: 'image/png' }],
+          [{ type: 'image_url', content: 'C', mimeType: 'image/png' }],
+        ],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.Vectors).toEqual([[0.6, 0.7], [0.6, 0.7], [0.6, 0.7]]);
+      expect(scriptFor(DRIVER_1B).ContentCalls).toHaveLength(3);
+    });
+
+    it('aborts sibling in-flight Contents calls when a call returns an empty vector before failover', async () => {
+      addSecondVendorToModel1();
+      const vendor1Signals: Array<AbortSignal | undefined> = [];
+      let vendor2SawAllVendor1Aborted = false;
+
+      scriptFor(DRIVER_1).ContentAnswer = (params) => {
+        const callIndex = vendor1Signals.length;
+        vendor1Signals.push(params.CancellationToken);
+        if (callIndex === 0) {
+          return Promise.resolve({
+            object: 'object',
+            model: params.model ?? '',
+            ModelUsage: new ModelUsage(1, 0),
+            vector: [],
+          });
+        }
+        // Ignores signal so only attemptController.abort() + raceWithAttemptAbort can unwind it.
+        return new Promise(() => undefined);
+      };
+      scriptFor(DRIVER_1B).ContentAnswer = async (params) => {
+        if (!vendor2SawAllVendor1Aborted) {
+          vendor2SawAllVendor1Aborted = vendor1Signals.length > 0 && vendor1Signals.every(s => s?.aborted === true);
+        }
+        return {
+          object: 'object',
+          model: params.model ?? '',
+          ModelUsage: new ModelUsage(2, 0),
+          vector: [0.8, 0.9],
+        };
+      };
+
+      const result = await runner.RunEmbedding({
+        Contents: [
+          [{ type: 'image_url', content: 'A', mimeType: 'image/png' }],
+          [{ type: 'image_url', content: 'B', mimeType: 'image/png' }],
+        ],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.Vectors).toEqual([[0.8, 0.9], [0.8, 0.9]]);
+      expect(vendor2SawAllVendor1Aborted).toBe(true);
+    });
   });
 });

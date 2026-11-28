@@ -13,19 +13,33 @@
 import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
 import { ChatMessage, ChatReasoningBlock, ChatToolCall } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
-import { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, UserInfo, IMetadataProvider, type MJLimitsOverride } from '@memberjunction/core';
+import type { MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
+import type { LimitsDiagnosticsSnapshot } from './limits-diagnostics';
+import type { WorkflowBudgetBreachDiagnostic } from './workflow-budget';
+import type {
+    BudgetBreachDetail,
+    FastConvergenceJudgeResult,
+    HumanResumeApproval,
+    OwnerPauseNotificationPayload,
+    ProgressEvaluationResult,
+    RunawayCheckpointState,
+    RunawayPauseReason,
+} from './runaway-governance';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
 import { AgentDecisionRequest, AgentDecisionResult, AgentFinishIf } from './agent-decisions';
 import { AIAPIKey, AICredentialScope } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
-import { ActionParam } from '@memberjunction/actions-base';
+import { ActionParam, type ActionOutputTrustLevel } from '@memberjunction/actions-base';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
 import { AgentRequestAssignmentStrategy } from './assignment-strategy';
 import { MJAIAgentRunEntityExtended } from './MJAIAgentRunEntityExtended';
+import type { TaskSecurityEnvelope } from './task-graph/task-security-envelope';
 import { MJAIAgentEntityExtended } from './MJAIAgentEntityExtended';
 import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
 import { MediaModality } from './prompt.types';
+import type { AgentHelperPluginEntry } from './agent-instantiation';
 
 /**
  * Value type for secondary scope dimensions.
@@ -181,6 +195,12 @@ export interface MediaOutput {
     /** Base64 encoded data (only if NOT from prompt run) */
     data?: string;
 
+    /**
+     * `MJ: Files` ID set once the media bytes are in MJStorage; downstream consumers
+     * reuse it instead of uploading the same bytes again.
+     */
+    fileId?: string;
+
     /** URL if available (some providers return URLs) */
     url?: string;
 
@@ -313,6 +333,20 @@ export type AgentAction = {
  * or a dedicated entity. The LLM sees Name + Description + InputSchema
  * in its system prompt to know how to invoke the tool.
  */
+/**
+ * One external or semi-trusted source a run ingested: which step, what produced it, and how far it is
+ * trusted. A run with any of these is tainted — its memory writes land `Pending`, and a parent run
+ * absorbs its sub-agents' sources so delegation cannot launder external content.
+ */
+export interface AgentTaintedSource {
+    /** The step that ingested the source, numbered as the run's steps are. */
+    stepNumber: number;
+    /** `action:<name>`, `client-tool:<name>`, or `sub-agent:<name>/<the child's source>`. */
+    sourceName: string;
+    /** How far the source is trusted; `'Trusted'` sources are not recorded. */
+    trustLevel: Exclude<ActionOutputTrustLevel, 'Trusted'>;
+}
+
 export interface ClientToolMetadata {
     /** Unique identifier for this tool */
     Name: string;
@@ -326,6 +360,8 @@ export interface ClientToolMetadata {
     Category?: string;
     /** Default timeout in ms for this specific tool (overrides agent default) */
     DefaultTimeoutMs?: number;
+    /** Optional output trust classification; when 'Untrusted' or 'SemiTrusted', tool output is wrapped in <untrusted_external_data> */
+    TrustLevel?: ActionOutputTrustLevel;
 }
 
 /**
@@ -405,6 +441,8 @@ export interface ClientToolResultSummary {
     Media?: ClientToolMediaItem[];
     /** Error message if the tool failed */
     ErrorMessage?: string;
+    /** Optional output trust classification; when 'Untrusted' or 'SemiTrusted', tool output is wrapped in <untrusted_external_data> */
+    TrustLevel?: ActionOutputTrustLevel;
 }
 
 /**
@@ -442,6 +480,17 @@ export type AgentSubAgentRequest<TContext = any> = {
     message: string;
     /** Whether to terminate the parent agent after sub-agent completes */
     terminateAfter: boolean;
+    /**
+     * The ID of this sub-agent's earlier run that ended with a question to this agent;
+     * set it only to answer that question; the framework resumes that run (its payload,
+     * its question, then your message).
+     */
+    resumeRunId?: string;
+    /**
+     * Optional configuration preset of the target sub-agent, by name (or display name).
+     * Overrides the relationship's default `ConfigurationPresetID` and the parent's `configurationId`.
+     */
+    presetName?: string;
     /** The native tool call (ChatToolCall.id) this dispatch answers — set only on native turns. */
     toolCallId?: string;
     /** Optional template parameters for sub-agent invocation */
@@ -587,6 +636,48 @@ export interface AgentToolCallRequest {
 }
 
 /**
+ * Maximum number of agent-to-agent handoffs allowed within a single user turn.
+ * Shared across `BaseAgent` handoff validation/execution and messaging adapters.
+ */
+export const MAX_HANDOFF_HOPS = CODE_FALLBACK_LIMITS.ResourceGuards.MaxHandoffHops;
+
+/** Resolves the effective handoff hop ceiling from `LimitsConfigResolver.Instance`. */
+export function GetMaxHandoffHops(): number {
+    return LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxHandoffHops;
+}
+
+/**
+ * Request emitted by an agent to transfer the conversation turn to another agent (`step === 'Handoff'`).
+ * The target agent runs as itself in the same conversation rather than as a nested sub-agent.
+ */
+export type AgentHandoffRequest = {
+    /** Name of the target agent to transfer the conversation to. */
+    agentName: string;
+    /** Self-contained brief carrying the context and requirements the target agent needs to handle the turn. */
+    brief: string;
+    /** Explanation of why the source agent is transferring the turn to the target agent. */
+    reason: string;
+};
+
+/**
+ * Outcome recorded when a run ends with a `'Handoff'` step, read by the host to execute the transfer.
+ */
+export type AgentHandoffResult = {
+    /** Resolved ID of the target agent receiving the handoff. */
+    targetAgentId: string;
+    /** Canonical Name of the target agent receiving the handoff. */
+    targetAgentName: string;
+    /** ID of the source agent that initiated the handoff. */
+    sourceAgentId: string;
+    /** Self-contained brief passed from the source agent to the target agent. */
+    brief: string;
+    /** Explanation of why the turn was transferred. */
+    reason: string;
+    /** ID of the recorded `AIAgentRunStep` row (`StepType = 'Handoff'`). */
+    runStepId: string;
+};
+
+/**
  * Represents the next step determination from an agent type.
  * 
  * Agent types analyze the output of prompt execution and determine what should
@@ -598,6 +689,55 @@ export interface AgentToolCallRequest {
  *                      This ensures type safety when passing context to sub-agents.
  *                      Defaults to any for backward compatibility.
  */
+/**
+ * All 14 built-in next-step keys recognized by `BaseAgent` and `AgentStepTypeRegistry`.
+ * Combines the terminal `MJAIAgentRun.FinalStep` values with non-terminal control steps.
+ */
+export type BuiltInAgentNextStepKey =
+    | NonNullable<MJAIAgentRunEntityExtended['FinalStep']>
+    | 'Skill'
+    | 'Plan'
+    | 'Tasks'
+    | 'Handoff'
+    | 'ClientTools'
+    | 'Decision';
+
+/**
+ * Next-step key emitted by an agent type or custom pluggable step handler.
+ * Preserves IDE autocomplete for all 14 built-in keys while accepting OpenApp step keys
+ * registered in `MJ: AI Agent Step Types` / `AgentStepTypeRegistry` without cast hacks.
+ */
+export type AgentNextStepKey = BuiltInAgentNextStepKey | (string & {});
+
+/**
+ * Converts a runtime {@link AgentNextStepKey} into a valid schema-backed
+ * `MJAIAgentRun.FinalStep` value (`null` for custom/non-terminal step keys).
+ */
+export function ToAgentRunFinalStep(
+    step: AgentNextStepKey | null | undefined
+): MJAIAgentRunEntityExtended['FinalStep'] {
+    switch (step) {
+        case 'Actions':
+            return 'Actions';
+        case 'Chat':
+            return 'Chat';
+        case 'Failed':
+            return 'Failed';
+        case 'ForEach':
+            return 'ForEach';
+        case 'Retry':
+            return 'Retry';
+        case 'Sub-Agent':
+            return 'Sub-Agent';
+        case 'Success':
+            return 'Success';
+        case 'While':
+            return 'While';
+        default:
+            return null;
+    }
+}
+
 export type BaseAgentNextStep<P = any, TContext = any> = {
     /** Whether to terminate the agent execution after this step */
     terminate: boolean;
@@ -620,12 +760,19 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * - 'Decision': non-terminal in the same way. Runs {@link decisions} as `Decision` run steps with
      *   no LLM turn, and returns a 'Retry' carrying {@link decisionResults}. A Flow agent's Decision
      *   step emits it.
+     * - 'Handoff': detaches by recording a `Handoff` run step, storing {@link AgentHandoffResult} on
+     *   `ExecuteAgentResult.handoff`, and concluding the source agent's run with `'Success'`. Use
+     *   `'Handoff' as typeof nextStep.step` at assignment and switch sites.
      *
      * Note: To expand a compacted message, set step to 'Retry', set messageIndex to the message to expand,
      * and optionally set expandReason to explain why expansion is needed. The framework will expand the message
      * and then continue with the retry.
      */
-    step: MJAIAgentRunEntityExtended['FinalStep']
+    step: AgentNextStepKey;
+    /** Optional foreign key referencing `MJ: AI Agent Step Types` when executing a registered/custom step type. */
+    stepTypeID?: string;
+    /** Optional structured input payload carried for custom pluggable step handlers. */
+    customStepData?: Record<string, unknown>;
     /** Result from the prior step, useful for retry or sub-agent context */
     priorStepResult?: any;
     /** 
@@ -714,6 +861,16 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * @since 6.1.0
      */
     artifactDirective?: ArtifactDirective;
+    /**
+     * Artifact type ID (`MJ: Artifact Types.ID`) to use when persisting this step's payload as an
+     * artifact. Propagated on `ParentID` child (and folded 1-node task-graph) `Sub-Agent` steps
+     * when terminating the parent run — preferring the child's `payloadArtifactTypeID`, else the
+     * child agent's `DefaultArtifactTypeID` (unless `ArtifactCreationMode === 'Never'`) — so a
+     * router/orchestrator whose own `DefaultArtifactTypeID` differs from the specialist's does not
+     * overwrite the specialist's artifact type. Not stamped on `AgentRelationships` related-agent
+     * merges (where the payload retains the parent's shape) or parallel `subAgents` fan-out.
+     */
+    payloadArtifactTypeID?: string;
     /** Index of the message to expand when step is 'expand-message' */
     messageIndex?: number;
     /** Reason for expanding the message when step is 'expand-message' */
@@ -827,6 +984,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
         /** Why it folded. Absent when it did not. */
         foldReason?: string;
     };
+    /**
+     * Request to transfer the conversation turn to another agent when `step` is `'Handoff'`.
+     * Records a `Handoff` run step and terminates the current agent run with `Success` so the
+     * host can invoke the target agent in the same conversation.
+     */
+    handoff?: AgentHandoffRequest;
     /**
      * When true, the agent should terminate after executing the current step.
      * Used by ClientTools: the main loop needs `terminate: false` so it continues
@@ -959,6 +1122,19 @@ export type ExecuteAgentResult<P = any> = {
     feedbackRequestId?: string;
 
     /**
+     * The untrusted and semi-trusted sources this run ingested, when there were any. A parent run
+     * folds these into its own taint when the sub-agent step completes, so a run that delegated web
+     * search is as tainted as one that searched itself.
+     */
+    taintedSources?: AgentTaintedSource[];
+
+    /**
+     * Populated when the run concluded with a `'Handoff'` step. Carries the resolved target agent
+     * and brief so the conversation host can execute the transfer in the same conversation.
+     */
+    handoff?: AgentHandoffResult;
+
+    /**
      * The resolved FileStorageAccount ID for file artifact storage, determined during
      * agent execution via the hierarchical resolution chain:
      * Runtime → Agent → Category tree → Type → system fallback.
@@ -968,6 +1144,89 @@ export type ExecuteAgentResult<P = any> = {
      * @since 5.24.0
      */
     resolvedStorageAccountId?: string;
+
+    /**
+     * Collaborative governed `MJ: Artifacts` (Docs, Slides, Sheets, Whiteboards) created,
+     * synthesized, or mutated mid-run via `artifact_tool` or `GovernedArtifactService` actions.
+     * Ensures `AgentRunner` and realtime delegation link these artifacts even when `payload` is empty.
+     */
+    touchedArtifacts?: GovernedRunArtifactSummary[];
+
+    /**
+     * Structured diagnostic snapshot of the resolved 5-tier limits and tier provenance
+     * active for this agent run.
+     */
+    limitsSnapshot?: LimitsDiagnosticsSnapshot;
+
+    /**
+     * True when the run paused non-destructively (e.g. budget exhaustion or progress stall)
+     * awaiting human approval/extension to resume.
+     */
+    paused?: boolean;
+
+    /**
+     * True when a non-destructive pause was triggered and its safe-point checkpoint is retained
+     * in memory awaiting storage recovery to persist `Status = 'Paused'`.
+     */
+    pausePersistencePending?: boolean;
+
+    /**
+     * Categorized reason the run paused non-destructively.
+     */
+    pausedReason?: RunawayPauseReason;
+
+    /**
+     * Persisted resumable checkpoint captured at pause time.
+     */
+    runawayCheckpoint?: RunawayCheckpointState;
+
+    /**
+     * Budget breach details when paused due to dollar or wall-clock budget exhaustion.
+     */
+    budgetBreach?: BudgetBreachDetail;
+
+    /**
+     * Latest deterministic progress detector (and optional fast judge) evaluation result.
+     */
+    progressEvaluation?: ProgressEvaluationResult;
+
+    /**
+     * ID of the `MJ: User Notifications` record emitted to notify the run owner of pause.
+     */
+    ownerNotificationId?: string;
+
+    /**
+     * Optional ID of the `MJ: AI Agent Requests` record created for human pause approval.
+     */
+    approvalRequestId?: string;
+
+    /**
+     * Structured whole-workflow or root-tree limit-exceeded diagnostics populated when execution
+     * halts or pauses due to a USD cost, wall-clock duration, token, or step ceiling breach.
+     */
+    limitExceeded?: WorkflowBudgetBreachDiagnostic;
+}
+
+/**
+ * Summary of a governed `MJ: Artifacts` record touched during an agent run via workspace tools
+ * or governed CoreActions. Carried on {@link ExecuteAgentResult.touchedArtifacts} so conversation
+ * detail links and realtime delegation channels can surface collaborative Docs/Slides/Sheets.
+ */
+export interface GovernedRunArtifactSummary {
+    /** `MJ: Artifacts` primary key UUID. */
+    ArtifactID: string;
+    /** Latest `MJ: Artifact Versions` primary key UUID produced or updated during the run. */
+    ArtifactVersionID: string;
+    /** Monotonic version number corresponding to {@link ArtifactVersionID}. */
+    VersionNumber: number;
+    /** Display name of the artifact. */
+    Name: string;
+    /** Canonical `MJ: Artifact Types` Name (e.g. `'Markdown Document'`, `'Presentation'`, `'Excel Spreadsheet'`). */
+    ArtifactTypeName: string;
+    /** Optional `DriverClass` from `MJ: Artifact Types` (used for channel partitioning). */
+    DriverClass?: string;
+    /** Highest-precedence operation performed on this artifact during the run. */
+    Operation: 'created' | 'mutated' | 'synthesized';
 }
 
 /**
@@ -1081,35 +1340,195 @@ export interface InputArtifact {
     deliveryMode?: 'Inline' | 'ToolsOnly';
     /** Per-instance override that forces ToolsOnly regardless of type default. */
     forceToolsOnly?: boolean;
+    /** Optional output trust classification when the artifact originated from an action or external source. */
+    trustLevel?: ActionOutputTrustLevel;
+    /** Provenance identifier (e.g. `'action:Web Search'`) used when wrapping untrusted tool reads. */
+    sourceName?: string;
 }
 
 /**
  * How a run's audience bounds what the run may show. See {@link ExecuteAgentParams.Audience}.
  * - `'Caller'` — the caller's own reach, exactly as if no audience were set. `UserIDs` must be empty.
  * - `'Intersection'` — only what the caller **and** every user in `UserIDs` may see.
+ * - `'ScopeCommonReach'` — structural common-reach mode: the host asserts the run scope
+ *   (`PrimaryScopeEntityName` / `PrimaryScopeRecordID` / `SecondaryScopes` / `SearchScopeIDs`)
+ *   is already the common reach of all readers, enabling O(1) startup without enumerating `UserIDs`
+ *   while keeping all audience restrictions (classification, tool/artifact boundaries, policy checks)
+ *   unconditionally enforced.
  *
  * Union, anchor and narrowing modes are not offered: a run bounded by a shared record or a tenant
  * uses `PrimaryScope*` / `SecondaryScopes`.
  *
  * @since 6.2.0
  */
-export type AgentAudienceMode = 'Caller' | 'Intersection';
+export type AgentAudienceMode = 'Caller' | 'Intersection' | 'ScopeCommonReach';
+
+/**
+ * Caller-only audience (`Mode: 'Caller'`): behaves as if no audience were set.
+ */
+export interface AgentCallerAudience {
+    /** Caller-only reach. */
+    Mode: 'Caller';
+    /** Must be absent or empty for `'Caller'`. */
+    UserIDs?: string[];
+}
+
+/**
+ * Enumerated-reader audience (`Mode: 'Intersection'`): only what the caller and every user in
+ * `UserIDs` may see.
+ */
+export interface AgentIntersectionAudience {
+    /** Enumerated intersection reach. */
+    Mode: 'Intersection';
+    /**
+     * `MJ: Users` IDs of everyone besides the caller who will see the output — for a shared
+     * conversation, its other participants. Required and non-empty, with no blank entry, for
+     * `'Intersection'`. Listing the caller, or an ID twice, is harmless. Each ID must name an
+     * existing user: a run whose audience names an unknown ID is refused.
+     */
+    UserIDs: string[];
+}
+
+/**
+ * Structural common-reach audience (`Mode: 'ScopeCommonReach'`): the host asserts the run scope
+ * is already the common reach of every eligible reader. Starts in O(1) time without enumerating
+ * or hydrating a reader `UserIDs` list while unconditionally enforcing all audience restrictions.
+ *
+ * Explicitly distinct from `{ Mode: 'Intersection', UserIDs: [] }`, which remains fail-closed
+ * and rejected so an empty enumerated reader array can never silently imply common reach.
+ */
+export interface AgentScopeCommonReachAudience {
+    /** Structural scope common-reach assertion. */
+    Mode: 'ScopeCommonReach';
+    /**
+     * Optional explicit confirmation flag (`true` when supplied; `false` is rejected). Omitting
+     * it is valid because `Mode: 'ScopeCommonReach'` itself asserts scope common reach.
+     */
+    ScopeAsserted?: true;
+    /** Disallowed on `'ScopeCommonReach'`: structural mode never enumerates reader IDs. */
+    UserIDs?: never;
+}
 
 /**
  * The people, besides the caller, who will see a run's output. See {@link ExecuteAgentParams.Audience}.
  *
+ * Backwards-compatible discriminated union across `'Caller'`, `'Intersection'`, and `'ScopeCommonReach'`.
+ *
  * @since 6.2.0
  */
-export interface AgentRunAudience {
-    /** How the audience bounds the run. */
-    Mode: AgentAudienceMode;
-    /**
-     * `MJ: Users` IDs of everyone besides the caller who will see the output — for a shared
-     * conversation, its other participants. Required and non-empty, with no blank entry, for
-     * `'Intersection'`; empty for `'Caller'`. Listing the caller, or an ID twice, is harmless. Each ID
-     * must name an existing user: a run whose audience names an unknown ID is refused.
-     */
-    UserIDs: string[];
+export type AgentRunAudience =
+    | AgentCallerAudience
+    | AgentIntersectionAudience
+    | AgentScopeCommonReachAudience;
+
+/** Own-key lookup table so inherited Object.prototype names (`'toString'`, `'__proto__'`, ...) are never accepted. */
+const AGENT_AUDIENCE_MODES: Record<AgentAudienceMode, true> = {
+    Caller: true,
+    Intersection: true,
+    ScopeCommonReach: true,
+};
+
+/**
+ * Runtime value accepted by {@link ValidateAgentRunAudience} and {@link IsStructuralCommonReachAudience}
+ * when validating host-assembled audience payloads without resorting to `unknown`.
+ */
+export type AgentRunAudienceInput =
+    | AgentRunAudience
+    | object
+    | string
+    | number
+    | boolean
+    | null
+    | undefined;
+
+interface AgentAudienceCandidateShape {
+    Mode?: AgentAudienceMode | string | number | boolean | object | null;
+    UserIDs?: ReadonlyArray<string | number | boolean | object | null | undefined> | string | number | boolean | object | null;
+    ScopeAsserted?: boolean | string | number | object | null;
+}
+
+type AgentAudienceCandidateValue =
+    | ReadonlyArray<string | number | boolean | object | null | undefined>
+    | string
+    | number
+    | boolean
+    | object
+    | null
+    | undefined;
+
+/**
+ * Type guard for {@link AgentScopeCommonReachAudience} (`Mode === 'ScopeCommonReach'`).
+ */
+export function IsStructuralCommonReachAudience(audience: AgentRunAudienceInput): audience is AgentScopeCommonReachAudience {
+    if (audience === null || typeof audience !== 'object' || Array.isArray(audience)) {
+        return false;
+    }
+    const candidate = audience as AgentAudienceCandidateShape;
+    return 'Mode' in candidate && candidate.Mode === 'ScopeCommonReach';
+}
+
+/**
+ * Builds a well-formed structural common-reach audience (`Mode: 'ScopeCommonReach'`).
+ */
+export function CreateScopeCommonReachAudience(): AgentScopeCommonReachAudience {
+    return { Mode: 'ScopeCommonReach', ScopeAsserted: true };
+}
+
+/**
+ * Validates a run's audience, returning `null` when absent or well formed and a diagnostic error
+ * string otherwise. Shared single source of truth across `@memberjunction/ai-core-plus` and
+ * `@memberjunction/ai-agents`.
+ */
+export function ValidateAgentRunAudience(audience: AgentRunAudienceInput): string | null {
+    if (audience === undefined) return null;
+    if (audience === null || typeof audience !== 'object' || Array.isArray(audience)) {
+        return `expected { Mode, UserIDs }, got ${describeAudienceValue(audience)}. Omit Audience for a run with no audience.`;
+    }
+    const candidate = audience as AgentAudienceCandidateShape;
+    const mode = 'Mode' in candidate ? candidate.Mode : undefined;
+    if (typeof mode !== 'string' || !Object.prototype.hasOwnProperty.call(AGENT_AUDIENCE_MODES, mode)) {
+        return `Mode must be 'Caller' or 'Intersection', got ${typeof mode === 'string' ? `'${mode}'` : describeAudienceValue(mode)} (or use 'ScopeCommonReach').`;
+    }
+    const ids = 'UserIDs' in candidate ? candidate.UserIDs : undefined;
+    if (mode === 'Caller') {
+        return callerAudienceIDsProblem(ids);
+    }
+    if (mode === 'ScopeCommonReach') {
+        return structuralAudienceProblem(candidate, ids);
+    }
+    return intersectionAudienceIDsProblem(ids);
+}
+
+function callerAudienceIDsProblem(ids: AgentAudienceCandidateValue): string | null {
+    if (ids === undefined || (Array.isArray(ids) && ids.length === 0)) return null;
+    return `Mode 'Caller' takes no UserIDs (got ${Array.isArray(ids) ? `${ids.length} ID(s)` : describeAudienceValue(ids)}); use 'Intersection' to name readers.`;
+}
+
+function intersectionAudienceIDsProblem(ids: AgentAudienceCandidateValue): string | null {
+    if (!Array.isArray(ids)) {
+        return `Mode 'Intersection' needs UserIDs, an array of MJ: Users IDs; got ${describeAudienceValue(ids)}.`;
+    }
+    if (ids.length === 0) {
+        return "Mode 'Intersection' needs at least one ID in UserIDs; use 'Caller' (or omit Audience) for a run with no other readers.";
+    }
+    const blank = ids.findIndex(id => typeof id !== 'string' || id.trim() === '');
+    return blank === -1 ? null : `UserIDs[${blank}] is blank or not a string — every reader must be an MJ: Users ID.`;
+}
+
+function structuralAudienceProblem(audience: AgentAudienceCandidateShape, ids: AgentAudienceCandidateValue): string | null {
+    if (ids !== undefined) {
+        return "Mode 'ScopeCommonReach' takes no UserIDs; omit UserIDs when asserting structural common reach.";
+    }
+    if ('ScopeAsserted' in audience && audience.ScopeAsserted !== undefined && audience.ScopeAsserted !== true) {
+        return "Mode 'ScopeCommonReach' requires ScopeAsserted to be true when provided.";
+    }
+    return null;
+}
+
+function describeAudienceValue(value: AgentAudienceCandidateValue): string {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return 'an array';
+    return typeof value;
 }
 
 /**
@@ -1192,6 +1611,7 @@ export interface AgentPostRunCompactionConfig {
  *   agent: myFlowAgent,
  *   conversationMessages: messages,
  *   agentTypeParams: {
+ *     executionMode: 'inRun',       // startAtStep and skipSteps are honoured only in-run
  *     startAtStep: someStepEntity,  // Start at a specific step
  *     skipSteps: [stepToSkip]       // Skip certain steps
  *   }
@@ -1245,6 +1665,24 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * ```
      */
     SecondaryScopes?: Record<string, SecondaryScopeValue>;
+
+    /**
+     * Search scopes the HOST assigns to this run (for example the space a conversation belongs to). Scoped Search,
+     * called by this agent or any sub-agent it runs, then searches only these (the first when the model names none),
+     * and the host's assignment stands in for the agent's own `SearchScopeAccess` and assigned-scope list, so any agent
+     * the host runs can search what the host allows. It never grants: the acting user's own permission on the scope,
+     * the scope's dimension rules and row-level security still apply. Server code sets it; it is never read from `data`.
+     *
+     * What it covers: the Scoped Search action, in this run and in every agent it starts (sub-agents, `Execute Agent`,
+     * realtime delegation, runtime actions). The plain Search action refuses in such a run. A task graph the run submits
+     * carries them in its security envelope (`TaskSecurityEnvelope.RunScope.SearchScopeIDs`) to every node; on a host
+     * whose submitter does not enforce envelopes the run is not offered graphs. Pre-execution RAG still uses only the agent's own `PreExecution`
+     * scopes. It is not written to the run row, so a continuation (`lastRunId`) must pass it again, as with `actionChanges`.
+     *
+     * An empty list means not assigned: the agent's own search access applies. To forbid search in a run, remove Scoped
+     * Search (and Search) with `actionChanges`.
+     */
+    SearchScopeIDs?: string[];
     /** Optional cancellation token to abort the agent execution */
     cancellationToken?: AbortSignal;
     /** Optional callback for receiving execution progress updates */
@@ -1284,6 +1722,21 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * Scoped Search binding its skill principal to the run. Set by `ExecuteSubAgent`; hosts need not.
      */
     parentActivatedSkillIDs?: readonly string[];
+    /**
+     * Ancestor agent IDs whose narrowed `MJ: AI Agent User Policies` apply as strict policy ceilings
+     * for this sub-agent run (for example Chief of Staff delegating to `Align Strategic Planning Coach`).
+     * Set automatically by `BaseAgent.ExecuteSubAgent`; enforced by both `BaseAgent.checkUserActionPolicy`
+     * and `TypedActionPolicyGuard`.
+     */
+    policyCeilingAgentIDs?: readonly string[];
+    /**
+     * Set when the PARENT run was tainted (had read untrusted content) when it invoked this sub-agent and
+     * runs outside any task graph. It starts this run tainted, so its memory writes land `Pending` and any
+     * graph it submits carries the taint, but unlike a tainted {@link SecurityEnvelope} it does not turn on
+     * the `disallowWhenTainted` egress gate: a sub-agent of a run outside a graph is held to what its parent
+     * is. Set by `ExecuteSubAgent`; hosts need not. It only ever adds a constraint.
+     */
+    ParentRunTainted?: boolean;
     /**
      * Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents.
      *
@@ -1442,8 +1895,9 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      *   and is locked out for the run (the model is told it is unavailable in a shared conversation), so an
      *   agent with other actions is limited to search in a shared room. A malformed audience on an action
      *   call refuses every action;
-     * - task graphs are not offered, and one the model writes anyway is refused (they are withheld in a
-     *   tenant-scoped run too: a graph runs outside the run's scope);
+     * - a task graph the run submits carries the audience (and a tenant-scoped run's scope) in its security
+     *   envelope to every node; where the registered submitter does not enforce envelopes
+     *   (`TaskGraphSubmitter.SupportsSecurityEnvelope`), graphs are not offered and one the model writes is refused;
      * - client tools are not offered and a client-tools step is refused (they run in the caller's browser),
      *   and the caller's app context (`data.appContext`) is not injected into the prompt;
      * - memory writes are not saved (a write's reply is read against the caller's own notes);
@@ -1522,6 +1976,15 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     ConversationBranchID?: string;
 
     /**
+     * Ordered list of agent IDs that have already handed this user turn on, oldest first.
+     *
+     * A host that carries out handoffs sets this property, even to `[]` on the initial run.
+     * When absent (`undefined`), this host does not carry out handoffs (e.g., MCP, scheduled jobs,
+     * evals, or API-key callers), so the run is not offered the `Handoff` step type.
+     */
+    handoffChain?: string[];
+
+    /**
      * Optional flag to automatically populate the payload from the last run.
      * When true and lastRunId is provided, the framework will:
      * 1. Load the last run's FinalPayload
@@ -1560,7 +2023,20 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * `paused: true` is start-paused — nothing is claimed until Resume/Step.
      * Must travel with the submit; Pause-after-submit races the first dispatcher poll.
      */
-    taskGraphDebug?: { paused?: boolean };
+    taskGraphDebug?: { paused?: boolean; breakpointStepIDs?: string[] };
+
+    /**
+     * The security envelope of the task-graph node this run executes, set by the task-graph agent runner
+     * (MJServer's `TaskGraphAgentRunner`) and nowhere else: server-side only, no GraphQL input reaches it.
+     * It only ever adds constraints. A tainted envelope (`IsRunTainted`) starts the run tainted, and a
+     * graph this run submits carries the envelope merged with the run's own bindings, audience and scope
+     * (`MergeTaskSecurityEnvelopes`, which keeps the stricter of each). Whether the run may submit a graph
+     * at all is decided by the registered `TaskGraphSubmitter` (`SupportsSecurityEnvelope`), never by this.
+     *
+     * @since 6.2.0
+     */
+    SecurityEnvelope?: TaskSecurityEnvelope;
+
 
     /**
      * Skills the caller (typically an end user via a `/skill-name` mention in the composer)
@@ -1580,8 +2056,9 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     /**
      * Optional AI Configuration ID to use for this agent execution.
      * When provided, this configuration will be passed to all prompts executed
-     * by this agent and its sub-agents, enabling environment-specific model
-     * selection (e.g., Prod vs Dev configurations).
+     * by this agent, enabling environment-specific model selection (e.g., Prod vs Dev configurations).
+     * Sub-agents inherit this configuration ID by default unless overridden by a
+     * per-call `presetName` or the relationship's `ConfigurationPresetID`.
      * 
      * The configuration ID filters which AI models are available for prompt
      * execution and can provide configuration parameters for dynamic behavior.
@@ -1766,6 +2243,14 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     testRunId?: string;
 
     /**
+     * Optional per-run helper plugin overrides (Extension Point #3).
+     * Merged after any admin-configured `helperPlugins` on the agent's configuration JSON.
+     * Code-only security/invariant seams (`limits`, `actionPolicy`, `setup`, `steps`, `actions`, `subAgents`)
+     * are always rejected regardless of source.
+     */
+    helperPlugins?: ReadonlyArray<AgentHelperPluginEntry>;
+
+    /**
      * Optional flag to convert UI markup (@{...} syntax) in user messages to plain text
      * before passing to the agent.
      *
@@ -1912,8 +2397,9 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      *
      * This is how a host fixes *which record* an action acts on (a space's chapter, a tenant, a folder)
      * so the model can neither see nor choose it, within these **limits**. Server-side only: no GraphQL
-     * input reaches this field. A run with bindings has task graphs withheld (`enableTaskGraphs` is
-     * ignored), because a graph's action nodes are dispatched outside the agent's binding gate. A run
+     * input reaches this field. A task graph the run submits carries the bindings in its security envelope
+     * and every action node applies them; where the registered submitter does not enforce envelopes, a run
+     * with bindings has task graphs withheld (`enableTaskGraphs` is ignored). A run
      * stores its bindings on `MJ: AI Agent Runs.BoundActionParams`, and a run that continues another
      * (`lastRunId`, including a resume from a stored request) applies them when its caller passes none;
      * a prior run that cannot be read (missing, hidden from the context user, or holding bindings that do
@@ -1943,7 +2429,9 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * type-specific configuration that doesn't belong in the general ExecuteAgentParams.
      *
      * Examples:
-     * - Flow agents: FlowAgentExecuteParams with startAtStep, skipSteps
+     * - Flow agents: FlowAgentExecuteParams with executionMode, startAtStep, skipSteps. A Flow run
+     *   on the task-graph dispatcher (the default for a top-level run) refuses startAtStep and a
+     *   non-empty skipSteps; set executionMode to 'inRun' to use them.
      * - Loop agents: Could define LoopAgentExecuteParams with custom iteration controls
      *
      * The type is determined by the TAgentTypeParams generic parameter.
@@ -1957,6 +2445,7 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      *   agent: myFlowAgent,
      *   conversationMessages: messages,
      *   agentTypeParams: {
+     *     executionMode: 'inRun',
      *     startAtStep: AIEngine.Instance.GetAgentSteps(agentId).find(s => s.Name === 'Approval'),
      *     skipSteps: [debugStep, testStep]
      *   }
@@ -2122,6 +2611,25 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     maxTreeDurationMs?: number;
 
     /**
+     * Optional whole-workflow USD cost ceiling across the entire root agent + sub-agent
+     * execution (and parent TaskGraph when invoked from a workflow node). Synchronized
+     * with `treeBudget.workflowMaxCostUsd` / `maxTreeCost`.
+     */
+    workflowMaxCostUsd?: number;
+
+    /**
+     * Optional whole-workflow wall-clock duration cap in milliseconds measured from
+     * `workflowStartedAtMs` (or the root run's start timestamp). Synchronized with
+     * `treeBudget.workflowMaxDurationMs` / `maxTreeDurationMs`.
+     */
+    workflowMaxDurationMs?: number;
+
+    /**
+     * Optional epoch timestamp (`Date.now()`) marking when the enclosing workflow started.
+     */
+    workflowStartedAtMs?: number;
+
+    /**
      * Optional post-run conversation compaction, memory extraction, and scratchpad pruning
      * configuration.
      *
@@ -2165,6 +2673,63 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     compactAfterRun?: boolean | AgentPostRunCompactionConfig;
 
+    /**
+     * Optional Tier 5 (`RunOverride`) limits override for this specific agent run.
+     */
+    limitsOverride?: MJLimitsOverride;
+
+    /**
+     * Optional scheduled routine / recurring workstream identifier for `PerRoutine` budget tracking.
+     */
+    routineId?: string;
+
+    /**
+     * Optional `MJ: Scheduled Job Runs.ID` associated with this run.
+     */
+    scheduledJobRunId?: string;
+
+    /**
+     * Optional user-agent policy entity contributing Tier 4 (`UserAgentPolicy`) limits.
+     */
+    userPolicy?: MJAIAgentUserPolicyEntity | null;
+
+    /**
+     * Optional structured Tier 4 (`UserAgentPolicy`) limits override.
+     */
+    userPolicyLimitsOverride?: MJLimitsOverride | null;
+
+    /**
+     * Optional ID of a paused `MJ: AI Agent Runs` record to resume non-destructively from its
+     * persisted {@link RunawayCheckpointState}.
+     */
+    resumeCheckpointRunId?: string;
+
+    /**
+     * Optional human approval & budget extension grant authorizing resumption of a paused run.
+     */
+    humanResumeApproval?: HumanResumeApproval;
+
+    /**
+     * Optional custom evaluator callback for the sub-200ms `FastConvergenceJudge` when
+     * `DeterministicProgressDetector` classifies a window as `Ambiguous`.
+     */
+    fastConvergenceJudgeEvaluator?: (input: {
+        StateSummary: string;
+        Iteration: number;
+        Signal?: AbortSignal;
+    }) => Promise<FastConvergenceJudgeResult>;
+
+    /**
+     * Optional callback invoked when a run pauses non-destructively and emits an owner notification.
+     */
+    onOwnerPauseNotification?: (payload: OwnerPauseNotificationPayload) => Promise<void> | void;
+
+    /**
+     * Explicit switch enabling or disabling Slice 3 non-destructive runaway governance pause
+     * for agent-level limits (`MaxCostPerRun`, `MaxTimePerRun`) in addition to 5-tier `Budgets`.
+     */
+    enableRunawayGovernance?: boolean;
+
 }
 
 /**
@@ -2187,16 +2752,30 @@ export interface AgentTreeBudget {
     maxTreeCost?: number;
     /** Maximum wall-clock duration (in milliseconds) allowed for the entire agent tree */
     maxTreeDurationMs?: number;
+    /** Whole-workflow USD cost ceiling propagated across root and nested sub-agent invocations */
+    workflowMaxCostUsd?: number;
+    /** Whole-workflow wall-clock duration cap in milliseconds propagated from workflow start */
+    workflowMaxDurationMs?: number;
+    /** Authoritative epoch timestamp (Date.now()) when the enclosing workflow started */
+    workflowStartedAtMs?: number;
     /** Live cumulative step counter shared by reference across the agent tree (initialized to 0) */
     totalSteps: number;
     /** Live cumulative token counter shared by reference across the agent tree (initialized to 0) */
     totalTokens: number;
     /** Live cumulative cost accumulator shared by reference across the agent tree (initialized to 0) */
     totalCost: number;
+    /** Mirror of cumulative USD cost across the workflow/tree for explicit workflow budget readers */
+    cumulativeCostUsd?: number;
     /** Epoch timestamp (Date.now()) when the root agent run started */
     startedAtMs: number;
+    /** Epoch timestamp of the latest usage update on this shared budget tracker */
+    lastUpdatedAtMs?: number;
+    /** Shared AbortController fired immediately when any concurrent branch breaches the budget */
+    abortController?: AbortController;
     /** Set to the breach reason once any tree limit is exceeded */
     breachedReason?: string;
+    /** Structured breach diagnostics stamped atomically when any workflow/tree cap is breached */
+    breachDiagnostic?: WorkflowBudgetBreachDiagnostic;
 }
 
 
@@ -2240,6 +2819,12 @@ export type AgentContextData = {
     planModeActive?: boolean;
     /** Whether Plan Mode's gate has already been satisfied (a prior plan was approved on this run chain) */
     planApproved?: boolean;
+    /** Whether ChatHandlingOption='Consult' is active for at least one listed sub-agent */
+    subAgentConsultEnabled?: boolean;
+    /** Whether this sub-agent's parent resolves ChatHandlingOption='Consult' for this pairing */
+    parentConsults?: boolean;
+    /** Whether at least one listed sub-agent has one or more active configuration presets */
+    subAgentPresetsAvailable?: boolean;
     /** Markdown formatted snapshot of the user's current application context */
     appContext?: string;
 }
@@ -2290,10 +2875,10 @@ export type AgentChatMessageMetadata = {
     /** Whether this message has expired */
     isExpired?: boolean;
     /** Type of message (for lifecycle management and logging) */
-    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'skill-activation' | 'skill-activation-refused' | 'chat' | 'system' | 'user';
-    /** Name of the sub-agent (only for sub-agent-result messages) */
+    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'sub-agent-consult' | 'skill-activation' | 'skill-activation-refused' | 'chat' | 'system' | 'user';
+    /** Name of the sub-agent (only for sub-agent-result and sub-agent-consult messages) */
     subAgentName?: string;
-    /** ID of the sub-agent (only for sub-agent-result messages) */
+    /** ID of the sub-agent (only for sub-agent-result and sub-agent-consult messages) */
     subAgentId?: string;
     /**
      * `ConversationDetail.Sequence` of the row this message came from. Stamped by
@@ -2321,6 +2906,14 @@ export type AgentChatMessageMetadata = {
     parentId?: string | null;
     /** Un-prefixed `ConversationDetail.Message` text when speaker attribution formatted `content` */
     rawContent?: string;
+    /**
+     * Alpha-sequence artifact IDs (e.g. `['A']`, `['A', 'B']`) registered in `ArtifactToolManager`
+     * for this action/tool result message's large or expirable outputs. Preserved across message
+     * compaction and removal so the compacted or stubbed message can remind the model which
+     * artifact handle(s) hold the full queryable data (`get_rows`, `search_rows`, `filter`,
+     * `aggregate`, `grep`, `get_lines`, `json_path`, `json_iterate`, `get_full`).
+     */
+    artifactIds?: string[];
     /**
      * True on the framework-authored trailing message that carries the loop agent's volatile
      * per-iteration state (date/time, Scratchpad, Payload, and a relocated specialization) as the

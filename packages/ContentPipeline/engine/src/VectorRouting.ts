@@ -12,6 +12,7 @@ import { NormalizeUUID } from '@memberjunction/global';
 import { ContentVectorInfrastructure, ResolvedVectorInfrastructure } from '@memberjunction/content-autotagging';
 import { WorkingRecord } from '@memberjunction/content-pipeline-base';
 import { WhereAnyOf } from './Filters.js';
+import { ItemEntityResolver } from './ItemEntityResolver.js';
 
 /** Where one record's vector lives. */
 export interface VectorRoute {
@@ -108,5 +109,38 @@ async function loadItems(records: readonly WorkingRecord[], provider: IMetadataP
         throw new Error(`Loading the Content Items behind this page failed: ${result.ErrorMessage}`);
     }
     result.Results.forEach((item) => items.set(NormalizeUUID(item.ID), item));
+    await reloadAsExtensions(items, provider, contextUser);
     return items;
+}
+
+/**
+ * Replace each item whose source's items are an IS-A extension with its row as that extension, so the
+ * vector metadata can carry the extension's fields. One query per extension entity; an item that has no
+ * extension row yet keeps its core row.
+ */
+async function reloadAsExtensions(items: Map<string, MJContentItemEntity>, provider: IMetadataProvider, contextUser: UserInfo): Promise<void> {
+    const resolver = new ItemEntityResolver(provider, contextUser);
+    const bySource = new Map<string, string | null>();
+    const byEntity = new Map<string, string[]>();
+    for (const item of items.values()) {
+        const sourceKey = NormalizeUUID(item.ContentSourceID ?? '');
+        if (!bySource.has(sourceKey)) {
+            const resolved = await resolver.Resolve(item.ContentSourceID);
+            bySource.set(sourceKey, resolved.IsExtension ? resolved.EntityName : null);
+        }
+        const entityName = bySource.get(sourceKey);
+        if (entityName) {
+            byEntity.set(entityName, [...(byEntity.get(entityName) ?? []), item.ID]);
+        }
+    }
+    for (const [entityName, ids] of byEntity) {
+        const result = await RunView.FromMetadataProvider(provider).RunView<MJContentItemEntity>(
+            { EntityName: entityName, ExtraFilter: WhereAnyOf('ID', ids), ResultType: 'entity_object' },
+            contextUser,
+        );
+        if (!result.Success) {
+            throw new Error(`Loading the Content Items behind this page as '${entityName}' failed: ${result.ErrorMessage}`);
+        }
+        result.Results.forEach((item) => items.set(NormalizeUUID(item.ID), item));
+    }
 }

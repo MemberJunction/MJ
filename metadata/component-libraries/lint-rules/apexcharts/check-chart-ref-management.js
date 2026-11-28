@@ -3,58 +3,34 @@
   // Initialize tracking sets if not already done
   context.apexChartVars = context.apexChartVars || new Set();
   context.apexChartVarsWithRefWarning = context.apexChartVarsWithRefWarning || new Set();
-  context.needsExportFunctionality = context.needsExportFunctionality || null;
 
-  // On first pass, check if component needs export functionality
-  if (context.needsExportFunctionality === null) {
-    context.needsExportFunctionality = false;
-
-    // Check for export-related method calls (dataURI, exportChart, etc.)
-    const hasExportCalls = (astNode) => {
-      let found = false;
-      const visitor = {
-        CallExpression(callPath) {
-          if (t.isMemberExpression(callPath.node.callee)) {
-            const methodName = callPath.node.callee.property?.name;
-            if (methodName === 'dataURI' ||
-                methodName === 'exportChart' ||
-                methodName === 'exportToSVG' ||
-                methodName === 'exportToPNG') {
-              found = true;
-              callPath.stop();
-            }
-          }
-        }
-      };
-
-      if (ast.program) {
-        for (const node of ast.program.body) {
-          if (found) break;
-          const nodePath = { node, scope: path.scope };
-          if (t.isFunctionDeclaration(node) || t.isExportDefaultDeclaration(node)) {
-            const func = t.isFunctionDeclaration(node) ? node : node.declaration;
-            if (func.body) {
-              const tempPath = { node: func.body, scope: path.scope, traverse: (v) => {
-                const walk = (n) => {
-                  if (t.isCallExpression(n)) v.CallExpression({ node: n });
-                  Object.values(n).forEach(val => {
-                    if (val && typeof val === 'object') {
-                      if (Array.isArray(val)) val.forEach(walk);
-                      else walk(val);
-                    }
-                  });
-                };
-                walk(func.body);
-              }};
-              tempPath.traverse(visitor);
-            }
-          }
-        }
+  // Once per lint (the validator runs on every AST node), check whether the component
+  // calls an export method anywhere. Only a boolean counts as computed: resetting a
+  // false result with `|| null` re-ran this walk on every node.
+  if (typeof context.needsExportFunctionality !== 'boolean') {
+    const exportMethods = new Set(['dataURI', 'exportChart', 'exportToSVG', 'exportToPNG']);
+    let found = false;
+    const walk = (node) => {
+      if (found || !node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        node.forEach(walk);
+        return;
       }
-      return found;
+      if (typeof node.type !== 'string') return;
+      if ((t.isCallExpression(node) || t.isOptionalCallExpression(node)) &&
+          (t.isMemberExpression(node.callee) || t.isOptionalMemberExpression(node.callee)) &&
+          t.isIdentifier(node.callee.property) &&
+          exportMethods.has(node.callee.property.name)) {
+        found = true;
+        return;
+      }
+      for (const key of Object.keys(node)) {
+        if (key === 'loc' || key === 'extra' || key.endsWith('Comments')) continue;
+        walk(node[key]);
+      }
     };
-
-    context.needsExportFunctionality = hasExportCalls(ast);
+    walk(ast.program);
+    context.needsExportFunctionality = found;
   }
 
   // Check for new ApexCharts creation
@@ -62,7 +38,7 @@
     const parent = path.parent;
 
     // Check if the chart instance is being stored
-    if (t.isVariableDeclarator(parent)) {
+    if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
       const varName = parent.id.name;
       context.apexChartVars.add(varName);
 

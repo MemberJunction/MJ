@@ -15,9 +15,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 
-vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: unknown) => target,
-}));
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return {
+        ...actual,
+        RegisterClass: () => (target: unknown) => target,
+    };
+});
 
 vi.mock('@memberjunction/actions-base', () => ({}));
 
@@ -46,11 +50,15 @@ const { runViewSpy } = vi.hoisted(() => ({
     >(),
 }));
 
-vi.mock('@memberjunction/core', () => ({
-    RunView: class RunViewMock {
-        public RunView = runViewSpy;
-    },
-}));
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        RunView: class RunViewMock {
+            public RunView = runViewSpy;
+        },
+    };
+});
 
 import { GetRecordsAction } from '../custom/crud/get-records.action';
 import { findOutput, makeParams } from './crud-action-test-harness';

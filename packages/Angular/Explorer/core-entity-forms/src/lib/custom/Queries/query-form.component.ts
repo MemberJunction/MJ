@@ -13,6 +13,8 @@ import type { QueryRefreshScope } from '@memberjunction/ng-query-viewer';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { Subject } from 'rxjs';
+import { JoinHeroSummary, CountLabel } from '../../shared/phone-hero';
+import { PhoneSectionsState } from '../../shared/phone-sections-state';
 
 interface CategoryTreeNode {
     id: string;
@@ -25,9 +27,29 @@ interface CategoryTreeNode {
   standalone: false,
     selector: 'mj-query-form',
     templateUrl: './query-form.component.html',
-    styleUrls: ['../../../shared/form-styles.css', './query-form.component.css']
+    styleUrls: ['../../../shared/form-styles.css', './query-form.component.css', '../../shared/phone-hero.css']
 })
 export class MJQueryFormComponentExtended extends MJQueryFormComponent implements OnInit, OnDestroy, AfterViewInit {
+
+    /** Phone width shows the stacked accordions as sections behind one picker (design call 7A). */
+    public Phone = new PhoneSectionsState(() => this.cdr.markForCheck());
+
+    /** Phone hero (6A): whether the summary line is expanded to show the rest of the hero. */
+    public HeroDetailsOpen = false;
+
+    /** Toggles the phone hero between its compact identity row and the full hero. */
+    public ToggleHeroDetails(): void {
+        this.HeroDetailsOpen = !this.HeroDetailsOpen;
+        this.cdr.markForCheck();
+    }
+
+    /** The phone hero's one-line summary of what the compact hero leaves out. */
+    public get HeroSummary(): string {
+        return JoinHeroSummary([
+            this.CategoryPathDisplay || 'Uncategorized',
+            this.record.IsSaved ? `Metadata: ${this.ExtractionStatusLabel}` : null,
+        ]);
+    }
     public record!: MJQueryEntityExtended;
     public QueryParameters: MJQueryParameterEntity[] = [];
 
@@ -383,6 +405,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
 
     ngOnDestroy() {
         super.ngOnDestroy();
+        this.Phone.Stop();
         this.destroy$.next();
         this.destroy$.complete();
     }

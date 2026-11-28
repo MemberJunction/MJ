@@ -15,16 +15,16 @@ describe('capability cards', () => {
   });
 });
 
-describe('buildImprovePrompt', () => {
-  it('names the prediction, its grade, and why it is held, and asks for improvements', () => {
-    const p = BuildImprovePrompt({ Name: 'Renewal Risk', TrustGrade: 'Poor', Reason: 'not enough training history' });
+describe('BuildImprovePrompt', () => {
+  it('names the prediction, its trust title, and why it is held, and asks for improvements', () => {
+    const p = BuildImprovePrompt({ Name: 'Renewal Risk', TrustTitle: 'No signal — not usable', Reason: 'not enough training history' });
     expect(p).toContain('"Renewal Risk"');
-    expect(p).toContain('current trust: Poor');
+    expect(p).toContain('current trust: No signal — not usable');
     expect(p).toContain('not enough training history.');
     expect(p).toContain('what would make it reliable');
   });
 
-  it('degrades gracefully when grade/reason are missing', () => {
+  it('degrades gracefully when the trust title and reason are missing', () => {
     const p = BuildImprovePrompt({ Name: 'Lapse Score' });
     expect(p).toContain('"Lapse Score"');
     expect(p).not.toContain('current trust');

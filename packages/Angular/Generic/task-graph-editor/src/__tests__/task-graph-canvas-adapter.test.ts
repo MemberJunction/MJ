@@ -210,7 +210,7 @@ describe('SpecToConnections', () => {
         expect(conn.Data?.['EdgeID']).toBe(edgeID);
     });
 
-    it('keeps a false-overridden edge visible after a skip cascade', () => {
+    it('keeps a false-overridden edge visible after a skip cascade and ghosts untaken edges by default', () => {
         const edgeID = '1e0a5b3c-1111-2222-3333-444455556666';
         const s = spec({
             tasks: [
@@ -218,12 +218,19 @@ describe('SpecToConnections', () => {
                 task({ tempId: 'b', dependsOn: [{ id: edgeID, tempId: 'a', condition: 'data.ok' }] }),
             ],
         });
-        const hidden = SpecToConnections(s, { a: 'Complete', b: 'Skipped' });
+        const ghosted = SpecToConnections(s, { a: 'Complete', b: 'Skipped' });
+        expect(ghosted).toHaveLength(1);
+        expect(ghosted[0].Untaken).toBe(true);
+        expect(ghosted[0].Style).toBe('dashed');
+
+        const hidden = SpecToConnections(s, { a: 'Complete', b: 'Skipped' }, { showUntakenPaths: false });
         expect(hidden).toHaveLength(0);
+
         const kept = SpecToConnections(s, { a: 'Complete', b: 'Skipped' }, { edgeOverrides: { [edgeID]: 'false' } });
         expect(kept).toHaveLength(1);
         expect(kept[0].Style).toBe('dotted');
         expect(kept[0].Label).toBe('forced no');
+        expect(kept[0].ForcedVerdict).toBe('false');
     });
 
     it('shows the condition expression as the label in debugger mode', () => {
@@ -550,6 +557,7 @@ describe('NextTempId', () => {
             expect(GetTaskNodeType(task({ kind: 'ForEach' as const, configuration: { collectionPath: 'payload.rows' } }))).toBe('ForEachTask');
             expect(GetTaskNodeType(task({ kind: 'While' as const, configuration: { condition: 'payload.ok !== true' } }))).toBe('WhileTask');
             expect(GetTaskNodeType(task({ kind: 'External' as const, configuration: { domain: 'billing' } }))).toBe('ExternalTask');
+            expect(GetTaskNodeType(task({ kind: 'Wait' as const, configuration: { durationSeconds: 86400 } }))).toBe('WaitTask');
         });
 
         it('never tells a configured step that it has no agent', () => {
@@ -559,6 +567,13 @@ describe('NextTempId', () => {
             expect(TaskSubtitle(foreach)).not.toContain('No agent chosen');
             expect(TaskSubtitle(foreach)).toContain('Describe');      // says what it repeats
             expect(TaskSubtitle(prompt)).toBe('Draft the piece');
+        });
+
+        it('says what a Wait step waits for', () => {
+            expect(TaskSubtitle(task({ kind: 'Wait' as const, configuration: { durationSeconds: 86400 } }))).toBe('Waits 1 day');
+            expect(TaskSubtitle(task({ kind: 'Wait' as const, configuration: { durationSeconds: 7200 } }))).toBe('Waits 2 hours');
+            expect(TaskSubtitle(task({ kind: 'Wait' as const, configuration: { durationSeconds: 90 } }))).toBe('Waits 90 seconds');
+            expect(TaskSubtitle(task({ kind: 'Wait' as const, configuration: { until: 'payload.chargeOn' } }))).toBe('Waits until payload.chargeOn');
         });
 
         it('still says so for a genuinely unassigned node', () => {

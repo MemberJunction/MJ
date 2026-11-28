@@ -126,6 +126,25 @@ Companion to `MJAIAgentNoteEntityServer` — maintains the parallel invariant fo
 
 The **AI-from-Description** half of the [Remote Operations](../../guides/REMOTE_OPERATIONS_GUIDE.md) primitive (RO-4). For a `MJ: Remote Operations` row with `GenerationType='AI'`, the `Save` hook calls the `Generate Remote Operation Code` prompt to author the body of the operation's `InternalExecute` — against the ambient `input` / `provider` / `user` / `context` contract — stores it in `Code`, records the libraries it used in the JSONType `LibrariesObject`, and resets `CodeApprovalStatus='Pending'` for human review (skipped when `CodeLocked`). CodeGen then emits a complete registered class from the approved code. Mirrors `MJActionEntityServer`; transactional; no junction CRUD (the library list is a JSONType field).
 
+### MJDuplicateRunEntityServer
+
+Saving a **new** `MJ: Duplicate Runs` record starts duplicate detection: after the first save the class
+runs `DuplicateRecordDetector.GetDuplicateRecords` (`@memberjunction/ai-vector-dupe`) asynchronously,
+over the run's `SourceListID` or, when that is empty, the whole entity. A run saved without an
+`EntityDocumentID` gets the entity's newest-updated Active document, preferring a `Record Duplicate`
+one. Thresholds `<= 0` or `>= 1.0` on the document are treated as unconfigured (`0.70` / `0.95`).
+A process-wide guard keyed on the run ID makes sure the detector's own progress saves never start a
+second pass. Progress is published on the `PIPELINE_PROGRESS` pub/sub topic; a failure marks the run
+`Failed` with `ProcessingErrorMessage`. See the
+[Duplicate Management Guide](../../guides/DUPLICATE_MANAGEMENT_GUIDE.md).
+
+### MJEntityDocumentEntityServer
+
+Gives `MJ: Entity Documents` a writable `TemplateText` virtual property: on save it creates or updates
+the backing `MJ: Templates` + `MJ: Template Contents` records and stamps `TemplateID`, so an entity
+document — a duplicate-detection or search document — can be authored (and shipped as metadata with
+`@file:`) without hand-building its template.
+
 ## Architecture
 
 ### Entity Registration

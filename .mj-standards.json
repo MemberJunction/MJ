@@ -32,6 +32,32 @@
         "metadata"
       ]
     },
+    "agent-skill-governance": {
+      "Severity": "error",
+      "Roots": [
+        "metadata"
+      ],
+      "Options": {
+        "AllowedAllSkillsAgents": [
+          "Sage",
+          "Research Agent",
+          "Knowledge Agent",
+          "Codesmith Agent",
+          "Marketing Agent"
+        ]
+      }
+    },
+    "limits-literals": {
+      "Severity": "error",
+      "Roots": [
+        "packages"
+      ],
+      "Options": {
+        "AllowedFiles": [
+          "packages/MJCore/src/generic/limitsConfig.ts"
+        ]
+      }
+    },
     "migration-existence-guards": {
       "Severity": "error",
       "Roots": [
@@ -49,6 +75,61 @@
       "Options": {
         "FromVersion": "202610221306",
         "AllowedValues": []
+      }
+    },
+    "migration-string-collation": {
+      "Severity": "error",
+      "Roots": [
+        "migrations"
+      ],
+      "Options": {
+        "FromVersion": "202610221306",
+        "Exempt": [
+          "V202610231210__v6.2.x__Bound_Data_Access_And_Approvals.sql",
+          "V202610231220__v6.2.x__Calendar_Event_Links.sql",
+          "V202610240805__v6.2.x__Entity_Alternate_Base_Views.sql",
+          "V202610252000__v6.2.x__Content_Pipeline_Framework.sql",
+          "V202610271915__v6.2.x__CommunicationProvider_UserDelegatedOAuth_Gates.sql",
+          "V202610291200__v6.2.x__Query_Extraction_Metadata.sql",
+          "V202610301710__v6.2.x__Agent_Consult_Chat_Handling.sql",
+          "V202610301713__v6.2.x__Brand_Kits_And_Video_Archetypes.sql",
+          "V202611022155__v6.2.x__Anchored_Conversations_And_Record_Comments.sql",
+          "V202611022300__v6.2.x__Semantic_Graph_And_Graph_Concepts.sql",
+          "V202611030307__v6.2.x__Diagnostic_Bundles.sql",
+          "V202611040751__v6.3.x__Document_Sequence_Counter.sql",
+          "V202611062303__v6.3.x__EntityFieldValue_OrganicKey_Source.sql"
+        ]
+      }
+    },
+    "file-line-limit": {
+      "Severity": "error",
+      "Roots": [
+        "packages/AI/Agents/src"
+      ],
+      "Options": {
+        "MaxLines": 1000,
+        "HeaderReasonPattern": "//\\s*file-size-ok:\\s*\\S+",
+        "Allowlist": {
+          "packages/AI/Agents/src/realtime/realtime-client-session-service.ts": 5215,
+          "packages/AI/Agents/src/memory-manager-agent.ts": 4480,
+          "packages/AI/Agents/src/AgentRunner.ts": 4279,
+          "packages/AI/Agents/src/ArtifactToolManager.ts": 3980,
+          "packages/AI/Agents/src/artifact-tools/SpreadsheetToolLibrary.ts": 3973,
+          "packages/AI/Agents/src/GovernedArtifactService.ts": 3411,
+          "packages/AI/Agents/src/PayloadManager.ts": 2713,
+          "packages/AI/Agents/src/agent-types/flow-agent-type.ts": 2599,
+          "packages/AI/Agents/src/artifact-tools/SlideDeckToolLibrary.ts": 2245,
+          "packages/AI/Agents/src/artifact-tools/DocumentToolLibrary.ts": 2825,
+          "packages/AI/Agents/src/AgentWakeTriggerService.ts": 2004,
+          "packages/AI/Agents/src/realtime/realtime-coagent-config.ts": 1735,
+          "packages/AI/Agents/src/agent-types/loop-agent-type.ts": 1612,
+          "packages/AI/Agents/src/GrowthCoachService.ts": 1419,
+          "packages/AI/Agents/src/BudgetEnforcementGuard.ts": 1286,
+          "packages/AI/Agents/src/artifact-tools/artifact-comment-suggestion-helper.ts": 1127,
+          "packages/AI/Agents/src/operations/LimitsOperations.ts": 1097,
+          "packages/AI/Agents/src/RunawayCheckpointManager.ts": 1029,
+          "packages/AI/Agents/src/artifact-tools/DataSnapshotToolLibrary.ts": 1008
+        }
       }
     }
   }

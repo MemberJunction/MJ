@@ -129,4 +129,31 @@ describe('Embed routes each record by its own route', () => {
         expect(runEmbeddingSpy).not.toHaveBeenCalled();
         expect(written).toEqual([]);
     });
+
+    it('honors IsReadOnly on the target vector DB: skips without calling the embedding model or vector store and sets no retry status', async () => {
+        written.length = 0;
+        const runEmbeddingSpy = vi.spyOn(AIEmbeddingRunner.prototype, 'RunEmbedding');
+        vi.spyOn(ContentVectorInfrastructure.prototype, 'Resolve').mockImplementation(async (key) => {
+            const index = key.split('|')[1];
+            const base = infrastructureFor(index);
+            return {
+                ...base,
+                vectorDB: {
+                    ...base.vectorDB,
+                    IsReadOnly: index === 'index-a',
+                },
+            } as unknown as ResolvedVectorInfrastructure;
+        });
+
+        const outcomes = await new EmbedStage().Finalize!([chunk('a-1'), chunk('b-1')], context);
+
+        const aOutcome = outcomes.find((o) => o.Key === 'a-1')?.Outcome;
+        expect(aOutcome?.Status).toBe('Skipped');
+        expect(aOutcome?.Message).toMatch(/read-only; no vector written/);
+        expect(new EmbedStage().StatusForOutcome('Skipped')).toBe('Skipped');
+        expect(outcomes.find((o) => o.Key === 'b-1')?.Outcome.Status).toBe('Complete');
+        expect(runEmbeddingSpy).toHaveBeenCalledTimes(1);
+        expect(written).toEqual([{ index: 'index-b', ids: ['b-1'], namespaces: ['b'] }]);
+    });
 });
+

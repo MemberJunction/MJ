@@ -11,6 +11,39 @@
  */
 
 /**
+ * One action step inside a multi-step loop body (`ForEachOperation.steps` or `WhileOperation.steps`).
+ *
+ * Steps run sequentially in array order within each iteration with zero LLM round-trips between
+ * steps. Later steps in the same iteration can reference earlier step outputs via `steps.<id>.*`
+ * (or `steps.step_<index>.*` when `id` is omitted), alongside the loop's item/index bindings and
+ * `payload.*`.
+ *
+ * @since 6.2.0
+ */
+export interface LoopBodyActionStep {
+    /**
+     * Optional handle for referencing outputs from later steps in the same iteration (`steps.<id>.*`).
+     * Defaults to `step_<zeroBasedIndex>` when omitted.
+     */
+    id?: string;
+    /** Action name (canonical MJ Action name or sanitized native tool name). */
+    name: string;
+    /**
+     * Parameters passed to the action (`item.field`, `steps.<id>.field`, `payload.*`, `static:*`, or inline templates).
+     */
+    params: Record<string, unknown>;
+    /**
+     * Optional boolean expression evaluated before this step runs; falsy skips the step cleanly.
+     * May read `payload`, `steps`, `item` (or custom `itemVariable`), `index` (or custom `indexVariable`), and `iteration`.
+     */
+    condition?: string;
+    /**
+     * Optional JSON mapping string (`{"ActionOutputField": "payloadPath"}` or `"target[]"`) folding outputs into payload.
+     */
+    outputMapping?: string;
+}
+
+/**
  * Universal ForEach loop configuration used by all agent types.
  * Flow agents convert AIAgentStep configuration to this format.
  * Loop agents receive this from LLM responses.
@@ -61,6 +94,13 @@ export interface ForEachOperation {
         outputMapping?: string;  // JSON mapping for Flow agents (maps action outputs to payload)
     };
 
+    /**
+     * Execute an ordered sequence of actions per iteration with zero LLM turns between steps.
+     * Mutually exclusive with `action`, `subAgent`, and `prompt`.
+     * @since 6.2.0
+     */
+    steps?: LoopBodyActionStep[];
+
     /** Execute sub-agent per iteration */
     subAgent?: {
         name: string;
@@ -89,4 +129,36 @@ export interface ForEachOperation {
         /** JSON mapping from the prompt's response into the payload, per iteration. */
         outputMapping?: string;
     };
+
+    /**
+     * Enqueue work items onto a WorkQueue topic for bounded parallel fan-out instead of executing
+     * inline per iteration. The loop suspends cleanly until queued items settle (or fail terminally).
+     */
+    enqueue?: ForEachEnqueueOperation;
+}
+
+/**
+ * WorkQueue fan-out configuration when a `ForEach` loop dispatches iterations via `Enqueue`.
+ */
+export interface ForEachEnqueueOperation {
+    /** Destination WorkQueue topic name (defaults to `Limits.TaskGraphQueue.DefaultEnqueueTopicName`). */
+    topic?: string;
+    /** Optional registered `BaseWorkHandler` key for consumer execution. */
+    handlerKey?: string;
+    /** Optional MemberJunction Action name run by the default queue item worker per item. */
+    actionName?: string;
+    /** Optional MemberJunction Sub-Agent name run by the default queue item worker per item. */
+    subAgentName?: string;
+    /** Static or expression payload merged into each published queue item. */
+    payloadTemplate?: Record<string, unknown>;
+    /** Optional correlation key prefix/path; defaults to deterministic `<graphRunId>:<stepInvocationId>`. */
+    correlationKey?: string;
+    /** Bounded concurrent WorkQueue publish operations (clamped by `Limits.TaskGraphQueue.MaxEnqueuePublishConcurrency`). */
+    publishConcurrency?: number;
+    /** Bounded concurrent active isolated runners on the host (clamped by `Limits.TaskGraphQueue.MaxConcurrentIsolatedRunners`). */
+    maxActiveRunners?: number;
+    /** Maximum delivery/retry attempts per queued item (clamped by `Limits.TaskGraphQueue.MaxEnqueueRedeliveryAttempts`). */
+    maxRetries?: number;
+    /** Deadline in hours while waiting for fan-out items to finish. */
+    expiresInHours?: number;
 }

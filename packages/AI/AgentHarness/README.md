@@ -109,7 +109,21 @@ container, no network.
 ### `WorkspacePath` means "as the harness sees it"
 
 A host path under the local provider; a **container-internal** path under Docker. Pass it to harness
-processes — do **not** open it with `fs` unless you know you are on the local provider.
+processes — do **not** open it with `fs` unless you know you are on the local provider. When host-side
+code needs to stage request files or read output artifacts from the bind mount, use
+`SandboxHandle.HostWorkspacePath`.
+
+### Container limits and hardening (`SandboxConfig`)
+
+`DockerSandboxProvider` maps optional `SandboxConfig` fields onto `docker run` flags before the image (`LocalDirectorySandboxProvider` ignores them):
+
+- `Cpus`: CPU quota in cores (`--cpus <n>`).
+- `MemoryMb`: hard memory limit in megabytes (`--memory <n>m`).
+- `PidsLimit`: maximum process/thread count inside the container (`--pids-limit <n>`).
+- `ShmSizeMb`: `/dev/shm` size in megabytes (`--shm-size <n>m`).
+- `ReadOnlyRoot`: read-only root filesystem with writable `/tmp` (`--read-only --tmpfs /tmp:rw,size=256m`).
+- `User`: container process UID/GID (`--user <uid:gid>`) for bind-mount ownership parity.
+- `DropCapabilities`: drop all Linux capabilities and block privilege escalation (`--cap-drop ALL --security-opt no-new-privileges`).
 
 ---
 
@@ -155,17 +169,83 @@ how a cost ceiling stops protecting anything.
 
 ---
 
-## Credentials
+## Credentials & GitHub Sandbox Auth (`HarnessCredentialResolver`)
 
 `MJ: AI Agent Credentials` records the **grant edge** — which credentials an agent carries into its
 sandbox. Custody stays in `MJ: Credentials` / `CredentialEngine`.
 
 Environment injection is the **only** channel by which a secret reaches the harness, and it carries
 exactly what was granted — never the MJAPI process environment, never DB credentials, never a user
-token.
+token from another user.
+
+All credential resolution flows through [`HarnessCredentialResolver`](./src/HarnessCredentialResolver.ts), which routes every lookup through `CredentialEngine.Instance.getCredential()` (preserving `MJ: Audit Logs` decryption audit entries, `LastUsedAt` updates, `IsActive` filtering, and expiration policy checks):
+
+| Credential Type / Mode | Sandbox Environment Behavior |
+|---|---|
+| **`GitHub App`** (`appId`, `installationId`, `privateKey`) | **Never injects the RSA private key PEM into the container.** Instead, signs a short-lived RS256 JWT on the host and exchanges it with GitHub for a 1-hour installation access token (`contents: write`, `pull_requests: write`, `issues: write`, `actions: read`, `checks: read`, `metadata: read`) scoped to the credential's `allowedRepositories`. Injects the short-lived token into both `GH_TOKEN` and `GITHUB_TOKEN`. |
+| **`GitHub Personal Access Token`** / API Key | Extracts the scalar token (`token` / `apiKey` / `accessToken`) from the encrypted JSON `Values` payload and mirrors `GH_TOKEN` ↔ `GITHUB_TOKEN` so both `gh` CLI and `git` credential helpers work out of the box. |
+| **Per-User 3LO OAuth** (`EnvVarName = 'GH_TOKEN_USER_3LO'` or `CredentialID = null` on a GitHub env var) | Resolves `UserOAuth3LO:GitHub:<contextUser.ID>` strictly for the calling `contextUser` via `CredentialEngine` (which enforces `ownerUserId === contextUser.ID` and throws `CredentialOwnerMismatchError` on any cross-user mismatch). Also injects `GIT_AUTHOR_NAME`, `GIT_COMMITTER_NAME`, `GIT_AUTHOR_EMAIL`, and `GIT_COMMITTER_EMAIL` from `contextUser` so commits and PRs inside the CLI session are attributed to the signed-in user. |
 
 Distinct from `MJ: AI Credential Bindings`, which is inference-selection plumbing for
 `AIPromptRunner` failover when *MJ itself* executes a prompt.
+
+---
+
+## Multi-Account CLI Subscription Pooling & Quota Cooldown Failover
+
+When running local CLI harnesses (`ClaudeCodeCliAdapter`, `AntigravityCliAdapter`, `CodexAdapter`, `GeminiCliAdapter`) in subscription login mode (`authMode: 'cli-login'` or `'auto'` with a local login), `HarnessAccountPoolService` balances turns across `1 + N` accounts without requiring migration away from your default OS login:
+
+- **Zero-friction `1 + N` hybrid pooling:** `includeOsDefaultLogin` defaults to `true`, so your existing OS `$HOME` login is automatically included as `os-default-<vendor>` alongside any isolated slots enrolled under `~/.mj/harness-accounts` (overridable via `MJ_HARNESS_ACCOUNT_POOL_DIR`).
+- **Per-vendor isolation (`envOverrides`):**
+  - `claude`: sets `CLAUDE_CONFIG_DIR` (and optional `CLAUDE_CODE_OAUTH_TOKEN`).
+  - `codex`: sets `CODEX_HOME`.
+  - `agy` & `gemini`: prepares an isolated `$HOME` + `$XDG_CONFIG_HOME` directory via `PrepareIsolatedHomeSlotDir`, safely symlinking read-through developer configs (`.gitconfig`, `.ssh`, `.npmrc`, `.nvm`, `.volta`, `.asdf`, `.local`, `.cargo`, plus `Library/Caches` on macOS or `.cache` on Linux) while keeping `.gemini/antigravity`, `.config/antigravity`, `.gemini/oauth_creds.json`, and `.gemini/google_accounts.json` strictly local per slot.
+- **Lock-free per-lease tracking:** Active leases are stored as individual files under `<poolDir>/leases/<leaseId>.json` with PID + TTL tracking. Expired leases and leases whose PID is no longer alive are automatically reclaimed.
+- **Balancing strategies:**
+  - `least-in-flight` (default): minimizes `activeLeaseCount / weight`, breaking ties by oldest `lastUsedAtIso` (LRU), then lowest `priority`, then `slotId`.
+  - `weighted`: deterministic proportional distribution favoring lowest `totalTurnsExecuted / weight` among minimal in-flight slots.
+  - `round-robin`: cycles evenly across healthy slots, persisting `roundRobinCursorByVendor`.
+  - `priority-failover`: always selects the lowest `priority` healthy slot, failing over only when higher-priority slots enter cooldown or are disabled/excluded.
+- **Automatic mid-run quota failover (`HarnessQuotaClassifier` + `HarnessAgentBase`):**
+  - Detects `429`, `rate_limit_error`, `overloaded_error`, `"hit your limit"`, `"usage limit"`, `"quota exceeded"`, `"too many requests"`, `"resets at"`, and `"try again in ..."` errors across all 4 CLIs and parses advertised reset timestamps (defaulting to a 15-minute cooldown when omitted).
+  - Places the exhausted slot into cooldown, releases its lease, acquires the next healthy slot, **clears `ExternalSessionID`** (since vendor CLI `--resume` / `--conversation` IDs are account-scoped), restarts the adapter session cleanly, and prepends a `[Cross-Account Continuity Handoff]` preamble instructing the new account to inspect `git status` / `git diff` in the shared working tree before continuing.
+
+### Per-Run Configuration (`accountPool`)
+
+```jsonc
+{
+  "harnessName": "Claude Code",
+  "authMode": "cli-login",
+  "accountPool": {
+    "enabled": true,
+    "strategy": "least-in-flight", // least-in-flight | round-robin | weighted | priority-failover
+    "maxAccountSwitchesPerRun": 3
+  }
+}
+```
+
+### CLI Management (`mj harness account`)
+
+```bash
+# List enrolled & OS-default accounts with auth status, active leases, and cooldowns
+mj harness account list
+mj harness account list --vendor claude --json
+
+# Enroll an additional isolated subscription slot and launch interactive login
+mj harness account add claude --label "Pro #2" --weight 2 --priority 50
+mj harness account add agy --label "Team Seat"
+mj harness account add codex --label "Codex #2" --no-login
+
+# Re-authenticate an existing slot (clears active cooldown)
+mj harness account login claude-pro-2
+
+# Operational controls
+mj harness account set-strategy weighted
+mj harness account disable claude-pro-2
+mj harness account enable claude-pro-2
+mj harness account clear-cooldown claude-pro-2
+mj harness account remove claude-pro-2 --purge-files
+```
 
 ---
 

@@ -1,4 +1,4 @@
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, TrimTrailingChars } from '@memberjunction/global';
 import {
   AppliedMessageFilters,
   BaseCommunicationProvider,
@@ -379,7 +379,7 @@ export class GmailProvider extends BaseCommunicationProvider {
       emailContent.push(message.ProcessedBody || '');
     }
     
-    return Buffer.from(emailContent.join('\r\n')).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return TrimTrailingChars(Buffer.from(emailContent.join('\r\n')).toString('base64').replace(/\+/g, '-').replace(/\//g, '_'), '=');
   }
 
   /**
@@ -755,10 +755,9 @@ export class GmailProvider extends BaseCommunicationProvider {
       emailContent.push(`--${boundary}--`);
 
       // Encode email content
-      const raw = Buffer.from(emailContent.join('\r\n')).toString('base64')
+      const raw = TrimTrailingChars(Buffer.from(emailContent.join('\r\n')).toString('base64')
         .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
+        .replace(/\//g, '_'), '=');
 
       // Send the forwarded message
       const result = await cached.client.users.messages.send({

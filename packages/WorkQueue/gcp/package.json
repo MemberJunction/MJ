@@ -1,0 +1,49 @@
+{
+  "name": "@memberjunction/work-queue-gcp",
+  "type": "module",
+  "version": "6.3.0-edge.2",
+  "description": "MemberJunction: Google Cloud Pub/Sub transport and Cloud Run HTTP push adapter for the durable work queue. No MemberJunction runtime dependencies.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./cloudrun": {
+      "types": "./dist/cloudrun/index.d.ts",
+      "default": "./dist/cloudrun/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    }
+  },
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check:cloudrun-bundle": "node scripts/check-cloudrun-bundle.mjs",
+    "test:live": "vitest run --config vitest.live.config.ts"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@google-cloud/pubsub": "^6.4.1",
+    "@memberjunction/work-queue-core": "6.3.0-edge.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "esbuild": "^0.27.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

@@ -15,7 +15,7 @@ describe('predictive-studio.nav — door section descriptors', () => {
   it('Studio hosts the build/run sections; Models hosts the lifecycle sections (no overlap, no Predictions)', () => {
     const studio = STUDIO_SECTIONS.map((s) => s.key);
     const models = MODELS_SECTIONS.map((s) => s.key);
-    expect(studio).toEqual(['home', 'pipelines', 'catalog', 'experiments', 'compare']);
+    expect(studio).toEqual(['home', 'units', 'protocols', 'pipelines', 'catalog', 'experiments', 'compare']);
     expect(models).toEqual(['registry', 'production']);
     // disjoint — a section lives in exactly one door
     expect(studio.filter((k) => models.includes(k))).toEqual([]);
@@ -28,8 +28,8 @@ describe('predictive-studio.nav — door section descriptors', () => {
     }
   });
 
-  it('groups Studio as ungrouped Overview, then Build, then Run (first-seen order)', () => {
-    expect(SectionGroups(STUDIO_SECTIONS)).toEqual(['', 'Build', 'Run']);
+  it('groups Studio as ungrouped Overview, then Define, Build and Run (first-seen order)', () => {
+    expect(SectionGroups(STUDIO_SECTIONS)).toEqual(['', 'Define', 'Build', 'Run']);
     expect(SectionsInGroup(STUDIO_SECTIONS, '').map((s) => s.key)).toEqual(['home']);
     expect(SectionsInGroup(STUDIO_SECTIONS, 'Build').map((s) => s.key)).toEqual(['pipelines', 'catalog']);
     expect(SectionsInGroup(STUDIO_SECTIONS, 'Run').map((s) => s.key)).toEqual(['experiments', 'compare']);
@@ -50,7 +50,7 @@ describe('predictive-studio.nav — lookups (tolerant fallbacks)', () => {
     expect(SectionIcon(STUDIO_SECTIONS, 'registry')).toMatch(/^fa-/);
   });
 
-  it('hasSection scopes membership to the door', () => {
+  it('HasSection scopes membership to the door', () => {
     expect(HasSection(STUDIO_SECTIONS, 'experiments')).toBe(true);
     expect(HasSection(STUDIO_SECTIONS, 'registry')).toBe(false);
     expect(HasSection(MODELS_SECTIONS, 'production')).toBe(true);
@@ -58,12 +58,14 @@ describe('predictive-studio.nav — lookups (tolerant fallbacks)', () => {
   });
 });
 
-describe('predictive-studio.nav — routeHomeNavigate (cross-door Overview navigation)', () => {
+describe('predictive-studio.nav — RouteHomeNavigate (cross-door Overview navigation)', () => {
   it('a Studio target switches the section in-place', () => {
     expect(RouteHomeNavigate('pipelines')).toEqual({ Kind: 'section', Key: 'pipelines' });
     expect(RouteHomeNavigate('catalog')).toEqual({ Kind: 'section', Key: 'catalog' });
     expect(RouteHomeNavigate('experiments')).toEqual({ Kind: 'section', Key: 'experiments' });
     expect(RouteHomeNavigate('compare')).toEqual({ Kind: 'section', Key: 'compare' });
+    expect(RouteHomeNavigate('units')).toEqual({ Kind: 'section', Key: 'units' });
+    expect(RouteHomeNavigate('protocols')).toEqual({ Kind: 'section', Key: 'protocols' });
   });
 
   it('a Models target crosses to the Models door, deep-linked to that section', () => {
@@ -73,5 +75,12 @@ describe('predictive-studio.nav — routeHomeNavigate (cross-door Overview navig
 
   it('navigating to home (the section we are already on) is a no-op', () => {
     expect(RouteHomeNavigate('home')).toEqual({ Kind: 'none' });
+  });
+});
+
+describe('Studio door — Define group', () => {
+  it('hosts Prediction Units and Evaluation Protocols before Build', () => {
+    expect(SectionsInGroup(STUDIO_SECTIONS, 'Define').map((s) => s.key)).toEqual(['units', 'protocols']);
+    expect(HasSection(STUDIO_SECTIONS, 'protocols')).toBe(true);
   });
 });

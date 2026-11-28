@@ -16,6 +16,14 @@ import type { GetRecordDependenciesOptions } from "./databaseProviderBase";
 export type { GetRecordDependenciesOptions } from "./databaseProviderBase";
 
 /**
+ * Mode controlling how server-side database providers handle field-level concurrency checks on UPDATE:
+ * - `'off'` (default): Skip server-side concurrency checking on direct server saves unless overridden per save (e.g. GraphQL mutations with `OldValues___` pass `'enforce'`).
+ * - `'log'`: Detect field-level conflicts under a row lock and log a warning, then allow the save to proceed.
+ * - `'enforce'`: Detect field-level conflicts under a row lock and reject the save (`Save()` returns `false` and populates `LatestResult.ConcurrencyConflict`).
+ */
+export type ConcurrencyCheckMode = 'off' | 'log' | 'enforce';
+
+/**
  * Base configuration class for data providers.
  * Contains schema inclusion/exclusion rules and configuration data.
  * Used to configure which database schemas should be included or excluded from metadata scanning.
@@ -51,6 +59,33 @@ export class ProviderConfigDataBase<D = any> {
      * default to an in-memory store.
      */
     public LocalStorageProvider?: ILocalStorageProvider;
+
+    /**
+     * Server-side concurrency check mode for entity UPDATEs (`'off' | 'log' | 'enforce'`).
+     * Defaults to `'off'` on server-side database providers when omitted (GraphQL mutations with
+     * `OldValues___` still enforce concurrency per save via `EntitySaveOptions.ConcurrencyCheck`).
+     */
+    public ConcurrencyCheck?: ConcurrencyCheckMode;
+
+    /**
+     * Controls whether entity UPDATEs against CodeGen-generated routines (`spUpdateGenerated === true`)
+     * bind only dirty columns instead of every loaded column. Defaults to `true` on server-side
+     * database providers when omitted. Set to `false` as an operational escape hatch to restore
+     * legacy full-row parameter binding globally.
+     */
+    public DeltaUpdates?: boolean;
+
+    /**
+     * Whether the provider loads the saved-query metadata (queries, their categories, fields,
+     * parameters, permissions, entities, dependencies, platform SQL and SQL dialects) into its
+     * metadata object, where the deprecated `Queries`, `QueryFields`, … getters read it. Defaults to
+     * `false`: those items are not read, a saved query does not refresh the metadata, and the
+     * getters return empty arrays. `QueryEngine` (`@memberjunction/core-entities`) is the source of
+     * query metadata either way. Set to `true` only for code that still reads the deprecated
+     * getters; the option is removed with them in 7.0. Every process sharing a metadata cache
+     * should use the same setting.
+     */
+    public LoadQueryMetadata?: boolean;
 
     /**
      * Constructor for ProviderConfigDataBase
@@ -299,6 +334,21 @@ export interface IEntityDataProvider {
     FindISAChildEntities?(entityInfo: EntityInfo, recordPKValue: string, contextUser?: UserInfo): Promise<{ ChildEntityName: string }[]>;
 
     /**
+     * Batch-discovers IS-A child entity types for multiple parent primary keys in a single
+     * UNION ALL SQL query (chunked automatically for large batches).
+     *
+     * @param entityInfo The parent entity's EntityInfo (whose `ChildEntities` are probed)
+     * @param recordPKValues Primary key values to probe across child views
+     * @param contextUser Optional context user for server-side operations
+     * @returns Map keyed by canonical lowercased primary-key string to ordered matching child entity names
+     */
+    FindISAChildEntitiesBatch?(
+        entityInfo: EntityInfo,
+        recordPKValues: string[],
+        contextUser?: UserInfo
+    ): Promise<Map<string, string[]>>;
+
+    /**
      * Whether this provider can execute a multi-record unit of work atomically, in-process.
      *
      * `true` for server-side database providers (`DatabaseProviderBase` and subclasses); `false`
@@ -328,6 +378,25 @@ export interface IEntityDataProvider {
      *          `RunInEntityTransaction()` which does that for you.
      */
     BeginEntityTransaction?(): Promise<EntityTransactionScope>;
+
+    /**
+     * Runs `fn` as if the caller were in no transaction on this provider, even when its async scope
+     * belongs to an open one: statements `fn` issues run on the pool and commit on their own.
+     *
+     * For fire-and-forget writes (see `BaseEntitySaveQueue`'s `detachFromTransaction`): the caller
+     * never awaits them, so it cannot order them before its transaction's COMMIT. Bound to the
+     * transaction, such a write either reaches SQL behind the COMMIT and is rejected, or is rolled back
+     * with work it merely observed.
+     *
+     * Limit: if `fn` itself begins a transaction (an IS-A save, a save with companions, a save that
+     * enlists a Durable After* binding) while the caller's transaction is still open on this instance,
+     * that begin joins the open transaction as a foreign savepoint (logged once per transaction) rather
+     * than opening its own. Detaching only keeps `fn`'s plain statements off the transaction.
+     *
+     * Implemented by `GenericDatabaseProvider`, which tracks which async scope owns its transaction.
+     * Absent on providers with no in-process transaction (e.g. `GraphQLDataProvider`): nothing to leave.
+     */
+    RunOutsideAmbientTransaction?<T>(fn: () => Promise<T>): Promise<T>;
 }
 
 /**
@@ -357,9 +426,23 @@ export class EntitySaveOptions {
      * Setting this to true means that the system will not look for inconsistency between the state of the record at the time it was loaded and the current database version of the record. This is normally on
      * because it is a good way to prevent overwriting changes made by other users that happened after your version of the record was loaded. However, in some cases, you may want to skip this check, such as when you are
      * updating a record that you know has not been changed by anyone else since you loaded it. In that case, you can set this property to true to skip the check which will be more efficient.
-     * * IMPORTANT: This is only used for client-side providers. On server-side providers, this check never occurs because server side operations are as up to date as this check would yield. 
      */
     SkipOldValuesCheck?: boolean = false;
+
+    /**
+     * Optional field-name-keyed baseline of values as the caller originally observed them before
+     * editing. Set by GraphQL resolvers (`ResolverBase`) from `input.OldValues` so the server-side
+     * provider's locked concurrency read compares the stored row against what the client actually
+     * saw rather than what `InnerLoad` fetched moments before `Save()`. When omitted on a direct
+     * server-side `Save()`, the provider falls back to each dirty field's `EntityField.OldValue`.
+     */
+    ConcurrencyBaseline?: Record<string, unknown>;
+
+    /**
+     * Optional per-save override for server-side field-level concurrency checking (`'off' | 'log' | 'enforce'`).
+     * When omitted, the database provider's configured `ConcurrencyCheck` mode (`'off'` by default) applies.
+     */
+    ConcurrencyCheck?: ConcurrencyCheckMode;
     
     /**
      * When set to true, the entity will skip the asynchronous ValidateAsync() method during save.
@@ -641,15 +724,37 @@ export interface ILocalStorageProvider {
     readonly SupportsCrossProcessPersistence?: boolean;
 
     /**
-     * Whether other processes read and write the same storage — `true` for Redis, where every
-     * server in a fleet shares one keyspace; `false`/omitted for per-process or per-browser
-     * stores (in-memory, IndexedDB, localStorage, MMKV).
+     * Whether other server processes read and write the same distributed storage — `true` for
+     * Redis, where every server in a fleet shares one keyspace; `false`/omitted for per-process
+     * or per-browser stores (in-memory, IndexedDB, localStorage, MMKV).
      *
-     * `LocalCacheManager` keeps its registry (per-process eviction accounting) out of shared
-     * storage: persisting it there made every server overwrite one key with its own view and
-     * publish the whole registry to every peer on each write.
+     * Setting this to `true` opts into multi-server fleet semantics in `LocalCacheManager`:
+     * - Keeps the eviction registry (`__MJ_CACHE_REGISTRY__`) process-local (equivalent to
+     *   {@link ProcessLocalRegistry}).
+     * - On a schema mismatch during a serving read, leaves the slot in place and applies a
+     *   rolling-deploy write hold rather than deleting the slot (avoiding delete/reload loops
+     *   across peers on either side of a migration).
+     * - Delegates TTL expiry to the store itself instead of deleting entries by this process's
+     *   local clock.
+     *
+     * Providers that only want a process-local eviction registry without multi-server fleet
+     * semantics (for example, browser tabs sharing IndexedDB via a SharedWorker) should set
+     * {@link ProcessLocalRegistry} instead.
      */
     readonly SharedAcrossProcesses?: boolean;
+
+    /**
+     * Keeps `LocalCacheManager`'s eviction registry (`__MJ_CACHE_REGISTRY__`) in-memory per
+     * process/tab (skipping `loadRegistry` and `persistRegistry`) without opting into the
+     * multi-server fleet semantics of {@link SharedAcrossProcesses}.
+     *
+     * Use this when multiple execution contexts share a local store (such as browser tabs
+     * routing IndexedDB through a SharedWorker) so they do not overwrite one shared registry
+     * key, while still wanting immediate schema-mismatch slot eviction and local `defaultTTLMs`
+     * expiry because the underlying store is not a rolling-deploy server fleet and does not
+     * expire keys natively.
+     */
+    readonly ProcessLocalRegistry?: boolean;
 
     /**
      * Retrieves a value from storage. The implementation is responsible for any
@@ -710,6 +815,28 @@ export interface ILocalStorageProvider {
      * @param options - Optional expiry and index hints; a provider ignores what it cannot honour.
      */
     SetItem<T>(key: string, value: T, category?: string, options?: LocalStorageWriteOptions): Promise<void>;
+
+    /**
+     * Stores a structured object directly without requiring caller-side serialization.
+     * When implemented by providers like `BrowserIndexedDBStorageProvider`, the underlying
+     * store uses native structured cloning rather than JSON stringification.
+     *
+     * @typeParam T - Type of the object being stored
+     * @param key - The key to store under
+     * @param value - The object to store
+     * @param category - Optional category for key isolation
+     */
+    SetObject?<T>(key: string, value: T, category?: string): Promise<void>;
+
+    /**
+     * Retrieves a structured object directly without requiring caller-side parsing.
+     * Returns `null` if the key is missing or not present.
+     *
+     * @typeParam T - Expected type of the retrieved object
+     * @param key - The key to retrieve
+     * @param category - Optional category for key isolation
+     */
+    GetObject?<T>(key: string, category?: string): Promise<T | null>;
 
     /**
      * Removes an item from storage.
@@ -773,12 +900,39 @@ export interface ILocalStorageProvider {
      * next process waiting for it can proceed. Does nothing for a lease held by someone else.
      */
     ReleaseLease?(name: string): Promise<void>;
+
+    /**
+     * Applies an incremental row-level delta to an existing `RunViewCache` entry in place without
+     * serializing or transmitting the full row array.
+     *
+     * Implemented by two-tier L1+L2 and Redis HASH storage providers so single-row saves/deletes on
+     * large cached views update only the mutated row keys in $O(\Delta)$ instead of rewriting the
+     * entire multi-megabyte snapshot.
+     *
+     * @param fingerprint - The `RunViewCache` slot key
+     * @param deltaPayloadJson - Compact JSON string encoding `CacheRowDeltaPayload`
+     * @param updatedSlotValue - Full post-mutation slot object (`CachedRunViewData`) already held in memory by `LocalCacheManager` (so L1 reference-sharing tiers can adopt the frozen reference in $O(1)$ without re-parsing)
+     * @param options - Per-write TTL, `IndexGroup`, `PrimaryKeyFields`, and pub/sub hints
+     * @returns `true` when the provider applied the delta in place (skipping `SetItem`), or `false` when the slot was absent/incompatible and the caller should fall back to `SetItem`.
+     */
+    ApplyRunViewRowDelta?<T = unknown>(
+        fingerprint: string,
+        deltaPayloadJson: string,
+        updatedSlotValue: T,
+        options?: LocalStorageWriteOptions
+    ): Promise<boolean>;
 }
 
 /**
  * Per-write options for {@link ILocalStorageProvider.SetItem}.
  */
 export interface LocalStorageWriteOptions {
+    /**
+     * Ordered primary-key field names for `RunViewCache` entries so storage providers like
+     * Redis HASH / TwoTier L1+L2 can index rows by PK without heuristics.
+     */
+    PrimaryKeyFields?: string[];
+
     /**
      * Seconds until the entry expires, overriding the provider's default. `0` stores the entry
      * without expiry. Omit to use the provider's default.
@@ -791,6 +945,19 @@ export interface LocalStorageWriteOptions {
      * {@link ILocalStorageProvider.GetIndexGroupKeys} without listing the whole category.
      */
     IndexGroup?: string;
+
+    /**
+     * Optional override for the pub/sub notification action emitted by distributed storage
+     * providers (such as `RedisLocalStorageProvider` in `'full'` publish mode). When set to
+     * `'row_delta'` alongside {@link pubSubData}, the storage key still stores the full `value`,
+     * while pub/sub broadcasts only the compact row-delta payload.
+     */
+    pubSubAction?: 'set' | 'row_delta';
+
+    /**
+     * Compact JSON payload broadcast over pub/sub when {@link pubSubAction} is `'row_delta'`.
+     */
+    pubSubData?: string;
 }
 
 /**
@@ -828,6 +995,23 @@ export interface IFileSystemProvider {
      * @param filePath - Full path to the file
      */
     FileExists(filePath: string): Promise<boolean>;
+}
+
+/**
+ * Options controlling how {@link IMetadataProvider.GetEntityObject} initializes a newly
+ * instantiated entity when no `loadKey` is supplied.
+ */
+export interface GetEntityObjectOptions {
+    /**
+     * When `true`, skips calling `NewRecord()` after constructing and configuring the entity.
+     *
+     * Use this only when the caller immediately hydrates the entity via `LoadFromData(...)` or
+     * `LoadFromDataBatchAsISAParent(...)`. Skipping `NewRecord()` avoids minting a throwaway
+     * UUID primary key, hydrating all `EntityField` instances for defaults that `LoadFromData`
+     * immediately discards, and broadcasting a synthetic `'new_record'` event — keeping
+     * `BaseEntity`'s lazy `_raw` row fast path intact.
+     */
+    SkipNewRecord?: boolean;
 }
 
 /**
@@ -890,23 +1074,23 @@ export interface IMetadataProvider {
      */
     get AuthorizationRoles(): AuthorizationRoleInfo[]
 
-    /** @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get Queries(): QueryInfo[]
-    /** @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get QueryFields(): QueryFieldInfo[]
-    /** @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get QueryCategories(): QueryCategoryInfo[]
-    /** @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get QueryPermissions(): QueryPermissionInfo[]
-    /** @deprecated Use `QueryEngine.Instance.QueryEntities` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.QueryEntities` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get QueryEntities(): QueryEntityInfo[]
-    /** @deprecated Use `QueryEngine.Instance.Parameters` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Parameters` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get QueryParameters(): QueryParameterInfo[]
-    /** @deprecated Use `QueryEngine.Instance.Dependencies` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Dependencies` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get QueryDependencies(): QueryDependencyInfo[]
-    /** @deprecated Use `QueryEngine.Instance.SQLDialects` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.SQLDialects` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get SQLDialects(): SQLDialectInfo[]
-    /** @deprecated Use `QueryEngine.Instance.QuerySQLs` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.QuerySQLs` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get QuerySQLs(): QuerySQLInfo[]
 
     get Libraries(): LibraryInfo[]
@@ -941,6 +1125,14 @@ export interface IMetadataProvider {
      * @throws Error if the record cannot be found or loaded
      */
     GetEntityObject<T extends BaseEntity>(entityName: string, loadKey: CompositeKey, contextUser?: UserInfo): Promise<T>
+
+    /**
+     * Optional fast-path entity instantiation method accepting {@link GetEntityObjectOptions}
+     * (for example `{ SkipNewRecord: true }` prior to `LoadFromData`).
+     * Keeping this separate and optional on `IMetadataProvider` preserves exact backwards
+     * compatibility for lightweight test stubs and custom `IMetadataProvider` implementations.
+     */
+    GetEntityObjectWithOptions?<T extends BaseEntity>(entityName: string, options: GetEntityObjectOptions, contextUser?: UserInfo): Promise<T>
     /**
      * Returns a list of dependencies - records that are linked to the specified Entity/RecordID combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
      * for this simply reflects the foreign key relationships that exist in the database. The CodeGen tool is what detects all of the relationships and generates the metadata that is used by MemberJunction. The metadata in question
@@ -1215,8 +1407,12 @@ export type RunViewResult<T = any> = {
      * Total number of rows that match the view criteria, not just the number returned in the Results[] array
      * This number will only be different when the view is configured to have a UserViewMaxRows value and the criteria of the view in question
      * has more than that # of rows. Otherwise it will be the same value as RowCount.
+     *
+     * A number here is always a real total. It is `undefined` only when the caller passed
+     * `SkipTotalRowCount: true`, which asks the provider not to count; a call without that flag
+     * always gets a number. `ResultType: 'count_only'` ignores the flag and always counts.
      */
-    TotalRowCount: number;
+    TotalRowCount?: number;
     /**
      * Time elapsed in executing the view (in milliseconds)
      */
@@ -1910,6 +2106,30 @@ export interface RemoteOpInvokeOptions {
      * client loudly instead of mis-deserializing. Usually derived from the operation definition.
      */
     contractFingerprint?: string;
+    /**
+     * Optional opaque handle for an existing backing run (e.g. a `ProcessRunID`) forwarded into
+     * {@link RemoteOpServerContext.handle} during server-side dispatch.
+     */
+    handle?: string;
+    /**
+     * Normalized HTTP `Origin` header from the inbound request (e.g. `https://app.example.com`),
+     * populated by the server transport when invoked over HTTP/GraphQL. Undefined for in-process
+     * server calls or requests without an `Origin` header.
+     */
+    requestOrigin?: string;
+    /**
+     * Caller's network IP address as resolved by the HTTP host (`req.ip`), populated by the server
+     * transport for rate-limiting and forensic audit trails. Never use as an identity assertion.
+     */
+    clientIp?: string;
+    /**
+     * Caller's authenticated session identifier, populated by the server transport when available.
+     */
+    sessionId?: string;
+    /**
+     * SHA-256 hash of the caller's MJ API key when authenticated via `mj_sk_*` API key / MCP.
+     */
+    apiKeyHash?: string;
 }
 
 /**
@@ -2052,23 +2272,23 @@ export class AllMetadata {
      * for lazy, on-demand filtering — mirrors the `AllQueryFields` pattern.
      */
     AllAuthorizationRoles: AuthorizationRoleInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQueryCategories: QueryCategoryInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQueries: QueryInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQueryFields: QueryFieldInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQueryPermissions: QueryPermissionInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQueryEntities: QueryEntityInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQueryParameters: QueryParameterInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQueryDependencies: QueryDependencyInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllSQLDialects: SQLDialectInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQuerySQLs: QuerySQLInfo[] = [];
     AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
     AllLibraries: LibraryInfo[] = [];

@@ -22,7 +22,7 @@ export const COMPLETE_TASK_TOOL = 'complete_task';
 export const SUB_AGENT_TOOL_PREFIX = 'delegate_to_';
 /** The fixed control tools. Sub-agent tools are recognised by {@link SUB_AGENT_TOOL_PREFIX}. */
 export const NATIVE_CONTROL_TOOL_NAMES: readonly string[] = [PAYLOAD_CHANGE_TOOL, ASK_USER_TOOL, COMPLETE_TASK_TOOL];
-/** Providers cap tool names at 64 characters. */
+// ProtocolLimit: OpenAI / Anthropic / Gemini chat-completions function tool name maximum length is 64 characters
 const MAX_TOOL_NAME_LENGTH = 64;
 
 /** Every tool the agent can declare, and what a call to it means. Discriminated on `kind`. */
@@ -143,12 +143,43 @@ function completeTaskPayloadParameter(form: CompleteTaskPayloadForm): ParamValue
     };
 }
 
+/** Schema for the optional `artifactDirective` argument on `complete_task`. */
+function completeTaskArtifactDirectiveParameter(): ParamValueSchema {
+    return {
+        type: 'object',
+        description:
+            'Optional. Controls how the run creates or versions a standalone payload artifact on completion: ' +
+            '{"behavior": "suppress" | "create-new" | "version-source", "targetArtifactId"?: string, "name"?: string, "description"?: string}.',
+        properties: {
+            behavior: {
+                type: 'string',
+                enum: ['suppress', 'create-new', 'version-source'],
+                description: 'Whether to suppress payload artifact creation, create a new artifact, or version an existing target artifact.'
+            },
+            targetArtifactId: {
+                type: 'string',
+                description: 'Target artifact UUID or alpha ID when behavior is "version-source".'
+            },
+            name: {
+                type: 'string',
+                description: 'Optional display title for a newly created artifact.'
+            },
+            description: {
+                type: 'string',
+                description: 'Optional description for a newly created artifact.'
+            }
+        }
+    };
+}
+
 /** How {@link BuildCompleteTaskTool} declares the tool. */
 export interface CompleteTaskToolOptions {
     /** Whether the tool carries a final payload change at all. Default true. */
     IncludePayloadChange?: boolean;
     /** The form of that parameter. Default `'string'`. */
     PayloadForm?: CompleteTaskPayloadForm;
+    /** When true, exposes `artifactDirective` on `complete_task` (for native-only agents with artifact support). */
+    IncludeArtifactDirective?: boolean;
 }
 
 /**
@@ -163,9 +194,11 @@ export interface CompleteTaskToolOptions {
  */
 export function BuildCompleteTaskTool(options: CompleteTaskToolOptions = {}): ChatTool {
     const includePayload = options.IncludePayloadChange !== false;
+    const includeArtifactDirective = options.IncludeArtifactDirective === true;
     const properties: Record<string, ParamValueSchema> = {
         message: { type: 'string', description: 'Your final answer or a brief summary of what you did.' },
-        ...(includePayload ? { payloadChangeRequest: completeTaskPayloadParameter(options.PayloadForm ?? 'string') } : {})
+        ...(includePayload ? { payloadChangeRequest: completeTaskPayloadParameter(options.PayloadForm ?? 'string') } : {}),
+        ...(includeArtifactDirective ? { artifactDirective: completeTaskArtifactDirectiveParameter() } : {})
     };
     const writes = includePayload
         ? 'put any final writes to the shared payload in payloadChangeRequest and your answer for the user or calling agent in message. The change is applied '
@@ -180,8 +213,15 @@ export function BuildCompleteTaskTool(options: CompleteTaskToolOptions = {}): Ch
     };
 }
 
+export interface SubAgentToolOptions {
+    /** When true, exposes `resumeRunId` in the tool's inputSchema so the parent can resume an open consult. */
+    consultEnabled?: boolean;
+    /** When non-empty, exposes `presetName` in the tool's inputSchema with these active preset names. */
+    presetNames?: string[];
+}
+
 /** One tool per sub-agent: `delegate_to_<sanitized name>`, described by the agent's own description. */
-export function BuildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
+export function BuildSubAgentTool(agent: MJAIAgentEntityExtended, options?: SubAgentToolOptions): ChatTool {
     const name = `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(agent.Name)}`.slice(0, MAX_TOOL_NAME_LENGTH);
     return {
         name,
@@ -190,7 +230,24 @@ export function BuildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
             type: 'object',
             properties: {
                 message: { type: 'string', description: 'Instructions for the sub-agent — what to do. Not the payload; it receives that separately.' },
-                terminateAfter: { type: 'boolean', description: 'true to end your own run when the sub-agent finishes; false (default) to continue with its result.' }
+                terminateAfter: { type: 'boolean', description: 'true to end your own run when the sub-agent finishes; false (default) to continue with its result.' },
+                ...(options?.consultEnabled === true
+                    ? {
+                        resumeRunId: {
+                            type: 'string',
+                            description: "Optional. The ID of this sub-agent's earlier run that ended with a question to you; set it only to answer that question and resume that run."
+                        }
+                    }
+                    : {}),
+                ...(options?.presetNames && options.presetNames.length > 0
+                    ? {
+                        presetName: {
+                            type: 'string',
+                            enum: options.presetNames,
+                            description: 'Configuration preset for this sub-agent'
+                        }
+                    }
+                    : {})
             },
             required: ['message']
         }
@@ -198,15 +255,23 @@ export function BuildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
 }
 
 /** @deprecated Use {@link BuildSubAgentTool}. */
-export function buildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
-    return BuildSubAgentTool(agent);
+export function buildSubAgentTool(agent: MJAIAgentEntityExtended, options?: SubAgentToolOptions): ChatTool {
+    return BuildSubAgentTool(agent, options);
 }
 
 /**
  * The fixed control tools this agent declares, with their bindings — `payload_change_request`,
  * `ask_user` and `complete_task`, each unless its configuration turns it off.
  */
-function buildControlBindings(control: NativeControlConfig): NativeToolBinding[] {
+export type SubAgentOptionsResolver = (agent: MJAIAgentEntityExtended) => SubAgentToolOptions | undefined;
+
+/** Options controlling optional control-tool parameters when building a native tool set. */
+export interface NativeToolSetBuildOptions {
+    /** When true, includes `artifactDirective` on `complete_task`. */
+    IncludeArtifactDirective?: boolean;
+}
+
+function buildControlBindings(control: NativeControlConfig, options?: NativeToolSetBuildOptions): NativeToolBinding[] {
     const bindings: NativeToolBinding[] = [];
     if (control.PayloadChangeTool) {
         const payload = BuildPayloadChangeTool();
@@ -217,7 +282,11 @@ function buildControlBindings(control: NativeControlConfig): NativeToolBinding[]
         bindings.push({ kind: 'askUser', toolName: ask.name, tool: ask });
     }
     if (control.Terminal === 'tool') {
-        const complete = BuildCompleteTaskTool({ IncludePayloadChange: control.PayloadChangeTool, PayloadForm: control.CompleteTaskPayload });
+        const complete = BuildCompleteTaskTool({
+            IncludePayloadChange: control.PayloadChangeTool,
+            PayloadForm: control.CompleteTaskPayload,
+            IncludeArtifactDirective: options?.IncludeArtifactDirective,
+        });
         bindings.push({ kind: 'complete', toolName: complete.name, tool: complete });
     }
     return bindings;
@@ -259,10 +328,14 @@ function addBinding(set: NativeToolSet, binding: NativeToolBinding, isControl: b
 export function BuildNativeToolSet(
     actionSet: ActionToolSet,
     subAgents: readonly MJAIAgentEntityExtended[],
-    control: NativeControlConfig = DEFAULT_NATIVE_CONTROL_CONFIG,
+    controlOrSubAgentOptions: NativeControlConfig | SubAgentOptionsResolver = DEFAULT_NATIVE_CONTROL_CONFIG,
     agentTools: readonly AgentToolDefinition[] = [],
-    frameworkTools: readonly AgentToolDefinition[] = []
+    frameworkTools: readonly AgentToolDefinition[] = [],
+    subAgentOptions?: SubAgentOptionsResolver,
+    buildOptions?: NativeToolSetBuildOptions
 ): NativeToolSet {
+    const control = typeof controlOrSubAgentOptions === 'function' ? DEFAULT_NATIVE_CONTROL_CONFIG : controlOrSubAgentOptions;
+    const resolveSubAgentOptions = typeof controlOrSubAgentOptions === 'function' ? controlOrSubAgentOptions : subAgentOptions;
     for (const reserved of NATIVE_CONTROL_TOOL_NAMES) {
         const clash = actionSet.byToolName.get(reserved);
         if (clash) {
@@ -280,7 +353,7 @@ export function BuildNativeToolSet(
     // Name order, as the action tools are: the sub-agents arrive in load order, and the declarations
     // have to read the same on every request for the provider's prompt cache to hold.
     for (const agent of [...subAgents].sort((a, b) => CompareToolNames(a.Name, b.Name))) {
-        const tool = BuildSubAgentTool(agent);
+        const tool = BuildSubAgentTool(agent, resolveSubAgentOptions?.(agent));
         addBinding(set, { kind: 'subAgent', toolName: tool.name, agent, tool }, true);
     }
     const reserved = [...NATIVE_CONTROL_TOOL_NAMES, ...FRAMEWORK_TOOL_NAMES];
@@ -292,13 +365,17 @@ export function BuildNativeToolSet(
         const tool: ChatTool = { name: definition.Name, description: definition.Description, inputSchema: definition.InputSchema };
         addBinding(set, { kind: 'agentTool', toolName: tool.name, tool, definition }, true);
     }
-    for (const binding of buildControlBindings(control)) {
+    for (const binding of buildControlBindings(control, buildOptions)) {
         addBinding(set, binding, true);
     }
     return set;
 }
 
 /** @deprecated Use {@link BuildNativeToolSet}. */
-export function buildNativeToolSet(actionSet: ActionToolSet, subAgents: readonly MJAIAgentEntityExtended[]): NativeToolSet {
-    return BuildNativeToolSet(actionSet, subAgents);
+export function buildNativeToolSet(
+    actionSet: ActionToolSet,
+    subAgents: readonly MJAIAgentEntityExtended[],
+    subAgentOptions?: SubAgentOptionsResolver
+): NativeToolSet {
+    return BuildNativeToolSet(actionSet, subAgents, subAgentOptions);
 }

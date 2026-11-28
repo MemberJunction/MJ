@@ -184,6 +184,64 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
             });
         });
 
+        it('names a new wake routine after the agent, like the routines Schedule Next Agent Wake creates', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({ AgentID: COS_AGENT_ID, UserID: USER_ALICE_ID, Status: 'Active', Agent: 'Chief of Staff' })
+            );
+            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+
+            const approvalRequest = {
+                ID: 'req-name-1', AgentID: COS_AGENT_ID, RequestForUserID: USER_ALICE_ID,
+                Status: 'Approved', Request: 'Send the update', Response: null, ResponseData: null,
+                ResponseByUserID: USER_ALICE_ID, RespondedAt: FIXED_NOW, Comments: null,
+            } as unknown as MJAIAgentRequestEntity;
+
+            await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(approvalRequest, aliceUser, provider, FIXED_NOW);
+
+            expect(savedRoutines[0].Name).toBe('Chief of Staff — Wake (approval-resolution)');
+        });
+
+        it('falls back to "AgentWake (<key>)" when an active policy does not name the agent', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({ AgentID: COS_AGENT_ID, UserID: USER_ALICE_ID, Status: 'Active', Agent: undefined })
+            );
+            runViewMock.mockResolvedValue({ Success: true, Results: [] });
+
+            const approvalRequest = {
+                ID: 'req-name-2', AgentID: COS_AGENT_ID, RequestForUserID: USER_ALICE_ID,
+                Status: 'Approved', Request: 'Send the update', Response: null, ResponseData: null,
+                ResponseByUserID: USER_ALICE_ID, RespondedAt: FIXED_NOW, Comments: null,
+            } as unknown as MJAIAgentRequestEntity;
+
+            await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(approvalRequest, aliceUser, provider, FIXED_NOW);
+
+            expect(savedRoutines[0].Name).toBe('AgentWake (approval-resolution)');
+        });
+
+        it('denies TriggerWakeOnAgentRequestResolution with POLICY_DENIED when user has no policy at all', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            runViewMock.mockResolvedValue({ Success: true, Results: [] });
+
+            const approvalRequest = {
+                ID: 'req-no-policy-1', AgentID: COS_AGENT_ID, RequestForUserID: USER_ALICE_ID,
+                Status: 'Approved', Request: 'Send the update', Response: null, ResponseData: null,
+                ResponseByUserID: USER_ALICE_ID, RespondedAt: FIXED_NOW, Comments: null,
+            } as Partial<MJAIAgentRequestEntity> as MJAIAgentRequestEntity;
+
+            const result = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+                approvalRequest,
+                aliceUser,
+                provider,
+                FIXED_NOW
+            );
+
+            expect(result.triggered).toBe(false);
+            expect(result.resultCode).toBe('POLICY_DENIED');
+            expect(savedRoutines).toHaveLength(0);
+        });
+
         it('wakes the target user Chief of Staff on incoming InterAgent request and wakes sender Chief of Staff on resolution', async () => {
             const { provider, savedRoutines } = createMockMetadataProvider();
             AgentUserPolicyEngine.Instance.SetCachedPolicy(
@@ -388,7 +446,7 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
                 Request: text,
                 Comments: null,
                 ResponseByUserID: USER_ALICE_ID,
-            } as unknown as MJAIAgentRequestEntity;
+            } as Partial<MJAIAgentRequestEntity> as MJAIAgentRequestEntity;
         }
 
         /** Second and later lookups return the routine the first call created, as the database would. */
@@ -478,9 +536,17 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
             IdentityType: 'Email',
             IdentityValue: 'cos@company.com',
             DisplayName: 'Chief of Staff Mailbox',
+            UserID: null,
             IsActive: true,
             Configuration: null,
         } as unknown as MJAIBridgeAgentIdentityEntity;
+
+        const dedicatedAliceIdentity: MJAIBridgeAgentIdentityEntity = Object.assign({}, utilityIdentity, {
+            ID: 'identity-cos-alice-dedicated',
+            IdentityValue: 'alice-cos@company.com',
+            DisplayName: 'Alice Chief of Staff Mailbox',
+            UserID: USER_ALICE_ID,
+        });
 
         it('wakes the verified internal sender Chief of Staff in sender contextUser scope when emailing cos@company.com', async () => {
             const { provider, savedRoutines, capturedContextUsers } = createMockMetadataProvider();
@@ -592,7 +658,7 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
             expect(savedRoutines).toHaveLength(0);
         });
 
-        it('rejects inbound utility mailbox emails when sender policy has EmailChannelMode="Disabled"', async () => {
+        it('rejects inbound utility mailbox emails when sender policy has Status="Active" and EmailChannelMode="Disabled"', async () => {
             const { provider, savedRoutines } = createMockMetadataProvider();
             AgentUserPolicyEngine.Instance.SetCachedPolicy(
                 createPolicy({
@@ -617,6 +683,415 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
             expect(result.triggered).toBe(false);
             expect(result.resultCode).toBe('POLICY_DENIED');
             expect(savedRoutines).toHaveLength(0);
+        });
+
+        it('wakes the owning user on a dedicated per-user bridge identity when sender matches identity.UserID', async () => {
+            const { provider, savedRoutines, capturedContextUsers } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({ AgentID: COS_AGENT_ID, UserID: USER_ALICE_ID, Status: 'Active' })
+            );
+            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+
+            const result = await AgentWakeTriggerService.Instance.RouteInboundUtilityMailboxWake({
+                toAddress: 'alice-cos@company.com',
+                fromAddress: 'alice@company.com',
+                subject: 'Morning priorities',
+                bodyPreview: 'Summarize today commitments.',
+                messageID: 'msg-dedicated-ok',
+                systemContextUser: serviceUser,
+                metadataProvider: provider,
+                identities: [dedicatedAliceIdentity],
+                users: [aliceUser, bobUser],
+                now: FIXED_NOW,
+            });
+
+            expect(result.triggered).toBe(true);
+            expect(result.resultCode).toBe('WAKE_SCHEDULED');
+            expect(result.targetUserID).toBe(USER_ALICE_ID);
+            expect(result.targetAgentID).toBe(COS_AGENT_ID);
+            expect(capturedContextUsers).toHaveLength(1);
+            expect(capturedContextUsers[0].ID).toBe(USER_ALICE_ID);
+            expect(savedRoutines).toHaveLength(1);
+            expect(savedRoutines[0].UserID).toBe(USER_ALICE_ID);
+            expect(savedRoutines[0].WakeConfigurationObject?.resumeState).toMatchObject({
+                triggerType: 'InboundUtilityMailboxEmail',
+                identityID: dedicatedAliceIdentity.ID,
+                senderUserID: USER_ALICE_ID,
+            });
+        });
+
+        it('rejects with SENDER_NOT_AUTHORIZED_FOR_IDENTITY when sender differs from dedicated identity.UserID and allowedUserID is unset', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({ AgentID: COS_AGENT_ID, UserID: USER_BOB_ID, Status: 'Active' })
+            );
+
+            const result = await AgentWakeTriggerService.Instance.RouteInboundUtilityMailboxWake({
+                toAddress: 'alice-cos@company.com',
+                fromAddress: 'bob@company.com',
+                subject: 'Trying to wake Alice mailbox',
+                systemContextUser: serviceUser,
+                metadataProvider: provider,
+                identities: [dedicatedAliceIdentity],
+                users: [aliceUser, bobUser],
+                now: FIXED_NOW,
+            });
+
+            expect(result.triggered).toBe(false);
+            expect(result.resultCode).toBe('SENDER_NOT_AUTHORIZED_FOR_IDENTITY');
+            expect(savedRoutines).toHaveLength(0);
+        });
+
+        it('rejects with POLICY_DENIED on a shared identity when sender has no policy row (empty RunView result)', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            // Cache cleared in beforeEach; RunView returns empty array -> policy === null
+            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+
+            const result = await AgentWakeTriggerService.Instance.RouteInboundUtilityMailboxWake({
+                toAddress: 'cos@company.com',
+                fromAddress: 'alice@company.com',
+                subject: 'Un-onboarded sender wake attempt',
+                systemContextUser: serviceUser,
+                metadataProvider: provider,
+                identities: [utilityIdentity],
+                users: [aliceUser, bobUser],
+                now: FIXED_NOW,
+            });
+
+            expect(result.triggered).toBe(false);
+            expect(result.resultCode).toBe('POLICY_DENIED');
+            expect(result.reason).toContain('no active policy');
+            expect(savedRoutines).toHaveLength(0);
+        });
+
+        it.each(['Pending', 'Paused', 'Disabled'] as const)(
+            'rejects with POLICY_DENIED when sender policy status is %s',
+            async (status) => {
+                const { provider, savedRoutines } = createMockMetadataProvider();
+                const policy = createPolicy({
+                    AgentID: COS_AGENT_ID,
+                    UserID: USER_ALICE_ID,
+                });
+                Object.defineProperty(policy, 'Status', {
+                    value: status,
+                    configurable: true,
+                    writable: true,
+                });
+                AgentUserPolicyEngine.Instance.SetCachedPolicy(policy);
+
+                const result = await AgentWakeTriggerService.Instance.RouteInboundUtilityMailboxWake({
+                    toAddress: 'cos@company.com',
+                    fromAddress: 'alice@company.com',
+                    subject: `Policy status ${status} attempt`,
+                    systemContextUser: serviceUser,
+                    metadataProvider: provider,
+                    identities: [utilityIdentity],
+                    users: [aliceUser],
+                    now: FIXED_NOW,
+                });
+
+                expect(result.triggered).toBe(false);
+                expect(result.resultCode).toBe('POLICY_DENIED');
+                expect(result.reason).toContain(`${status} policy`);
+                expect(savedRoutines).toHaveLength(0);
+            }
+        );
+    });
+
+    describe('3. Generic Workstream Wake (TriggerWakeForWorkstream)', () => {
+        const FACTORY_AGENT_ID = '00000000-0000-0000-0000-0000FAC70711';
+
+        it('schedules an immediate AgentWake routine for a named non-Chief-of-Staff agent (Software Factory) and workstream when called by system/Owner user', async () => {
+            const { provider, savedRoutines, capturedContextUsers } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({
+                    AgentID: FACTORY_AGENT_ID,
+                    UserID: USER_ALICE_ID,
+                    Agent: 'Software Factory',
+                    Status: 'Active',
+                })
+            );
+            findUserMock.mockResolvedValue(aliceUser);
+            runViewMock
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [{ ID: FACTORY_AGENT_ID, Name: 'Software Factory' }],
+                })
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [],
+                });
+
+            const result = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentName: 'Software Factory',
+                workstreamKey: 'task:task-42',
+                wakeReason: 'Factory task moved to Ready for Build',
+                resumeState: {
+                    triggerType: 'TaskStatusChanged',
+                    recordID: 'task-42',
+                    status: 'Ready for Build',
+                    workstreamKey: 'spoofed-workstream',
+                    wakeReason: 'spoofed-reason',
+                },
+                contextUser: systemUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+
+            expect(result.triggered).toBe(true);
+            expect(result.resultCode).toBe('WAKE_SCHEDULED');
+            expect(result.targetAgentID).toBe(FACTORY_AGENT_ID);
+            expect(result.targetUserID).toBe(USER_ALICE_ID);
+            expect(result.workstreamKey).toBe('task:task-42');
+            expect(savedRoutines).toHaveLength(1);
+            expect(savedRoutines[0].TargetID).toBe(FACTORY_AGENT_ID);
+            expect(savedRoutines[0].UserID).toBe(USER_ALICE_ID);
+            expect(savedRoutines[0].Name).toContain('Software Factory');
+            expect(capturedContextUsers[0]).toBe(systemUser);
+            // Canonical wake envelope fields must never be overwritten by caller resumeState
+            expect(savedRoutines[0].WakeConfigurationObject?.resumeState?.['workstreamKey']).toBe('task:task-42');
+            expect(savedRoutines[0].WakeConfigurationObject?.resumeState?.['wakeReason']).toBe(
+                'Factory task moved to Ready for Build'
+            );
+        });
+
+        it('rejects cross-user TriggerWakeForWorkstream from non-Owner callers, inactive target users, and policy lookup errors', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({
+                    AgentID: FACTORY_AGENT_ID,
+                    UserID: USER_ALICE_ID,
+                    Agent: 'Software Factory',
+                    Status: 'Active',
+                })
+            );
+
+            // 1. Non-system, non-Owner caller (bobUser / serviceUser) attempting cross-user wake is rejected
+            const unauthorizedCrossUser = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-42',
+                wakeReason: 'Cross-user spoof',
+                contextUser: bobUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(unauthorizedCrossUser.triggered).toBe(false);
+            expect(unauthorizedCrossUser.resultCode).toBe('POLICY_DENIED');
+
+            // 2. Inactive target user is rejected even for systemUser
+            findUserMock.mockResolvedValue({ ...aliceUser, IsActive: false } as UserInfo);
+            const inactiveTarget = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-42',
+                wakeReason: 'Wake inactive user',
+                contextUser: systemUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(inactiveTarget.triggered).toBe(false);
+            expect(inactiveTarget.resultCode).toBe('POLICY_DENIED');
+
+            // 3. Policy lookup failure (Success: false) fails closed instead of defaulting to allowed
+            AgentUserPolicyEngine.Instance.ClearCache();
+            runViewMock.mockResolvedValueOnce({
+                Success: false,
+                Results: [],
+                ErrorMessage: 'Transient SQL timeout',
+            });
+            const lookupFailed = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-42',
+                wakeReason: 'Self wake during DB blip',
+                contextUser: aliceUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(lookupFailed.triggered).toBe(false);
+            expect(lookupFailed.resultCode).toBe('POLICY_DENIED');
+            expect(savedRoutines).toHaveLength(0);
+        });
+
+        it('coalesces two rapid external events for the same workstream into pendingEvents without dropping either', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({ AgentID: FACTORY_AGENT_ID, UserID: USER_ALICE_ID, Agent: 'Software Factory', Status: 'Active' })
+            );
+
+            runViewMock.mockImplementation(async (params: { EntityName: string }) => {
+                if (params.EntityName === 'MJ: AI Agents') {
+                    return { Success: true, Results: [{ ID: FACTORY_AGENT_ID, Name: 'Software Factory' }] };
+                }
+                return { Success: true, Results: savedRoutines };
+            });
+
+            await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-99',
+                wakeReason: 'GitHub CI check suite succeeded',
+                resumeState: { triggerType: 'GitHubWebhook', eventID: 'gh-evt-1' },
+                contextUser: aliceUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-99',
+                wakeReason: 'GitHub PR approved by reviewer',
+                resumeState: { triggerType: 'GitHubWebhook', eventID: 'gh-evt-2' },
+                contextUser: aliceUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+
+            expect(new Set(savedRoutines).size).toBe(1);
+            const pending = (savedRoutines[0].WakeConfigurationObject?.resumeState?.['pendingEvents'] ?? []) as Array<Record<string, unknown>>;
+            expect(pending).toHaveLength(2);
+            expect(pending.map((p) => p['eventID'])).toEqual(['gh-evt-1', 'gh-evt-2']);
+        });
+
+        it('suppresses workstream wake when target user has no active policy (un-onboarded), or policy is Paused/Disabled, and rejects unknown agent names', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+
+            // 0. Un-onboarded user (policy === null) must be suppressed cleanly with POLICY_DENIED
+            runViewMock
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [{ ID: FACTORY_AGENT_ID, Name: 'Software Factory' }],
+                })
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [],
+                });
+            const unOnboarded = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-unonboarded',
+                wakeReason: 'Assigned task for user with no policy row',
+                contextUser: aliceUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(unOnboarded.triggered).toBe(false);
+            expect(unOnboarded.resultCode).toBe('POLICY_DENIED');
+            expect(unOnboarded.reason).toContain('no active policy');
+
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({ AgentID: FACTORY_AGENT_ID, UserID: USER_ALICE_ID, Status: 'Paused' })
+            );
+            runViewMock.mockResolvedValueOnce({
+                Success: true,
+                Results: [{ ID: FACTORY_AGENT_ID, Name: 'Software Factory' }],
+            });
+
+            const paused = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-1',
+                wakeReason: 'Task created',
+                contextUser: aliceUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(paused.triggered).toBe(false);
+            expect(paused.resultCode).toBe('POLICY_DENIED');
+
+            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+            const missing = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentName: 'Nonexistent Agent',
+                workstreamKey: 'task:task-1',
+                wakeReason: 'Task created',
+                contextUser: aliceUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(missing.triggered).toBe(false);
+            expect(missing.resultCode).toBe('AGENT_NOT_FOUND');
+
+            const invalid = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: '',
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-1',
+                wakeReason: 'Task created',
+                contextUser: aliceUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(invalid.triggered).toBe(false);
+            expect(invalid.resultCode).toBe('MISSING_REQUIRED_INPUT');
+            expect(savedRoutines).toHaveLength(0);
+        });
+
+        it('E1: RouteInboundUtilityMailboxWake enforces identity.UserID ownership and resolves Required template to user IsPrimaryInstance=1', async () => {
+            const PEPPER_ID = '00000000-0000-0000-0000-000000009E99';
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            const providerWithRunView = Object.assign({}, provider, { RunView: runViewMock });
+            const alice = createUser(USER_ALICE_ID, 'Alice', 'alice@company.com');
+            const bob = createUser(USER_BOB_ID, 'Bob', 'bob@company.com');
+
+            const aliceIdentity = {
+                ID: '00000000-0000-0000-0000-000000001D01',
+                AgentID: COS_AGENT_ID,
+                UserID: USER_ALICE_ID,
+                IdentityType: 'Email',
+                IdentityValue: 'alice.cos@company.com',
+                IsActive: true,
+                Configuration: null,
+            } as Partial<MJAIBridgeAgentIdentityEntity> as MJAIBridgeAgentIdentityEntity;
+
+            // 1. Bob sending to Alice's user-owned bridge identity MUST be rejected (identity.UserID check)
+            const crossUser = await AgentWakeTriggerService.Instance.RouteInboundUtilityMailboxWake({
+                toAddress: 'alice.cos@company.com',
+                fromAddress: 'bob@company.com',
+                subject: 'Unauthorized probe',
+                systemContextUser: systemUser,
+                metadataProvider: providerWithRunView,
+                identities: [aliceIdentity],
+                users: [alice, bob],
+                now: FIXED_NOW,
+            });
+            expect(crossUser.triggered).toBe(false);
+            expect(crossUser.resultCode).toBe('SENDER_NOT_AUTHORIZED_FOR_IDENTITY');
+
+            // 2. Alice sending to her utility mailbox targeting COS_AGENT_ID resolves to her primary instance (Pepper)
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({ AgentID: PEPPER_ID, UserID: USER_ALICE_ID, Status: 'Active', EmailChannelMode: 'SendAsAgent' })
+            );
+            runViewMock
+                // Primary instance DB lookup for COS_AGENT_ID + USER_ALICE_ID
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [{ ID: PEPPER_ID, Name: 'Pepper', IsPrimaryInstance: true }],
+                })
+                // Existing pending routine check for upsertImmediateWakeRoutine
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [],
+                });
+
+            const routed = await AgentWakeTriggerService.Instance.RouteInboundUtilityMailboxWake({
+                toAddress: 'alice.cos@company.com',
+                fromAddress: 'alice@company.com',
+                subject: 'Morning prep',
+                bodyPreview: 'Brief me on Q4',
+                systemContextUser: systemUser,
+                metadataProvider: providerWithRunView,
+                identities: [aliceIdentity],
+                users: [alice, bob],
+                now: FIXED_NOW,
+            });
+
+            expect(routed.triggered).toBe(true);
+            expect(routed.resultCode).toBe('WAKE_SCHEDULED');
+            expect(routed.targetAgentID).toBe(PEPPER_ID);
+            expect(savedRoutines).toHaveLength(1);
+            expect(savedRoutines[0].TargetID).toBe(PEPPER_ID);
         });
     });
 });

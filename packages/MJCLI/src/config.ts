@@ -6,6 +6,8 @@ import { simpleGit, SimpleGit } from 'simple-git';
 import { z } from 'zod';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { BuildPgPasswordSource, BuildPgSslConfig, ResolvePgAuthMode, type PgSslConfig } from '@memberjunction/postgresql-dataprovider';
+import { DEFAULT_MIGRATION_REQUEST_TIMEOUT_MS } from './lib/migration-timeout';
 
 export type MJConfig = z.infer<typeof mjConfigSchema>;
 
@@ -73,6 +75,22 @@ const dynamicPackageEntrySchema = z.object({
   // (or prefixes — `cli:sync` covers every `mj sync` command) the entry loads in / never loads in.
   Processes: z.array(z.string()).optional(),
   ExcludeProcesses: z.array(z.string()).optional(),
+});
+
+// Schema for top-level `publicPages` entries managed by `mj app install/remove/enable/disable`.
+// Read by `mj codegen manifest --open-app-client-bootstrap` and `mj explorer postbuild`.
+// A page has a `Slug`. An error page has `Role: 'error'` and a `Scope` in its place.
+export const PublicPageEntrySchema = z.object({
+  AppName: z.string(),
+  Slug: z.string().optional(),
+  Role: z.literal('error').optional(),
+  Scope: z.string().optional(),
+  PackageName: z.string(),
+  ExportName: z.string(),
+  Title: z.string().optional(),
+  Description: z.string().optional(),
+  SubPaths: z.boolean().optional(),
+  Enabled: z.boolean().default(true),
 });
 
 // Schema for Open App configuration section
@@ -164,6 +182,7 @@ const mjConfigSchema = z.object({
   }).passthrough().optional(),
   openApps: openAppsConfigSchema,
   dynamicPackages: DynamicPackagesSchema,
+  publicPages: z.array(PublicPageEntrySchema).optional(),
 });
 
 // Schema for non-database commands (all fields optional)
@@ -199,6 +218,7 @@ const mjConfigSchemaOptional = z.object({
   }).passthrough().optional(),
   openApps: openAppsConfigSchema,
   dynamicPackages: DynamicPackagesSchema,
+  publicPages: z.array(PublicPageEntrySchema).optional(),
 });
 
 // Don't validate at module load - let commands decide when they need validated config
@@ -360,6 +380,7 @@ export const GetSkywayConfig = async (
 
   const dialect: DatabaseDialect = mjConfig.dbPlatform === 'postgresql' ? 'postgresql' : 'sqlserver';
 
+  const pgSecurity = dialect === 'postgresql' ? await ResolvePostgresMigrationSecurity(mjConfig) : undefined;
   const dbConfig = {
     Dialect: dialect,
     Server: mjConfig.dbHost,
@@ -367,10 +388,14 @@ export const GetSkywayConfig = async (
     Database: mjConfig.dbDatabase,
     User: mjConfig.codeGenLogin,
     Password: mjConfig.codeGenPassword,
+    // A token login: Skyway asks the source for each new connection, so a long run never presents
+    // a token that expired after the first connection opened.
+    ...(pgSecurity?.PasswordSource ? { PasswordProvider: pgSecurity.PasswordSource } : {}),
     Options: {
       Encrypt: mjConfig.dbEncrypt,
       TrustServerCertificate: mjConfig.dbTrustServerCertificate,
-      ...(mjConfig.dbRequestTimeout ? { RequestTimeout: mjConfig.dbRequestTimeout } : {}),
+      RequestTimeout: mjConfig.dbRequestTimeout ?? DEFAULT_MIGRATION_REQUEST_TIMEOUT_MS,
+      ...(pgSecurity?.SSL ? { SSL: pgSecurity.SSL } : {}),
     },
   };
 
@@ -425,4 +450,32 @@ async function createSkywayProvider(dialect: DatabaseDialect, dbConfig: SkywayCo
       );
     }
   }
+}
+
+/** The result of {@link ResolvePostgresMigrationSecurity}. */
+export interface PostgresMigrationSecurity {
+  SSL?: Record<string, unknown>;
+  PasswordSource?: () => Promise<string>;
+}
+
+/**
+ * TLS and password for a PostgreSQL migration run, from the shared `PG_SSL_*` and `PG_AUTH_MODE`
+ * settings every MJ PostgreSQL client follows.
+ *
+ * For a token login, `PasswordSource` gives a token each time it is called. Pass it to every client
+ * (Skyway as `PasswordProvider`, node-postgres as `password`), so each connection asks for its own.
+ */
+export async function ResolvePostgresMigrationSecurity(mjConfig: MJConfig): Promise<PostgresMigrationSecurity> {
+  const ssl: PgSslConfig = BuildPgSslConfig(mjConfig.dbHost);
+  // BuildPgPasswordSource refuses a token login whose TLS does not verify the server.
+  const source = BuildPgPasswordSource(ResolvePgAuthMode(), {
+    Host: mjConfig.dbHost,
+    Port: mjConfig.dbPort ?? 5432,
+    User: mjConfig.codeGenLogin ?? '',
+    Database: mjConfig.dbDatabase,
+  }, ssl);
+  // Skyway types its SSL option as a plain record and treats `true` as "TLS, unverified", so pass
+  // the object as a record and leave the option out for plain TCP.
+  const sslRecord: Record<string, unknown> | undefined = typeof ssl === 'object' && ssl !== null ? Object.fromEntries(Object.entries(ssl)) : undefined;
+  return source ? { SSL: sslRecord, PasswordSource: source } : { SSL: sslRecord };
 }

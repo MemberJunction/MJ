@@ -345,7 +345,7 @@ These predate the mjButton directive. They use single-dash naming (`.mj-btn-prim
 
 ## Icon Libraries
 - **PRIMARY ICON LIBRARY: Font Awesome** - Use Font Awesome icons throughout all Angular components
-- **NEVER use Kendo icons** - Replace all Kendo icon references (k-icon, k-i-*) with Font Awesome equivalents
+- **NEVER use another icon set** - Font Awesome is the only icon library in MJ; there is no `k-icon`/`k-i-*` or other vendor icon font to fall back on
 - Font Awesome classes: `fa-solid`, `fa-regular`, `fa-light`, `fa-brands`
 - Use semantic icon names that clearly represent their function
 - Examples:
@@ -851,7 +851,7 @@ Before a lazy chunk loads, the ClassFactory has **no registration** for classes 
 
 ## MJ UI Components (`@memberjunction/ng-ui-components`)
 
-- **All UI components** should use the MJ UI components package — NOT Kendo, PrimeNG, or Angular Material. **Never hand-roll a feature-specific equivalent of anything this package already provides** — check the catalog before building any control, layout region, overlay, or pattern.
+- **All UI components** should use the MJ UI components package — NOT PrimeNG, Angular Material, or any other third-party UI kit. **Never hand-roll a feature-specific equivalent of anything this package already provides** — check the catalog before building any control, layout region, overlay, or pattern.
 - **Canonical catalog with full APIs and usage examples: `packages/Angular/Generic/ui-components/README.md`**
 - Component overview:
   - **Controls**: `button[mjButton]`, `mj-dropdown`, `mj-combobox`, `mj-switch`, `mj-numeric-input`, `mj-datepicker`, `[mjClickable]`
@@ -940,6 +940,11 @@ Pay attention to GraphQL scalar types — match the schema exactly to avoid type
 - Group related components in dedicated directories
 - Export shared components (like dialogs) for reuse
 - Maintain clear separation between container and presentational components
+
+## Component & Engine Cache Lifecycle (No Arbitrary Count Caps)
+
+- **Post-`await` teardown guards**: Whenever an `async` lifecycle hook or loader (`ngOnInit`, `loadData`, polling refresh) awaits an async call before starting a `setInterval`/`setTimeout`, attaching manual subscriptions, or instantiating workers/plugins/blob URLs, check `isDestroyed` (or pipe through `takeUntil(this.destroy$)`, which on `BaseResourceComponent` emits immediately even for post-destroy subscribers) right after the `await` so tabs closed mid-load never leak background work.
+- **Session-scoped caches, never arbitrary `MAX_CACHED_*` caps**: Browser engines (`BaseEngine` subclasses) are scoped to the signed-in user session, kept coherent via `BaseEntity` events, and cleared on sign-out/environment switch (`ClearCache()`). Never add arbitrary `MAX_CACHED_* = 50` eviction caps to shared engines to work around server-side callers, and document any genuine UX numeric constant (debounce ms, preview length) with an inline rationale comment (`StaticNumericLiteralCompliance.test.ts`).
 
 ## Design tokens
 

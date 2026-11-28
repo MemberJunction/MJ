@@ -43,6 +43,7 @@ function createHarness(opts: { view?: ConversationOpenView; sessionFor?: string;
     open['reloadWindowForView'] = reload;
     open['RealtimeSession'] = realtime;
     open['isActiveConversation'] = (id: string | null | undefined) => id === 'CONV-1';
+    open['handoffStepsByRunId'] = new Map();
     open['cdr'] = { detectChanges: vi.fn(), markForCheck: vi.fn() };
     return { component, open, reload, realtime, order };
 }

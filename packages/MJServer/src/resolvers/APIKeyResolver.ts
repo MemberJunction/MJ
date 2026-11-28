@@ -6,6 +6,8 @@ import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import { AppContext } from "../types.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { GetReadWriteProvider } from "../util.js";
+import { RefuseScopeLimitedPrincipals } from "../auth/scopeLimitedAccess.js";
+import { HasReservedImpersonationKeyLabelPrefix, USER_IMPERSONATION_KEY_LABEL_PREFIX } from "../auth/impersonationGuard.js";
 
 /**
  * Input type for creating a new API key
@@ -91,6 +93,7 @@ export class RevokeAPIKeyResult {
  * Resolver for API key operations
  * Handles secure server-side API key generation
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class APIKeyResolver extends ResolverBase {
     /**
@@ -121,6 +124,15 @@ export class APIKeyResolver extends ResolverBase {
                 return {
                     Success: false,
                     Error: "User is not authenticated"
+                };
+            }
+
+            // Reject the server-reserved impersonation prefix so regular callers cannot forge
+            // impersonation-labelled keys or spoof impersonation audit attribution.
+            if (HasReservedImpersonationKeyLabelPrefix(input.Label)) {
+                return {
+                    Success: false,
+                    Error: `API key labels starting with '${USER_IMPERSONATION_KEY_LABEL_PREFIX}' are reserved for server-managed user impersonation sessions.`
                 };
             }
 

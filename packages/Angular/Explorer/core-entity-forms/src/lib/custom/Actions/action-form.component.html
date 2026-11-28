@@ -20,8 +20,8 @@
             <div class="action-main-area" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
                 
                 <!-- Header Section -->
-                <div class="action-header" style="flex-shrink: 0; padding: 20px; background: var(--mj-bg-surface-card); border-bottom: 2px solid var(--mj-border-default);">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+                <div class="action-header phone-hero" [class.hero-view]="!EditMode" [class.hero-compact]="!EditMode && !HeroDetailsOpen" style="flex-shrink: 0; padding: 20px; background: var(--mj-bg-surface-card); border-bottom: 2px solid var(--mj-border-default);">
+                    <div class="hero-header-row">
                         
                         <!-- Left: Action Info -->
                         <div style="flex: 1; min-width: 0;">
@@ -40,7 +40,7 @@
                                         {{ record.Status }}
                                     </span>
                                     @if (hasCodeApproval && record.CodeApprovalStatus) {
-                                        <span class="status-chip"
+                                        <span class="status-chip phone-hero-detail"
                                               [attr.data-color]="record.CodeApprovalStatus === 'Approved' ? 'success' : record.CodeApprovalStatus === 'Pending' ? 'warning' : 'error'"
                                               [title]="'Code ' + record.CodeApprovalStatus">
                                             <i [class]="'fa-solid ' + getApprovalStatusIcon()" style="margin-right: 4px;"></i>
@@ -115,11 +115,11 @@
                                                style="width: 100%; max-width: 600px; margin-bottom: 12px;">
                                 </textarea>
                             } @else if (record.Description) {
-                                <p style="margin: 0 0 12px 0; color: var(--mj-text-muted); font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
+                                <p class="phone-hero-detail" style="margin: 0 0 12px 0; color: var(--mj-text-muted); font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
                             }
                             
                             <!-- Quick Config Row -->
-                            <div class="quick-config" style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                            <div class="quick-config phone-hero-detail" style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
                                 @if (category) {
                                     <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
                                         <i class="fa-solid fa-folder" style="color: var(--mj-text-muted);"></i>
@@ -155,10 +155,10 @@
                         </div>
                         
                         <!-- Right: Action Buttons -->
-                        <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                        <div class="action-buttons">
                             <div style="display: flex; gap: 8px;">
                                 @if (record.ID && !EditMode) {
-                                    <button mjButton variant="primary" size="lg"
+                                    <button mjButton variant="primary" size="lg" class="phone-hero-run"
                                                 (click)="openTestHarness()"
                                                 title="Open Run Harness"
                                                 [disabled]="record.Status !== 'Active'">
@@ -181,13 +181,21 @@
                             }
                         </div>
                     </div>
+                  @if (!EditMode && HeroSummary) {
+                    <button type="button" class="phone-hero-summary" [attr.aria-expanded]="HeroDetailsOpen" (click)="ToggleHeroDetails()">
+                      <span class="phone-hero-summary-text">{{ HeroSummary }}</span>
+                      <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                  }
                 </div>
 
                 <!-- Configuration Sections with Expansion Panels -->
                 <div class="configuration-sections" style="flex: 1; background: var(--mj-bg-surface-card); border-top: 2px solid var(--mj-border-default); padding: 16px; min-height: 0;">
+                    <!-- Phone: one section at a time behind a picker; desktop keeps the accordions -->
+                    <mj-accordion-sections [Enabled]="Phone.IsPhone" [ActiveKey]="Phone.Section" (ActiveKeyChange)="Phone.Pick($event)">
                     
                     <!-- Parameters Section (FIRST) -->
-                    <mj-accordion-panel
+                    <mj-accordion-panel SectionKey="parameters" SectionTitle="Parameters" SectionIcon="fa-solid fa-sliders" [SectionCount]="ActionParams.length"
                         [Expanded]="true"
                         style="margin-bottom: 12px;">
                         <ng-template mjAccordionTitle>
@@ -202,7 +210,7 @@
                             </span>
                         </ng-template>
                         
-                        <div style="padding: 16px;">
+                        <div class="phone-flush-x" style="padding: 16px;">
                             @if (isLoadingParams) {
                                 <div class="loading-state">
                                     <i class="fa-solid fa-spinner fa-spin"></i>
@@ -336,7 +344,7 @@
 
                     <!-- Code & Generation Section (Only for Generated type) -->
                     @if (record.Type === 'Generated') {
-                        <mj-accordion-panel
+                        <mj-accordion-panel SectionKey="code" SectionTitle="Code &amp; Generation" SectionIcon="fa-solid fa-code"
                             [Expanded]="expandedSections.code"
                             style="margin-bottom: 12px;">
                             <ng-template mjAccordionTitle>
@@ -351,7 +359,7 @@
                                 </span>
                             </ng-template>
                             
-                            <div style="padding: 16px;">
+                            <div class="phone-flush-x" style="padding: 16px;">
                                 @if (EditMode) {
                                     <div class="generation-panel">
                                         <h3><i class="fa-solid fa-robot"></i> AI Generation</h3>
@@ -431,7 +439,7 @@
 
                     <!-- Runtime Action Configuration Section (only for Type='Runtime') -->
                     @if (isRuntimeAction) {
-                        <mj-accordion-panel
+                        <mj-accordion-panel SectionKey="runtime" SectionTitle="Runtime Configuration &amp; Permissions" SectionIcon="fa-solid fa-wand-magic-sparkles"
                             [Expanded]="true"
                             style="margin-bottom: 12px;">
                             <ng-template mjAccordionTitle>
@@ -444,7 +452,7 @@
                                 </span>
                             </ng-template>
 
-                            <div style="padding: 16px;">
+                            <div class="phone-flush-x" style="padding: 16px;">
                                 @if (!runtimeConfig) {
                                     <mj-alert Variant="error">
                                         <strong>Missing or malformed RuntimeActionConfiguration.</strong>
@@ -587,7 +595,7 @@
                     }
 
                     <!-- Result Codes Section -->
-                    <mj-accordion-panel
+                    <mj-accordion-panel SectionKey="result-codes" SectionTitle="Result Codes" SectionIcon="fa-solid fa-flag-checkered" [SectionCount]="ResultCodes.length"
                         [Expanded]="expandedSections.resultCodes"
                         style="margin-bottom: 12px;">
                         <ng-template mjAccordionTitle>
@@ -602,7 +610,7 @@
                             </span>
                         </ng-template>
                         
-                        <div style="padding: 16px;">
+                        <div class="phone-flush-x" style="padding: 16px;">
                             <!-- Add Result Code Button -->
                             @if (EditMode && record.IsSaved) {
                                 <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
@@ -659,7 +667,7 @@
 
                     <!-- Execution & Monitoring Section -->
                     @if (record.IsSaved) {
-                        <mj-accordion-panel
+                        <mj-accordion-panel SectionKey="execution" SectionTitle="Execution &amp; Monitoring" SectionIcon="fa-solid fa-chart-line"
                             [Expanded]="expandedSections.execution"
                             style="margin-bottom: 12px;">
                             <ng-template mjAccordionTitle>
@@ -669,7 +677,7 @@
                                 </span>
                             </ng-template>
                             
-                            <div style="padding: 16px;">
+                            <div class="phone-flush-x" style="padding: 16px;">
                                 @if (isLoadingExecutions) {
                                     <div class="loading-state">
                                         <i class="fa-solid fa-spinner fa-spin"></i>
@@ -753,7 +761,7 @@
 
                     <!-- Related Configuration Section -->
                     @if (record.IsSaved) {
-                        <mj-accordion-panel
+                        <mj-accordion-panel SectionKey="related" SectionTitle="Related Configuration" SectionIcon="fa-solid fa-cogs"
                             [Expanded]="expandedSections.configuration"
                             style="margin-bottom: 12px;">
                             <ng-template mjAccordionTitle>
@@ -763,7 +771,7 @@
                                 </span>
                             </ng-template>
                             
-                            <div style="padding: 16px;">
+                            <div class="phone-flush-x" style="padding: 16px;">
                                 <!-- Libraries -->
                                 <div class="config-subsection">
                                     <h3><i class="fa-solid fa-book"></i> Libraries</h3>
@@ -821,6 +829,7 @@
                             </div>
                         </mj-accordion-panel>
                     }
+                    </mj-accordion-sections>
                 </div>
             </div>
         </form>

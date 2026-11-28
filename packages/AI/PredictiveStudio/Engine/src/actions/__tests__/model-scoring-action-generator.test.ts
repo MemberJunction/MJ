@@ -4,6 +4,7 @@ import type { MJMLModelEntity } from '@memberjunction/core-entities';
 
 import { ModelScoringActionGenerator } from '../model-scoring-action-generator';
 import { SCORE_RECORD_SET_DRIVER_CLASS } from '../score-record-set.action';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the per-model scoring Action generator (PS2-2). NO live DB — a
@@ -14,7 +15,7 @@ import { SCORE_RECORD_SET_DRIVER_CLASS } from '../score-record-set.action';
  *   (a) generating builds the child Action with the right shape + a ModelID param
  *       whose DefaultValue is the model id;
  *   (b) idempotency — generating twice neither duplicates the Action nor appends params;
- *   (c) disableForModel flips the generated Action's Status to 'Disabled';
+ *   (c) DisableForModel flips the generated Action's Status to 'Disabled', finding it by its ModelID param;
  *   (d) a missing parent action is handled gracefully (no throw, nothing created).
  */
 
@@ -37,6 +38,8 @@ class Store {
     'MJ: Action Params': [],
     'MJ: Action Categories': [],
   };
+  /** Entities whose `Save()` is refused (returns false with a message), the way a failed save surfaces. */
+  public readonly RefusedSaves = new Set<string>();
 }
 
 /** Minimal entity fake: field bag + Save()/Delete() that write through to the store. */
@@ -63,8 +66,12 @@ class FakeEntity {
   }
 
   public async Save(): Promise<boolean> {
+    if (this.store.RefusedSaves.has(this.entityName)) {
+      this.LatestResult = { CompleteMessage: 'the save was refused' };
+      return false;
+    }
     if (this.isNew) {
-      if (this.row['ID'] == null) {
+      if (this.row['ID'] === null || this.row['ID'] === undefined) {
         this.row['ID'] = newId();
       }
       this.store.rows[this.entityName].push(this.row);
@@ -123,14 +130,14 @@ class FakeProvider {
   /** Honors the exact filter shapes the generator issues. */
   public async RunView<T = unknown>(params: RunViewParams): Promise<RunViewResult<T>> {
     // The generator issues plain-string filters; a PlatformSQL filter is read by its default variant.
-    const filter = IsPlatformSQL(params.ExtraFilter) ? params.ExtraFilter.default : (params.ExtraFilter ?? '');
-    const matched = this.match(params.EntityName ?? '', filter);
-    const results = matched.map((row) => makeEntity(this.store, params.EntityName ?? '', row));
+    const filter = IsPlatformSQL(params.ExtraFilter) ? params.ExtraFilter.default : (params.ExtraFilter || '');
+    const matched = this.match(params.EntityName || '', filter);
+    const results = matched.map((row) => makeEntity(this.store, params.EntityName || '', row));
     return { Success: true, Results: results as unknown as T[], RowCount: results.length } as RunViewResult<T>;
   }
 
   private match(entityName: string, extraFilter: string): Row[] {
-    const rows = this.store.rows[entityName] ?? [];
+    const rows = this.store.rows[entityName] || [];
     return rows.filter((r) => this.rowMatches(r, extraFilter));
   }
 
@@ -140,12 +147,13 @@ class FakeProvider {
     return clauses.every((clause) => {
       const nullMatch = clause.match(/^(\w+)\s+IS NULL$/i);
       if (nullMatch) {
-        return row[nullMatch[1]] == null;
+        return row[nullMatch[1]] === null || row[nullMatch[1]] === undefined;
       }
       const eqMatch = clause.match(/^(\w+)='(.*)'$/);
       if (eqMatch) {
         const [, field, value] = eqMatch;
-        return String(row[field] ?? '') === value.replace(/''/g, "'");
+        const stored = row[field];
+        return (stored === null || stored === undefined ? '' : String(stored)) === value.replace(/''/g, "'");
       }
       return true; // unknown clause → don't exclude
     });
@@ -180,14 +188,14 @@ function seedParentAction(store: Store): Row {
  */
 function fakeModel(over: Partial<{ ID: string; Pipeline: string | null; Version: number }> = {}): MJMLModelEntity {
   return {
-    ID: over.ID ?? 'model-uuid-1',
+    ID: over.ID || 'model-uuid-1',
     Pipeline: over.Pipeline === undefined ? 'Renewal Risk' : over.Pipeline,
-    Version: over.Version ?? 3,
+    Version: over.Version || 3,
   } as unknown as MJMLModelEntity;
 }
 
 function actions(store: Store): Row[] {
-  return store.rows['MJ: Actions'].filter((a) => a['ParentID'] != null); // children only
+  return store.rows['MJ: Actions'].filter((a) => a['ParentID'] !== null && a['ParentID'] !== undefined); // children only
 }
 function paramsFor(store: Store, actionID: string): Row[] {
   return store.rows['MJ: Action Params'].filter((p) => p['ActionID'] === actionID);
@@ -195,18 +203,32 @@ function paramsFor(store: Store, actionID: string): Row[] {
 
 const USER = { Email: 'test@example.com' } as UserInfo;
 
+/** The generated child Action whose ModelID param defaults to `modelId` (the only link from an Action to its model). */
+function byModelID(store: Store, modelId: string): Row {
+  const param = store.rows['MJ: Action Params'].find((p) => p['Name'] === 'ModelID' && p['DefaultValue'] === modelId);
+  const action = actions(store).find((a) => param !== undefined && a['ID'] === param['ActionID']);
+  if (action === undefined) throw new Error(`no generated Action has ModelID ${modelId}`);
+  return action;
+}
+
+/** The model as it reads after its pipeline is renamed: the same row, its label (the `Pipeline` view field) changed. */
+function renamePipeline(model: MJMLModelEntity, name: string): MJMLModelEntity {
+  return fakeModel({ ID: model.ID, Pipeline: name, Version: model.Version });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('ModelScoringActionGenerator — generateForModel', () => {
+describe('ModelScoringActionGenerator — GenerateForModel', () => {
   it('creates a child Action with the right shape + a ModelID param defaulted to the model id', async () => {
+    const status = ConsoleCapture.Status();
     const store = new Store();
     seedParentAction(store);
     const provider = new FakeProvider(store);
     const model = fakeModel({ ID: 'model-uuid-1', Pipeline: 'Renewal Risk', Version: 3 });
 
-    await new ModelScoringActionGenerator().generateForModel(model, USER, asProvider(provider));
+    await new ModelScoringActionGenerator().GenerateForModel(model, USER, asProvider(provider));
 
     const children = actions(store);
     expect(children).toHaveLength(1);
@@ -231,78 +253,152 @@ describe('ModelScoringActionGenerator — generateForModel', () => {
     expect(modelIdParam!['IsRequired']).toBe(false);
     expect(modelIdParam!['DefaultValue']).toBe('model-uuid-1');
 
-    // The full canonical param set is present (3 inputs + 5 outputs).
-    expect(params).toHaveLength(8);
+    // The full canonical param set is present (4 inputs + 6 outputs), named as the parent Score Record Set writes them.
+    expect(params).toHaveLength(10);
     expect(params.map((p) => p['Name']).sort()).toEqual(
-      ['FailedCount', 'ModelID', 'Predictions', 'Scope', 'ScoredCount', 'SkippedCount', 'WriteBack', 'WroteBack'].sort(),
+      ['AsOfDate', 'BindingID', 'Failed', 'ModelID', 'Predictions', 'Scope', 'ScoringRunID', 'Status', 'Total', 'Written'].sort(),
     );
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with Renewal Risk v3' for model 'model-uuid-1'.")]);
   });
 
   it('falls back to the model ID + v1 in the name when Name/Version are absent', async () => {
+    const status = ConsoleCapture.Status();
     const store = new Store();
     seedParentAction(store);
     const provider = new FakeProvider(store);
     const model = { ID: 'bare-model', Pipeline: null } as unknown as MJMLModelEntity;
 
-    await new ModelScoringActionGenerator().generateForModel(model, USER, asProvider(provider));
+    await new ModelScoringActionGenerator().GenerateForModel(model, USER, asProvider(provider));
 
     expect(actions(store)[0]['Name']).toBe('Score with bare-model v1');
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with bare-model v1' for model 'bare-model'.")]);
   });
 
   it('is idempotent — generating twice neither duplicates the Action nor appends params', async () => {
+    const status = ConsoleCapture.Status();
     const store = new Store();
     seedParentAction(store);
     const provider = new FakeProvider(store);
     const model = fakeModel();
     const gen = new ModelScoringActionGenerator();
 
-    await gen.generateForModel(model, USER, asProvider(provider));
-    await gen.generateForModel(model, USER, asProvider(provider));
+    await gen.GenerateForModel(model, USER, asProvider(provider));
+    await gen.GenerateForModel(model, USER, asProvider(provider));
 
     const children = actions(store);
     expect(children).toHaveLength(1); // reused, not duplicated
-    expect(paramsFor(store, children[0]['ID'] as string)).toHaveLength(8); // recreated, not doubled
+    expect(paramsFor(store, children[0]['ID'] as string)).toHaveLength(10); // recreated, not doubled
     expect(store.rows['MJ: Action Categories']).toHaveLength(1); // category reused too
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with Renewal Risk v3'"), expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with Renewal Risk v3'")]);
   });
 });
 
-describe('ModelScoringActionGenerator — disableForModel', () => {
+describe('ModelScoringActionGenerator — a name another Action holds (M4b.6 cell (c))', () => {
+  it('a later model of the pipeline taking a deleted model\'s freed version gets its own Action, named with its ID; the left-behind one is untouched', async () => {
+    ConsoleCapture.Status();
+    const store = new Store();
+    seedParentAction(store);
+    const provider = asProvider(new FakeProvider(store));
+    const generator = new ModelScoringActionGenerator();
+    await generator.GenerateForModel(fakeModel({ ID: 'deleted-model', Version: 1 }), USER, provider);
+    await generator.GenerateForModel(fakeModel({ ID: 'new-model', Version: 1 }), USER, provider);
+    expect([byModelID(store, 'deleted-model')['Name'], byModelID(store, 'new-model')['Name']]).toEqual(['Score with Renewal Risk v1', 'Score with Renewal Risk v1 (new-model)']);
+    await generator.GenerateForModel(fakeModel({ ID: 'new-model', Version: 1 }), USER, provider);
+    expect(actions(store).map((a) => a['Name'])).toEqual(['Score with Renewal Risk v1', 'Score with Renewal Risk v1 (new-model)']);
+  });
+});
+
+describe('ModelScoringActionGenerator — DisableForModel', () => {
   it("sets the generated Action's Status to 'Disabled'", async () => {
+    const status = ConsoleCapture.Status();
     const store = new Store();
     seedParentAction(store);
     const provider = new FakeProvider(store);
     const model = fakeModel();
     const gen = new ModelScoringActionGenerator();
 
-    await gen.generateForModel(model, USER, asProvider(provider));
+    await gen.GenerateForModel(model, USER, asProvider(provider));
     expect(actions(store)[0]['Status']).toBe('Active');
 
-    await gen.disableForModel(model, USER, asProvider(provider));
+    await gen.DisableForModel(model, USER, asProvider(provider));
     expect(actions(store)[0]['Status']).toBe('Disabled');
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with Renewal Risk v3'"), expect.stringContaining("ModelScoringActionGenerator: disabled scoring action 'Score with Renewal Risk v3' for archived model 'model-uuid-1'.")]);
   });
 
-  it('is a no-op when no generated Action exists', async () => {
+  it('finds the scoring Action by model ID after the pipeline is renamed', async () => {
+    ConsoleCapture.Status();
+    const store = new Store();
+    seedParentAction(store);
+    const provider = asProvider(new FakeProvider(store));
+    const model = fakeModel();
+    const generator = new ModelScoringActionGenerator();
+    await generator.GenerateForModel(model, USER, provider);
+    await generator.DisableForModel(renamePipeline(model, 'Renamed'), USER, provider);
+    expect(byModelID(store, model.ID)['Status']).toBe('Disabled');
+  });
+
+  it('regenerating after a rename updates the same Action (found by model ID), never a second one', async () => {
+    ConsoleCapture.Status();
+    const store = new Store();
+    seedParentAction(store);
+    const provider = asProvider(new FakeProvider(store));
+    const model = fakeModel();
+    const generator = new ModelScoringActionGenerator();
+    await generator.GenerateForModel(model, USER, provider);
+    await generator.GenerateForModel(renamePipeline(model, 'Renamed'), USER, provider);
+    expect(actions(store).map((a) => a['Name'])).toEqual(['Score with Renamed v3']);
+    expect(byModelID(store, model.ID)['Status']).toBe('Active');
+  });
+
+  it('is a no-op when no generated Action exists, and reports the model has no enabled Action', async () => {
     const store = new Store();
     seedParentAction(store);
     const provider = new FakeProvider(store);
 
     // Should not throw and should create nothing.
-    await new ModelScoringActionGenerator().disableForModel(fakeModel(), USER, asProvider(provider));
+    expect(await new ModelScoringActionGenerator().DisableForModel(fakeModel(), USER, asProvider(provider))).toBe(true);
     expect(actions(store)).toHaveLength(0);
+  });
+
+  it('reports true once the Action is disabled, and again for one already disabled', async () => {
+    ConsoleCapture.Status();
+    const store = new Store();
+    seedParentAction(store);
+    const provider = asProvider(new FakeProvider(store));
+    const model = fakeModel();
+    const generator = new ModelScoringActionGenerator();
+    await generator.GenerateForModel(model, USER, provider);
+    expect([await generator.DisableForModel(model, USER, provider), await generator.DisableForModel(model, USER, provider)]).toEqual([true, true]);
+  });
+
+  it('reports false, logs the save message and leaves the Action enabled when the save is refused', async () => {
+    ConsoleCapture.Status();
+    const errors = ConsoleCapture.Errors();
+    const store = new Store();
+    seedParentAction(store);
+    const provider = asProvider(new FakeProvider(store));
+    const model = fakeModel();
+    const generator = new ModelScoringActionGenerator();
+    await generator.GenerateForModel(model, USER, provider);
+    store.RefusedSaves.add('MJ: Actions');
+    expect(await generator.DisableForModel(model, USER, provider)).toBe(false);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining('the save was refused')]);
   });
 });
 
 describe('ModelScoringActionGenerator — missing parent', () => {
   it('handles a missing parent action gracefully (logs, no throw, nothing created)', async () => {
+    const errors = ConsoleCapture.Errors();
     const store = new Store(); // NO parent seeded
     const provider = new FakeProvider(store);
 
     await expect(
-      new ModelScoringActionGenerator().generateForModel(fakeModel(), USER, asProvider(provider)),
+      new ModelScoringActionGenerator().GenerateForModel(fakeModel(), USER, asProvider(provider)),
     ).resolves.toBeUndefined();
 
     // Nothing was created — neither an Action nor a category.
     expect(store.rows['MJ: Actions']).toHaveLength(0);
     expect(store.rows['MJ: Action Categories']).toHaveLength(0);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("ModelScoringActionGenerator: parent action 'Score Record Set' (DriverClass 'PredictiveStudioScoreRecordSetAction') not found")]);
   });
 });

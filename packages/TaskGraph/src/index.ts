@@ -7,12 +7,16 @@
  * `@memberjunction/ai-core-plus`, which both this dispatcher and the in-run executor consume.
  */
 export * from './types';
+export * from './resolve-by-tool-name';
 export * from './debug-state';
 export * from './TaskGraphService';
 export * from './TaskClaimStore';
+export * from './TaskGraphGovernanceCoordinator';
 export * from './settlement-rescue';
 export * from './condition-gate';
 export * from './decision-node';
+export * from './saga-compensation';
+export * from './task-security';
 export * from './AIDecisionTaskRunner';
 export * from './task-predicates';
 export * from './DispatcherConditionEvaluator';
@@ -24,3 +28,10 @@ export * from './operations/TaskGraphOperations';
 export * from './operations/TaskGraphDebugOperations';
 export * from './operations/WorkflowDraftOperation';
 export * from './operations/WorkflowOperations';
+export * from './operations/TaskGraphWaitingStepOperations';
+export * from './waiting-steps';
+export * from './WaitingStepRunner';
+export * from './TaskGraphWaitingSteps';
+export * from './isolation';
+export * from './queue-dispatch';
+export * from './enqueue-fanout';

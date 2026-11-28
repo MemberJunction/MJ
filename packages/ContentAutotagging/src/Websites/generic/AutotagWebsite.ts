@@ -2,13 +2,14 @@ import { AutotagBase, AutotagProgressCallback } from '../../Core';
 import { AutotagBaseEngine, ContentSourceParams } from '../../Engine';
 import { ContentSourceTypeParamValue } from '../../Engine/generic/content.types';
 import { RunBudget } from '../../Engine/generic/RunBudget';
-import { RegisterClass, NormalizeUUID } from '@memberjunction/global';
-import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus } from '@memberjunction/core';
+import { RegisterClass, NormalizeUUID, FilterByUUIDs } from '@memberjunction/global';
+import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError } from '@memberjunction/core';
 import { MJContentSourceEntity, MJContentItemEntity, MJContentSourceEntity_IContentSourceConfiguration } from '@memberjunction/core-entities';
 import * as cheerio from 'cheerio';
 import type { AnyNode } from 'domhandler';
 import { HttpGet, HttpHead } from '@memberjunction/network-utils';
-import { DiscoverRequest, DiscoveredItem } from '@memberjunction/content-pipeline-base';
+import { BasePageRenderer, DiscoverRequest, DiscoveredItem, DiscoverWalkEnd } from '@memberjunction/content-pipeline-base';
+import { CrawlFetchers, CrawlFound, CrawlPage, DecodeCrawlState, WebsiteCrawl } from './WebsiteCrawl';
 import { URL } from 'url';
 import dotenv from 'dotenv';
 dotenv.config({ quiet: true })
@@ -19,6 +20,7 @@ export class AutotagWebsite extends AutotagBase {
 
     private contextUser: UserInfo;
     private engine: AutotagBaseEngine;
+    private _onProgress?: AutotagProgressCallback;
     protected contentSourceTypeID: string
     // Sensible defaults — overridable per content source via ContentSourceParam rows.
     // CrawlSitesInLowerLevelDomain=true + MaxDepth=2 means we crawl the start URL
@@ -212,7 +214,11 @@ export class AutotagWebsite extends AutotagBase {
         if (provider) this._provider = provider;
         this.contextUser = contextUser;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Website');
-        const contentSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
+        const allSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
+        const contentSources: MJContentSourceEntity[] = contentSourceIDs?.length
+            ? FilterByUUIDs(allSources, contentSourceIDs)
+            : allSources;
+        this._onProgress = onProgress;
 
         // Per-source budget setup — produces a RunBudget for each content
         // source and installs the OnAfterBatch gate on the engine so the
@@ -242,6 +248,7 @@ export class AutotagWebsite extends AutotagBase {
             // budget state into the next Autotag invocation on a shared
             // engine singleton.
             this.engine.OnAfterBatch = null;
+            this._onProgress = undefined;
         }
 
         // Surface per-source budget pause reasons in the log so operators can
@@ -294,6 +301,7 @@ export class AutotagWebsite extends AutotagBase {
                 let yieldedForSource = 0;
                 for await (const link of this.streamAllLinksFromContentSource(startURL, rootURL, regex)) {
                     try {
+                        this._onProgress?.(yieldedForSource, 0, link);
                         const item = await this.processSingleURL(link, contentSourceParams);
                         if (item) {
                             yieldedForSource++;
@@ -332,26 +340,107 @@ export class AutotagWebsite extends AutotagBase {
 
     private activeDiscoverRequest?: DiscoverRequest;
 
-    /** Crawl the site for the pipeline, yielding each discovered page link for Extract to fetch and hash. */
-    public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
+    /**
+     * Crawl the site for the pipeline, yielding each page found for Extract to fetch and hash (see
+     * {@link WebsiteCrawl}): breadth-first within the root URL and pattern, optionally seeded from the site's
+     * sitemaps, with pages loaded through the source's page renderer when it names one. A walk with a deadline
+     * stops between pages and returns a resume token, and the next walk carries on from it.
+     */
+    public async *Discover(request: DiscoverRequest): AsyncGenerator<DiscoveredItem, DiscoverWalkEnd | void, undefined> {
         const configuration = request.Configuration as MJContentSourceEntity_IContentSourceConfiguration;
         this.configureCrawl(configuration.Website, new Map(Object.entries(request.Parameters)));
-        const rootURL = this.RootURL ?? this.getBasePath(request.URL);
-        const pattern = this.URLPattern ? new RegExp(this.URLPattern) : /.*/;
+        const website = configuration.Website ?? {};
+        const crawl = new WebsiteCrawl(
+            {
+                SeedURL: request.URL,
+                RootURL: this.RootURL ?? this.getBasePath(request.URL),
+                Pattern: this.URLPattern ? new RegExp(this.URLPattern) : /.*/,
+                MaxDepth: this.MaxDepth,
+                FollowLinks: this.CrawlSitesInLowerLevelDomain,
+                SiblingFanOut: this.CrawlOtherSitesInTopLevelDomain,
+                UseSitemaps: website.UseSitemaps === true,
+                SitemapURLs: website.SitemapURLs,
+                MaxPages: website.MaxPages ?? null,
+                DelayMs: typeof website.CrawlDelayMs === 'number' && website.CrawlDelayMs >= 0 ? website.CrawlDelayMs : 1000,
+                Since: request.Since ?? null,
+                Deadline: request.Deadline ?? null,
+                Signal: request.Signal,
+            },
+            this.crawlFetchers(request, configuration.PageRenderer, website.RenderTimeoutMs),
+        );
         this.activeDiscoverRequest = request;
         try {
-            for await (const link of this.streamAllLinksFromContentSource(request.URL, rootURL, pattern)) {
-                if (request.Signal.aborted) {
-                    return;
+            const run = crawl.Run(this.usableResumeToken(request));
+            for (;;) {
+                const next = await run.next();
+                if (next.done) {
+                    const end = next.value as { ResumeToken?: string };
+                    return end.ResumeToken ? { ResumeToken: end.ResumeToken } : undefined;
                 }
-                if (request.Since && await this.isUnmodifiedSince(link, request.Since)) {
+                const found = next.value as CrawlFound;
+                // A sitemap page carries its own lastmod; any other page is asked over HTTP.
+                if (request.Since && !found.LastModified && (await this.isUnmodifiedSince(found.URL, request.Since))) {
                     continue;
                 }
-                yield { URL: link };
+                yield { URL: found.URL };
             }
         } finally {
             this.activeDiscoverRequest = undefined;
         }
+    }
+
+    /** The resume token, when it is one this crawler wrote; otherwise the walk starts again from the seed. */
+    private usableResumeToken(request: DiscoverRequest): string | null {
+        if (!request.ResumeToken) {
+            return null;
+        }
+        try {
+            DecodeCrawlState(request.ResumeToken);
+            return request.ResumeToken;
+        } catch (error) {
+            LogError(`AutotagWebsite: the saved crawl of '${request.URL}' cannot be resumed, so the walk starts again: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
+    }
+
+    /**
+     * How the crawl reads pages and sitemaps. Pages go through the source's page renderer when it names one;
+     * otherwise, like sitemaps, over HTTP with the SSRF guard and the session applied to its own origins.
+     */
+    private crawlFetchers(request: DiscoverRequest, rendererKey: string | undefined, renderTimeoutMs: number | undefined): CrawlFetchers {
+        const renderer = rendererKey ? BasePageRenderer.Resolve(rendererKey) : null;
+        if (rendererKey && !renderer) {
+            throw new Error(`PageRenderer '${rendererKey}' is not registered. Check that the package registering it has been loaded.`);
+        }
+        const text = async (url: string): Promise<string | null> => {
+            try {
+                const response = await HttpGet<string>(url, { ResponseType: 'text', ThrowOnError: false, ...this.buildCrawlHttpOptions(url) });
+                return response.Status === 200 && typeof response.Data === 'string' ? response.Data : null;
+            } catch {
+                return null;
+            }
+        };
+        const page = async (url: string): Promise<CrawlPage | null> => {
+            try {
+                if (renderer) {
+                    const sourceOrigin = this.originOf(request.URL);
+                    const rendered = await renderer.Render({
+                        URL: url,
+                        Access: this.sessionAppliesToUrl(request, url) ? request.Access : null,
+                        AccessOrigins: request.Access?.Origins?.length ? request.Access.Origins : sourceOrigin ? [sourceOrigin] : [],
+                        TimeoutMs: renderTimeoutMs,
+                        Signal: request.Signal,
+                    });
+                    return { Html: rendered.Html, FinalURL: rendered.FinalURL, Status: rendered.Status };
+                }
+                const html = await text(url);
+                return html === null ? null : { Html: html, FinalURL: url, Status: 200 };
+            } catch (error) {
+                LogStatus(`AutotagWebsite: could not read ${url}: ${error instanceof Error ? error.message : String(error)}`);
+                return null;
+            }
+        };
+        return { Page: page, Text: text };
     }
 
     /** True when HTTP HEAD returns a valid `Last-Modified` header at or before `since`. */
@@ -393,6 +482,14 @@ export class AutotagWebsite extends AutotagBase {
             Headers: access?.Headers ? { ...access.Headers } : undefined,
             Query: access?.QueryParameters ? { ...access.QueryParameters } : undefined,
         };
+    }
+
+    private originOf(url: string): string | null {
+        try {
+            return new URL(url).origin;
+        } catch {
+            return null;
+        }
     }
 
     private sessionAppliesToUrl(req: DiscoverRequest, targetUrl: string): boolean {

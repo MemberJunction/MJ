@@ -1,0 +1,92 @@
+<div
+  class="handoff"
+  [class.handoff--transferring]="Status === 'Transferring'"
+  [class.handoff--transferred]="Status === 'Transferred'"
+  [class.handoff--failed]="Status === 'Failed'"
+  [attr.data-state]="Status.toLowerCase()"
+  [style.--mj-handoff-source]="SourceAccentVar"
+  [style.--mj-handoff-target]="TargetAccentVar"
+  role="status"
+  aria-live="polite"
+  [attr.aria-label]="AnnouncedTitle"
+>
+  <div class="baton">
+    <div class="end end--from">
+      <div class="avatar avatar--source" aria-hidden="true">
+        @if (SourceAvatarUrl) {
+          <img class="end-img" [src]="SourceAvatarUrl" alt="" />
+        } @else if (SourceIconClass) {
+          <i [class]="SourceIconClass"></i>
+        } @else {
+          <span class="end-initial">{{ SourceInitial }}</span>
+        }
+      </div>
+      <span class="name">{{ SourceAgentName }}</span>
+    </div>
+
+    <div class="track" aria-hidden="true">
+      @if (Status === 'Transferring') {
+        <span class="spark"></span>
+      }
+      <span class="arrow"></span>
+    </div>
+
+    <div class="end end--to">
+      <span class="name">{{ TargetAgentName }}</span>
+      <div class="avatar avatar--target" aria-hidden="true">
+        @if (TargetAvatarUrl) {
+          <img class="end-img" [src]="TargetAvatarUrl" alt="" />
+        } @else if (TargetIconClass) {
+          <i [class]="TargetIconClass"></i>
+        } @else {
+          <span class="end-initial">{{ TargetInitial }}</span>
+        }
+      </div>
+    </div>
+  </div>
+
+  <div class="handoff-title">
+    @if (Status === 'Transferring') {
+      <strong>Transferring to {{ TargetAgentName }}…</strong>
+      <span class="sub">Starting its own run with your request</span>
+    } @else if (Status === 'Failed') {
+      <strong class="err">Couldn't transfer to {{ TargetAgentName }}</strong>
+      <span class="sub">{{ FailureReasonText }}</span>
+    } @else {
+      <strong>Transferred to {{ TargetAgentName }}</strong>
+      <span class="sub">It now owns this request</span>
+    }
+  </div>
+
+  <div class="handoff-meta">
+    @if (Status === 'Failed') {
+      <span class="pill pill--next-step">{{ FailureNextStepText }}</span>
+    } @else {
+      @if (PresetName) {
+        <span class="pill pill--target">Power level · {{ PresetName }}</span>
+      }
+      @if (Brief) {
+        <span class="pill">Brief handed over</span>
+      }
+      @if (Status === 'Transferred') {
+        <span class="pill">Next messages go to {{ TargetAgentName }}</span>
+      }
+      @if (Reason) {
+        <span class="pill handoff-reason">{{ Reason }}</span>
+      }
+      @if (HasMultiHopChain) {
+        <span class="hop-chain" [attr.title]="FullHopChainTitle">
+          <span class="pill hop-chain-tail">{{ LastTwoHopsLabel }}</span>
+          <span class="pill hop-chain-extra">+{{ ExtraHopCount }}</span>
+        </span>
+      }
+    }
+  </div>
+
+  @if (Brief && Status !== 'Failed') {
+    <details class="handoff-details">
+      <summary>Brief from {{ SourceAgentName }}</summary>
+      <div class="brief">{{ Brief }}</div>
+    </details>
+  }
+</div>

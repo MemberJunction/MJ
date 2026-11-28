@@ -201,7 +201,7 @@ export class ClassifyItemGridComponent extends BaseAngularComponent {
 
         const tagCounts = await this.loadTagCounts(result.Results.map(r => r['ID'] as string));
         const rows = result.Results.map(r => this.toRow(r, tagCounts));
-        this.applyRows(rows, result.TotalRowCount);
+        this.applyRows(rows, result.TotalRowCount ?? 0);
     }
 
     /**

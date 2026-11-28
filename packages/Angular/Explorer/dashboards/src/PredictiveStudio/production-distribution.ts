@@ -6,6 +6,8 @@
  * reusable.
  */
 
+import type { MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
+
 /** Max rows pulled when sampling a target column's population for the distribution. */
 export const PRODUCTION_SAMPLE_CAP = 5000;
 
@@ -54,10 +56,6 @@ export function BuildDistribution(values: ReadonlyArray<unknown>, numeric: boole
     : buildCategorical(cleaned, sampled, capped);
 }
 
-/** @deprecated Use {@link BuildDistribution}. */
-export function buildDistribution(values: ReadonlyArray<unknown>, numeric: boolean): DistributionResult {
-  return BuildDistribution(values, numeric);
-}
 
 const MAX_CATEGORICAL_BUCKETS = 8;
 
@@ -197,10 +195,6 @@ export function HumanizeCron(cron: string | null | undefined): string | null {
   return raw;
 }
 
-/** @deprecated Use {@link HumanizeCron}. */
-export function humanizeCron(cron: string | null | undefined): string | null {
-  return HumanizeCron(cron);
-}
 
 /** True when a cron field is a single integer literal (no `*`, ranges, lists, or steps). */
 function isNumericField(field: string): boolean {
@@ -254,10 +248,6 @@ export function ModelLabel(pipeline: string | null | undefined, version: number 
   return name ? `${name} v${version}` : `Model v${version}`;
 }
 
-/** @deprecated Use {@link ModelLabel}. */
-export function modelLabel(pipeline: string | null | undefined, version: number | null | undefined): string {
-  return ModelLabel(pipeline, version);
-}
 
 /**
  * Map a Process-Run status to a {@link StatusVariant} pill colour. Unknown/empty statuses fall back
@@ -281,27 +271,12 @@ export function RunStatusVariant(status: string | null | undefined): StatusVaria
   }
 }
 
-/** @deprecated Use {@link RunStatusVariant}. */
-export function runStatusVariant(status: string | null | undefined): StatusVariant {
-  return RunStatusVariant(status);
+
+/** Map a scoring binding's mode to its badge colour: Scheduled → blue; OnDemand or none → neutral gray. */
+export function ModeBadgeClass(mode: MJMLModelScoringBindingEntity['Mode'] | null | undefined): StatusVariant {
+  return mode === 'Scheduled' ? 'blue' : 'gray';
 }
 
-/** Map a scoring mode to its badge colour. OnDemand/unknown → neutral gray. */
-export function ModeBadgeClass(mode: string | null | undefined): StatusVariant {
-  switch (mode) {
-    case 'Scheduled':
-      return 'blue';
-    case 'Materialized':
-      return 'green';
-    default:
-      return 'gray';
-  }
-}
-
-/** @deprecated Use {@link ModeBadgeClass}. */
-export function modeBadgeClass(mode: string | null | undefined): StatusVariant {
-  return ModeBadgeClass(mode);
-}
 
 /** Minimal raw shape of a Process Run consumed by {@link summarizeRun} (decoupled from the entity). */
 export interface RawRun {
@@ -344,7 +319,3 @@ export function SummarizeRun(run: RawRun | null | undefined): RunSummary | null 
   };
 }
 
-/** @deprecated Use {@link SummarizeRun}. */
-export function summarizeRun(run: RawRun | null | undefined): RunSummary | null {
-  return SummarizeRun(run);
-}

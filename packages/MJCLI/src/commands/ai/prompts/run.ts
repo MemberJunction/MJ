@@ -58,26 +58,28 @@ export default class PromptsRun extends Command {
   };
 
   async run(): Promise<void> {
-    const { PromptService, OutputFormatter, CloseMJProvider } = await import('@memberjunction/ai-cli');
+    const { PromptService, OutputFormatter, CloseMJProvider, FlushStdout } = await import('@memberjunction/ai-cli');
 
     const { flags, metadata } = await this.parse(PromptsRun);
     const service = new PromptService();
-    const formatter = new OutputFormatter(ResolveLegacyFormat({
-        Format: flags.format,
-        Legacy: flags.output as 'compact' | 'json' | 'table',
-        LegacyDefault: 'compact' as const,
-        LegacyWasExplicit: metadata.flags.output?.setFromDefault === false,
-        Map: AI_FORMAT_MAP,
-      }));
+    const format = ResolveLegacyFormat({
+      Format: flags.format,
+      Legacy: flags.output as 'compact' | 'json' | 'table',
+      LegacyDefault: 'compact' as const,
+      LegacyWasExplicit: metadata.flags.output?.setFromDefault === false,
+      Map: AI_FORMAT_MAP,
+    });
+    const formatter = new OutputFormatter(format);
+
+    let exitCode = 0;
+    const spinner = format !== 'json' ? ora() : null;
 
     try {
-      const spinner = ora();
-      
       // Show what model will be used
       if (flags.model) {
-        spinner.start(`Executing prompt with model: ${flags.model}`);
+        spinner?.start(`Executing prompt with model: ${flags.model}`);
       } else {
-        spinner.start('Executing prompt with default model');
+        spinner?.start('Executing prompt with default model');
       }
 
       // Parse temperature if provided
@@ -85,7 +87,7 @@ export default class PromptsRun extends Command {
       if (flags.temperature) {
         temperature = parseFloat(flags.temperature);
         if (isNaN(temperature) || temperature < 0 || temperature > 2) {
-          spinner.fail();
+          spinner?.fail();
           this.error('Temperature must be a number between 0.0 and 2.0');
         }
       }
@@ -100,17 +102,23 @@ export default class PromptsRun extends Command {
         configurationId: flags.configuration,
       });
 
-      spinner.stop();
+      spinner?.stop();
       this.log(formatter.formatPromptResult(result));
 
       if (!result.success) {
-        this.exit(1);
+        exitCode = 1;
       }
-      setImmediate(() => process.exit(0));
     } catch (error) {
+      spinner?.fail('Prompt execution failed');
       this.error(error as Error);
     } finally {
       await CloseMJProvider().catch(() => {});
     }
+
+    await FlushStdout();
+    if (exitCode !== 0) {
+      this.exit(exitCode);
+    }
+    setImmediate(() => process.exit(0));
   }
 }

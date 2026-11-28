@@ -13,7 +13,7 @@ Everything a channel needs to be usable by an agent that has never seen it is in
 | `@memberjunction/ai-core-plus` | The contract types (`RealtimeChannelDescriptor`, verbs, nouns, events), scoping (`ResolveRealtimeChannelScope`), exposure policy (`ResolveChannelExposure`, `IsVerbWithheld`), and the JSON-schema validator. Pure, shared by browser and server. |
 | `@memberjunction/realtime-runtime` | `BaseRealtimeChannelClient` (the class every channel extends), `ChannelActionDispatcher`, the catalog note, the perception coalescer, the visual-perception pump, `RealtimeSessionRuntime`. |
 | `@memberjunction/ng-realtime-channels` | `AngularComponentChannel` (wrap an existing component), and the opt-in DOM rasterizer (`EnableChannelFrameCapture`). Small on purpose: no overlay, no Explorer, no router. |
-| `@memberjunction/ng-conversations` | The call overlay, the built-in channels (Whiteboard, Remote Browser, Media, Interactive Component, Identity Verification). |
+| `@memberjunction/ng-conversations` | The call overlay, the built-in channels (`ArtifactWorkspace`, `Whiteboard`, `RemoteBrowser`, `Media`, `InteractiveComponent`, `IdentityVerification`, `Camera`, `ScreenShare`, `Avatar`). |
 | `@memberjunction/ng-realtime-widget` | `<mj-realtime-widget>`: the call, packaged for any web page (a one-script custom element and an Angular component). See section 10. |
 | `@memberjunction/ng-realtime-channel-examples` | A complete worked channel (tic-tac-toe). Not loaded by default; not a dependency of anything. |
 | `@memberjunction/ai-agents` | The server half of each channel (`BaseRealtimeChannelServer` plugins) and the server's scoping and exposure decisions. |
@@ -512,6 +512,21 @@ A channel of your own that hosts artifacts takes part the same way: say yes in `
 **Access.** Artifacts load through the signed-in user's own session and read permission (the agent cannot open anything the user cannot).
 
 Configuration (`channels.config.InteractiveComponent`): `autoOpenDelegatedComponents`, `swapToNewerVersions`, `maxInstances` (1 to 8), `maxStateRows` (25), `maxStateChars` (6000), `maxExposure`. Open components are live-only: not saved with the session, not restored on resume.
+
+---
+
+## 7b. The Artifact Workspace channel (`ArtifactWorkspace`)
+
+Collaborative Docs (`Markdown Document`), Slides (`Presentation`), Sheets (`Excel Spreadsheet`), and Whiteboards have their own dedicated bidirectional channel — **`ArtifactWorkspace`** (`ArtifactWorkspaceChannel`, registered as `'RealtimeArtifactWorkspaceChannel'` in `@memberjunction/ng-conversations`, paired with `ArtifactWorkspaceChannelServer` in `@memberjunction/ai-agents`, hosting `<mj-realtime-artifact-workspace-surface>`):
+
+| Capability | Behavior |
+|---|---|
+| **Multi-instance tabs** | Hosts up to `MaxInstances` (default `6`) concurrent `<mj-artifact-viewer-panel>` tabs (`w1`, `w2`, …) beside the realtime call (`DisplayPolicy: 'on-demand'`, `DefaultAvailability: 'all-sessions'`, `MaxExposure: 'pixels'`). |
+| **Dynamic delegation partitioning** | `AcceptsDelegationArtifacts` inspects each `ParsedDelegationArtifact`'s `ArtifactTypeName` and `DriverClass` (`IsCollaborativeArtifactDescriptor` / `IsComponentArtifactDescriptor`): collaborative Docs, Slides, Sheets, and Whiteboards route exclusively to `ArtifactWorkspace` (`open` refuses Component specs with `use_interactive_component`), while `Component` artifacts route exclusively to `InteractiveComponent`. |
+| **Verbs (`ContextTool`)** | Reserved `open` (`{ artifactId?, artifactVersionId?, versionNumber?, name?, artifactTypeName?, driverClass? }`), `focus` (`{ artifactId? }`), `show_version` (`{ artifactId?, versionId, versionNumber? }`), `refresh` (`{ artifactId?, versionNumber? }`), `close` (`{ artifactId? }`), **`navigate_to_anchor`** (`{ artifactId?, sheet?, range?, slideNumber?, elementId?, heading?, blockId?, highlightMs? }` to scroll/highlight a cell range, slide, heading, or block), and **`set_view_mode`** (`{ artifactId?, mode: 'edit' \| 'suggest' \| 'diff' \| 'present' }`). |
+| **Bidirectional perception & events** | Emits `opened`, `focused`, `version_changed`, `newer_version_available`, `refreshed`, **`selection_changed`** (driven by `EmitSelectionDelta` when a user changes active range/slide/block selection), `navigated_to_anchor`, `view_mode_changed`, and `closed`. `GetState()` reports `{ activeInstanceId, activeSelection, artifacts }`. |
+| **Live collaboration, ACL & scopes** | Workspace viewers connect via `/collaboration/yjs` with viewer permissions (`ArtifactPermissionEngine.ResolvePermissions` enforcing `Visibility <> 'System Only'`, `EnvironmentID`, and `CanEdit`), render spoof-proof live agent presence (`<AgentName> · for <ActingForUserName>`), and honor API/mutation scopes (`artifact:read`, `artifact:edit`, `artifact:comment`, and `artifact:share` for sharing/guest links). |
+| **Visual frame perception** | When `ChannelFrameCapture.Instance.Capturer` is enabled (`EnableChannelFrameCapture()`) and `Exposure === 'pixels'` on an active video track, `CaptureActiveFrame()` streams snapshots of the active workspace viewer tab to the session. |
 
 ---
 

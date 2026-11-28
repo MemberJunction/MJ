@@ -85,6 +85,7 @@ const result = await ai.ChatCompletion({
 ### Communication & Automation
 - **Multi-channel messaging** — Email (SendGrid, Gmail, MSGraph), SMS (Twilio)
 - **Actions framework** — Metadata-driven business logic for workflows and agents
+- **Durable work queues & isolated workflows** — [TaskGraph](./packages/TaskGraph/README.md) (`InProcess`/`Worker`/`Process`/`Container` isolation, queued dispatch, `Enqueue` fan-out) and [WorkQueue](./packages/WorkQueue/README.md) across Database, AWS SQS, Azure Service Bus, and Google Cloud Pub/Sub
 - **Scheduled jobs** — Cron-based scheduling with distributed locking
 - **Template engine** — Nunjucks templates with AI-powered content generation
 
@@ -460,7 +461,6 @@ The MJExplorer application -- MemberJunction's primary Angular-based UI for brow
 | [explorer-core](./packages/Angular/Explorer/explorer-core/README.md) | `@memberjunction/ng-explorer-core` | Core Explorer framework: application shell, routing, resource containers, and navigation |
 | [explorer-modules](./packages/Angular/Explorer/explorer-modules/README.md) | `@memberjunction/ng-explorer-modules` | Consolidated Explorer NgModule bundle that re-exports all Explorer feature modules |
 | [base-application](./packages/Angular/Explorer/base-application/README.md) | `@memberjunction/ng-base-application` | BaseApplication class system for app-centric navigation |
-| [auth-services](./packages/Angular/Explorer/auth-services/README.md) | `@memberjunction/ng-auth-services` | Authentication services with Auth0, MSAL, Okta, Cognito, and WorkOS provider support |
 | [shared](./packages/Angular/Explorer/shared/README.md) | `@memberjunction/ng-shared` | Shared Explorer utilities, base components, services, and events used across Explorer packages |
 | [workspace-initializer](./packages/Angular/Explorer/workspace-initializer/README.md) | `@memberjunction/ng-workspace-initializer` | Workspace initialization service and components for bootstrapping the Explorer environment |
 
@@ -560,6 +560,7 @@ Reusable Angular components and services shared across MemberJunction applicatio
 |---------|-----|-------------|
 | [credentials](./packages/Angular/Generic/credentials/README.md) | `@memberjunction/ng-credentials` | Components for credential management -- panels and dialogs for creating and editing credentials |
 | [resource-permissions](./packages/Angular/Generic/resource-permissions/README.md) | `@memberjunction/ng-resource-permissions` | Generic components for displaying/editing permissions for a resource |
+| [auth-services](./packages/Angular/Generic/auth-services/README.md) | `@memberjunction/ng-auth-services` | Authentication services with Auth0, MSAL, Okta, Cognito, WorkOS, Magic Link, and Local Dev provider support |
 
 **UI Utilities**
 
@@ -721,7 +722,9 @@ Packages at the top level of the `packages/` directory, not part of a multi-pack
 | [MJExportEngine](./packages/MJExportEngine/README.md) | `@memberjunction/export-engine` | Export engine for Excel, CSV, and JSON with sampling and formatting |
 | [MJQueue](./packages/MJQueue/README.md) | `@memberjunction/queue` | Server-side queue management |
 | [QueryGen](./packages/QueryGen/README.md) | `@memberjunction/query-gen` | AI-powered SQL query template generation with automatic testing and refinement |
+| [TaskGraph](./packages/TaskGraph/README.md) | `@memberjunction/task-graph` | DAG workflow orchestration with per-graph isolation runners, queued dispatch, and durable `Enqueue` steps |
 | [VersionHistory](./packages/VersionHistory/README.md) | `@memberjunction/version-history` | Label-based versioning, dependency-graph snapshots, cross-entity diffs, and point-in-time restore |
+| [WorkQueue](./packages/WorkQueue/README.md) | `@memberjunction/work-queue-engine` | Durable work queue across Database, AWS SNS/SQS (`work-queue-aws`), Azure Service Bus (`work-queue-azure`), and GCP Pub/Sub (`work-queue-gcp`) |
 
 ---
 

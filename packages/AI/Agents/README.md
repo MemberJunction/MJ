@@ -6,63 +6,53 @@ It also provides two capability layers any agent can opt into:
 
 - **Skills** — reusable capability bundles (instructions + Actions + sub-agents) an agent activates mid-run via a progressive-disclosure catalog. Availability is gated per-agent (`AIAgent.AcceptsSkills`); *self*-activation additionally requires the **double activation gate** (`AISkill.ActivationMode` × `AIAgent.SkillActivationMode`, both defaulting to `RequestedOnly` so autonomous skill expansion is always a deliberate double opt-in — users can still `/skill`-request any available skill). Every activation is recorded with **provenance of authority** on `AIAgentRunStep.Skills` (activation type, gate values, agent-stated reason), and Prompt/Actions/Sub-Agent steps carry per-step skill attribution. Skills are shareable via the dedicated skill-permissions model and portable via **SKILL.md** import/export.
 - **Plan Mode** — a per-request human-in-the-loop gate (`ExecuteAgentParams.planMode`) that makes an agent present a plan and get it approved before executing any Actions or Sub-Agents, built on the existing `MJ: AI Agent Requests` pause/resume flow.
+- **Consult & Handoff** (*owner: `@AN-BC` / `@memberjunction/ai-agents` maintainers*) — **Consult** (`ChatHandlingOption = 'Consult'`, [`src/sub-agent-consult.ts`](./src/sub-agent-consult.ts)) routes a sub-agent's `Chat` step back to its parent Loop agent for up to `MaxSubAgentConsultRounds` (default 3) before escalating to the human caller via `MJ: AI Agent Requests`, and resumes the paused child run via `resumeRunId`. **Handoff** (`step = 'Handoff'`, [`src/handoff-target.ts`](./src/handoff-target.ts)) lets a general router agent (such as Sage) transfer a conversation turn to a discoverable, permitted specialist agent (up to `MAX_HANDOFF_HOPS = 3` with cycle detection and target preset resolution). See [Sub-Agents Guide](./docs/sub-agents-guide.md), [Human-in-the-Loop](./docs/HUMAN_IN_THE_LOOP.md), and the post-release review in [`plans/video-studio-ws3-consult-handoff-review.md`](../../../plans/video-studio-ws3-consult-handoff-review.md).
 
-**See the [Agent Skills & Plan Mode Guide](../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md)** for the full architecture, the three-layer gate, the SKILL.md format, and the plan-approval flow.
+**Canonical Agent Guides:**
+- [Agent Administrator Guide](../../../guides/AGENT_ADMINISTRATOR_GUIDE.md) — security & sandbox invariants, 3-table `IAgentConfiguration` cascade, `v6.x` → `v7.0` deprecation roadmap, sliding liveness watchdog, `undici` tuning, `AgentStuckDetector`, and `MJ: AI Agent Step Types`
+- [Agent Builder & Extension Guide](../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) — ~600-line `BaseAgent` facade + `AgentRunContext` + 13 pluggable helper seams, copy-paste recipes for all Four Extension Points, isolated helper testing, and prefix-cache discipline
+- [Agent End-User Guide](../../../guides/AGENT_END_USER_GUIDE.md) — personal instances, personas, presets, memory, Plan Mode, and long-running runs
+- [BaseAgent Rebase Map](../../../guides/BASE_AGENT_REBASE_MAP.md) — exhaustive 1-to-1 map of all 494 preserved `@deprecated` `BaseAgent` methods to their new `BaseAgent<Seam>Helper` classes
+- [Agent Skills & Plan Mode Guide](../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md) — full architecture, three-layer gate, SKILL.md format, and plan-approval flow
 
 ## Architecture
+
+`packages/AI/Agents/src/base-agent.ts` is a **~600-line** public execution facade decomposed into **13 strongly-typed, pluggable `BaseAgent*Helper` seams** (`packages/AI/Agents/src/helpers/`) sharing live per-run state via `AgentRunContext`, a pluggable step-type registry (`AgentStepTypeRegistry` + `BaseAgentStepHandler`), and a zero-breakage `v6.x` compatibility shim (`BaseAgentDeprecatedDelegates*`, scheduled for removal in `v7.0`).
 
 ```mermaid
 graph TD
     subgraph "@memberjunction/ai-agents"
-        BA["BaseAgent<br/>Core Execution Engine"]
-        style BA fill:#2d8659,stroke:#1a5c3a,color:#fff
+        AR["AgentRunner\nOrchestration Entry Point"]
+        BA["BaseAgent (~600L Facade)\nLifecycle · Permanent Hooks · 13 Seam Resolvers"]
+        CTX["AgentRunContext\nLive Per-Run State + SubclassHooks"]
+        RES["ResolveAgentHelper / AgentHelperCache\n1. Configuration.helperPlugins (Admin-Only)\n2. Global @RegisterClass\n3. Built-in Default"]
+        STEPREG["AgentStepTypeRegistry (BaseSingleton)\n14 Built-in BaseAgentStepHandlers\n+ MJ: AI Agent Step Types"]
 
-        AR["AgentRunner<br/>Orchestration Entry Point"]
-        style AR fill:#2d8659,stroke:#1a5c3a,color:#fff
+        subgraph "13 Pluggable Helper Seams (helpers/)"
+            H_CORE["Metadata-Pluggable Seams (Admin-Only)\nmessaging · payload · compaction · realtime\niteration · skills · prompt"]
+            H_SEC["CODE-ONLY Security & Invariant Seams (@RegisterClass only)\nlimits · actionPolicy · setup · steps · actions · subAgents"]
+        end
 
         subgraph "Agent Types"
             BAT["BaseAgentType"]
-            style BAT fill:#7c5295,stroke:#563a6b,color:#fff
-            LAT["LoopAgentType"]
-            style LAT fill:#7c5295,stroke:#563a6b,color:#fff
-            FAT["FlowAgentType"]
-            style FAT fill:#7c5295,stroke:#563a6b,color:#fff
-        end
-
-        subgraph "Support Systems"
-            PM["PayloadManager<br/>Data Flow Between Steps"]
-            style PM fill:#b8762f,stroke:#8a5722,color:#fff
-            PCA["PayloadChangeAnalyzer"]
-            style PCA fill:#b8762f,stroke:#8a5722,color:#fff
-            PFM["PayloadFeedbackManager"]
-            style PFM fill:#b8762f,stroke:#8a5722,color:#fff
-            ACI["AgentContextInjector<br/>Notes, Examples, Data Sources"]
-            style ACI fill:#b8762f,stroke:#8a5722,color:#fff
-            ADP["AgentDataPreloader<br/>Batch Metadata Loading"]
-            style ADP fill:#b8762f,stroke:#8a5722,color:#fff
-            MMA["MemoryManagerAgent<br/>Note/Example Management"]
-            style MMA fill:#b8762f,stroke:#8a5722,color:#fff
+            LAT["LoopAgentType / HarnessAgentType"]
+            FAT["FlowAgentType / RealtimeAgentType"]
         end
     end
 
-    BA --> BAT
-    BA --> PM
-    BA --> ACI
-    BA --> ADP
     AR --> BA
+    BA --> CTX
+    BA --> RES
+    BA --> STEPREG
+    BA --> BAT
+    RES --> H_CORE
+    RES --> H_SEC
 
     subgraph Dependencies
-        AIP["@memberjunction/ai-prompts<br/>AIPromptRunner"]
-        style AIP fill:#2d6a9f,stroke:#1a4971,color:#fff
-
-        AIE["@memberjunction/aiengine<br/>AIEngine"]
-        style AIE fill:#2d6a9f,stroke:#1a4971,color:#fff
-
-        ACT["@memberjunction/actions<br/>ActionEngineServer"]
-        style ACT fill:#2d6a9f,stroke:#1a4971,color:#fff
-
-        RR["@memberjunction/ai-reranker<br/>RerankerService"]
-        style RR fill:#2d6a9f,stroke:#1a4971,color:#fff
+        AIP["@memberjunction/ai-prompts (AIPromptRunner)"]
+        AIE["@memberjunction/aiengine (AIEngine)"]
+        ACT["@memberjunction/actions (ActionEngineServer)"]
+        RR["@memberjunction/ai-reranker (RerankerService)"]
     end
 
     AIP --> BA
@@ -79,19 +69,32 @@ npm install @memberjunction/ai-agents
 
 ## Key Components
 
-### BaseAgent
+### BaseAgent, `AgentRunContext` & 13 Pluggable Helper Seams
 
-The core execution engine that all agents use. Handles:
+`BaseAgent` (`src/base-agent.ts`, ~600 lines) orchestrates every agent run by resolving 13 pluggable helper seams via `ResolveAgentHelper` / `AgentHelperCache` (`src/helpers/AgentHelperResolver.ts`) and sharing live per-run state through `AgentRunContext` (`src/helpers/AgentRunContext.ts`):
 
-- Hierarchical prompt execution (agent type's system prompt as parent, agent's prompts as children)
-- Action execution through the MJ Actions framework
-- **Client tool invocation** for browser-side UI operations (navigate to records, switch tabs, show search results) via PubSub round-trip
-- Sub-agent orchestration with full context propagation
-- Conversation context management with automatic message compaction
-- Memory retrieval (notes and examples) with optional reranking
-- Payload data management across execution steps
-- ForEach and While loop operations
-- Comprehensive execution tracking (AIAgentRun, AIAgentRunStep records)
+| Seam Key (`AgentHelperSeamKey`) | Pluggable Base Class | Default Implementation | Per-Agent `helperPlugins`? |
+|---|---|---|---|
+| `'messaging'` | `BaseAgentMessagingHelper` | `AgentMessagingHelper` | Yes (Admin-Only) |
+| `'payload'` | `BaseAgentPayloadHelper` | `AgentPayloadHelper` | Yes (Admin-Only) |
+| `'compaction'` | `BaseAgentCompactionHelper` | `AgentCompactionHelper` | Yes (Admin-Only) |
+| `'realtime'` | `BaseAgentRealtimeHelper` | `AgentRealtimeHelper` | Yes (Admin-Only) |
+| `'iteration'` | `BaseAgentIterationHelper` | `AgentIterationHelper` | Yes (Admin-Only) |
+| `'skills'` | `BaseAgentSkillsHelper` | `AgentSkillsHelper` | Yes (Admin-Only) |
+| `'limits'` | `BaseAgentLimitsHelper` | `AgentLimitsHelper` | **No — Code-Only (`@RegisterClass`)** |
+| `'actionPolicy'` | `BaseAgentActionPolicyHelper` | `AgentActionPolicyHelper` | **No — Code-Only (`@RegisterClass`)** |
+| `'actions'` | `BaseAgentActionsHelper` | `AgentActionsHelper` | **No — Code-Only (`@RegisterClass`)** |
+| `'prompt'` | `BaseAgentPromptHelper` | `AgentPromptHelper` | Yes (Admin-Only) |
+| `'subAgents'` | `BaseAgentSubAgentHelper` | `AgentSubAgentHelper` | **No — Code-Only (`@RegisterClass`)** |
+| `'steps'` | `BaseAgentStepExecutionHelper` | `AgentStepExecutionHelper` | **No — Code-Only (`@RegisterClass`)** |
+| `'setup'` | `BaseAgentRunSetupHelper` | `AgentRunSetupHelper` | **No — Code-Only (`@RegisterClass`)** |
+
+- **Four Extension Points:** (1) `BaseAgentType`, (2) `AIAgentStepType` + `BaseAgentStepHandler` via `AgentStepTypeRegistry`, (3) `BaseAgent*Helper` global `@RegisterClass` or admin-only `AIAgent.Configuration.helperPlugins`, and (4) `BaseAgent` subclassing (`AIAgent.DriverClass`). See [Agent Builder & Extension Guide](../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md).
+- **Pluggable Step-Type Registry (`AgentStepTypeRegistry`):** Replaces monolithic step `switch` blocks with 14 built-in `BaseAgentStepHandler` classes (`BuiltInAgentStepHandlers.ts`) plus metadata-driven (`MJ: AI Agent Step Types`) and programmatic OpenApp step handlers, each declaring `AllowedInUnapprovedPlanMode` and `CountsAgainstTreeBudget`.
+- **Sliding Liveness Watchdog & `AgentStuckDetector` (`helpers/limits/`):**
+  - `AgentLivenessWatchdog` replaces blunt wall-clock aborts with a sliding inactivity window (`Liveness.InactivityTimeoutMs`, default `900_000` ms = 15m) reset by streaming chunks (via an always-on headless liveness sink), step completions, and action/sub-agent heartbeats, suspended during external waits (`SuspendForExternalWait` / `ResumeFromExternalWait`), plus a 32-bit-safe outer ceiling (`Liveness.OuterMaxWallClockMs`, default `259_200_000` ms = 72h). Pair with `ConfigureLongRunningAIFetch` from `@memberjunction/ai` to avoid Node `undici`'s 300s `headersTimeout` on AI provider SDK requests without replacing the process-global dispatcher.
+  - `AgentStuckDetector` catches identical succeeding canonical tool-call loops (`IdenticalToolCallThreshold`, default `3` in `WindowSize = 10`) and consecutive read-only spirals (`ReadOnlyStepThreshold`, default `30` + `5` grace steps), injecting course-correction/wrap-up directives before escalating to a non-destructive checkpoint pause (`StuckToolCallLoop` / `ReadOnlySpiral`).
+- **Zero-Breakage `v6.x` Compatibility:** All 494 historical `protected` methods remain callable and overridable via logic-free `@deprecated` 1-line delegates in `helpers/compat/BaseAgentDeprecatedDelegates*.ts` (retiring in `v7.0`; see [BaseAgent Rebase Map](../../../guides/BASE_AGENT_REBASE_MAP.md)).
 
 ### AgentRunner
 
@@ -127,10 +130,12 @@ Abstract base that all agent types extend. Defines the `DetermineNextStep()` int
 | `Chat` | Send a message back to the user |
 | `Actions` | Execute one or more server-side actions |
 | `ClientTools` | Invoke browser-side tools (navigate, switch tabs, show results) |
-| `SubAgents` | Delegate to sub-agents |
+| `SubAgents` / `Sub-Agent` | Delegate to child, related, or runtime-granted sub-agents and receive their result in-run |
+| `Handoff` | Transfer a top-level interactive conversation to a directly discoverable peer agent (hosts that pass `handoffChain` only) |
+| `Tasks` | Submit a durable `TaskGraphSpec` to the task-graph dispatcher and detach |
 | `MoreInfo` | Ask the user for additional information |
 | `Retry` | Retry the current step (e.g., after validation failure) |
-| `End` | Complete execution |
+| `End` / `Success` / `Failed` | Complete execution |
 | `ForEach` | Iterate over a collection |
 | `While` | Loop while a condition is true |
 
@@ -140,7 +145,7 @@ Conversational agent that runs in a loop: prompt -> decide -> act -> repeat. Bes
 
 ##### Decision models
 
-An agent can ask a fast decision model typed questions in six places on its own. One master switch governs all of them: the Loop prompt param **`decisionsEnabled`**, `false` by default. Unless it is `true`, the agent never asks a decision model on its own, whatever the other settings say: their docs stay out of the prompt and the runtime refuses the call. With it `true`, each use still needs its own setting, and each of those is off by default too:
+An agent can ask a fast decision model typed questions in seven places on its own. One master switch governs all of them: the Loop prompt param **`decisionsEnabled`**, `false` by default. Unless it is `true`, the agent never asks a decision model on its own, whatever the other settings say: their docs stay out of the prompt and the runtime refuses the call. With it `true`, each use still needs its own setting, and each of those is off by default too, except the Memory Manager's two:
 
 | Use | Its own setting |
 |---|---|
@@ -148,16 +153,50 @@ An agent can ask a fast decision model typed questions in six places on its own.
 | `finishIf` gates on an Actions or Sub-Agent step | `finishIfMode: 'shadow'` or `'on'` |
 | Decision discovery (suggest an agent before the first prompt) | `decisionDiscovery: true` |
 | Payload change check | `payloadFeedbackCheck: true` |
-| Catalog narrowing | `maxActionsInPrompt` / `maxSubAgentsInPrompt` > 0 |
-| Memory Manager note gate | run `data.enableDecisionGate: true` |
+| Catalog narrowing | `maxActionsInPrompt` / `maxSubAgentsInPrompt` / `maxSkillsInPrompt` > 0 |
+| Memory Manager note gate | on by default; a run turns it off with `data.enableDecisionGate: false` |
+| Memory Manager dedupe and contradiction decisions | run `data.memoryDecisionMode`: `'Shadow'` by default, `'Prompt'` or `'Decision'` |
+
+The Memory Manager ships with `decisionsEnabled: true`, and Sage with `decisionsEnabled: true` and `decisionDiscovery: true` (`metadata/agents`). The Memory Manager's decisions ask its `decisionPromptName` on the run's execution scope.
 
 Set it in an agent's `AgentTypePromptParams` (`{"decisionsEnabled": true, "finishIfMode": "shadow"}`) or for one run in `data.__agentTypePromptParams`. Uses someone placed explicitly do not read it: a Flow or task-graph Decision step, the Run Decision action, and other direct callers of `AgentDecisionService`. See the [Decision Models guide](./docs/loop-agent-decisions.md).
+
+##### Skill Catalog Narrowing & Hybrid Prioritization (`maxSkillsInPrompt`)
+
+When an agent has access to a large library of skills (`AcceptsSkills = 'All'`), `LoopAgentPromptParams` supports capping the skills injected into the system prompt via `maxSkillsInPrompt` (default `25` when `decisionsEnabled: true` or when explicitly set) and `maxSkillDecisionCandidates` (default `60`).
+
+In [`catalog-narrowing.ts`](./src/catalog-narrowing.ts), [`AgentPromptCatalogAndNarrowingHelper.EnsureCatalogNarrowing`](./src/helpers/prompt/AgentPromptCatalogAndNarrowingHelper.ts) (via `BaseAgentPromptHelper`) runs a **two-stage narrowing pipeline**:
+1. **Stage 1 (`PreFilterSkillCandidatesForDecision` + `RankSkillsByHybridRelevance`)**: Ranks all available skills in-memory (`0ms`) using a weighted hybrid score combining lexical/semantic query fit across skill name, description, category, and bundled action names (`0.55`), log-normalized agent-specific + global usage frequency from recent `MJ: AI Agent Run Steps` (`0.25`), and exponential recency decay with a 7-day half-life (`0.20`), slicing the top `maxSkillDecisionCandidates` (60).
+2. **Stage 2 (`NarrowSkillsWithDecision`)**: When `decisionsEnabled: true`, passes the Stage 1 shortlist to `AgentDecisionService` (`selectRelevantCatalogItems`) to pick up to `maxSkillsInPrompt`. When `decisionsEnabled: false` (or if the decision call fails), deterministically slices the top `maxSkillsInPrompt` from Stage 1.
+3. **Pinned Skills & Discovery Guidance**: Any skill already activated in the run (`_activatedSkillIDs`) or requested via `requestedSkillIDs` is pinned (`pinnedSkillIDs`) so it is never dropped. When skills are narrowed and the agent holds `Find Candidate Skills`, `BuildCatalogNarrowingNote` appends guidance instructing the model to use `Find Candidate Skills` and `Get Skill Details` to discover omitted skills.
+
+##### Untrusted external data
+
+Some actions return content that nobody inside MJ wrote: web pages, search results, mail, feeds, arbitrary HTTP responses, MCP tool output. The loop agent wraps such a result in an `<untrusted_external_data source="…" trust="…" warning="…">` envelope (any closing tag inside the content is escaped first), drops the action's `AIDirectives`, and marks the run **tainted**. A tainted run's `memory_write` notes land with `Status = 'Pending'` and the sources named in `Comments`, so an instruction smuggled in a web page cannot become an active memory. A parent run absorbs its sub-agents' sources when the sub-agent step completes. `ExecuteAgentResult.taintedSources` carries them to the caller.
+
+How a result's trust level is decided, first match wins:
+
+| Precedence | Source |
+|---|---|
+| 1 | `actionTrustLevels: { "<action>": "Trusted" \| "SemiTrusted" \| "Untrusted" }` in the agent's `AgentTypePromptParams` or the run's `data.__agentTypePromptParams` |
+| 2 | `trustedActionNames` / `untrustedActionNames` lists in the same prompt params |
+| 3 | `Action.Config_Object?.outputTrustLevel` on the `MJ: Actions` metadata record (`IActionConfiguration` JSONType on `Action.Config`) |
+| 4 | `Trusted` |
+
+Client tools declare `TrustLevel` on their `ClientToolMetadata`; a browser DOM extractor should say `Untrusted`. In the `MJ: Actions` metadata catalog, `outputTrustLevel: "Untrusted"` is set on actions that ingest external content (web search and page content, inbox reader, HTTP request, URL metadata, RSS feeds, `Execute MCP Tool`), not on actions that send to an external system or list MJ's own MCP catalog.
+
+Trust labels propagate end to end across context-management and delegation boundaries:
+- **Spilled artifact tools (`ArtifactToolManager`)**: reads (`ExecuteSingleToolCall`), workspace listings (`list_workspace_artifacts`), refreshed artifacts (`refresh_and_snapshot_artifact`), source-link records (`follow_source_link`), mutations to existing workspace artifacts, and newly created or synthesized artifacts (`create_artifact`, `create_synthesized_artifact`) inherit the most restrictive `trustLevel`/`sourceName` of their source artifacts and the active run taint, and wrap returned content in `<untrusted_external_data>`.
+- **Sub-agent delegation (`ExportInputArtifacts`)**: parent artifacts passed to sub-agents preserve `trustLevel` and `sourceName`.
+- **Server-side pipelines (`Pipeline`)**: multi-stage pipelines taint and wrap their final output whenever any source stage reads from an untrusted or semi-trusted artifact or action.
+- **Compaction and emergency recovery**: `First N Chars` and `AI Summary` compaction as well as emergency context-recovery truncation (`TruncatePreservingUntrustedEnvelope`) preserve the outer `<untrusted_external_data>` XML boundary instead of slicing off the closing tag.
+- **Cross-run carry-forward**: `BuildPriorTurnToolResultsMessage` drops `Untrusted` and `SemiTrusted` artifact/action step outputs while preserving `Trusted` ones.
 
 ##### Output Artifact Lifecycle (`artifactDirective`) & `_ARTIFACTS_ENABLED` Gating
 
 When an artifact-producing Loop agent finishes a turn (`taskComplete: true`), it controls whether its final payload creates a new artifact, versions an existing artifact in the conversation, or suppresses artifact creation via `artifactDirective: { behavior: 'create-new' | 'version-source' | 'suppress', targetArtifactId?, name?, description? }`:
 
-- **Default-on per-agent gating (`_ARTIFACTS_ENABLED`)**: `BaseAgent.isArtifactSupportEnabled(agent)` returns `true` unless `AIAgent.ArtifactCreationMode` is `'Never'` or `'System Only'`. The Loop Agent system prompt (`{% if _ARTIFACTS_ENABLED != false %}`) and `<mj-runtime-state>` automatically omit all `artifactDirective` instructions and the `_CONVERSATION_ARTIFACTS` catalog for non-artifact agents (such as `Sage` and `Knowledge Agent`), while enabling them by default for artifact-producing agents (`Query Builder`, `SkillSmith`, `Codesmith`, `Research Agent`, etc.).
+- **Default-on per-agent gating (`_ARTIFACTS_ENABLED`)**: `BaseAgent.isArtifactSupportEnabled(agent)` returns `true` unless `AIAgent.ArtifactCreationMode` is `'Never'` or `'System Only'`. The Loop Agent system prompt (`{% if _ARTIFACTS_ENABLED != false %}`) and `<mj-runtime-state>` automatically omit turn-end `artifactDirective` / automatic JSON payload creation for non-artifact agents (such as `Sage`), while keeping explicit workspace artifact tools (`create_artifact`, `open_artifact`, `list_workspace_artifacts`, `create_synthesized_artifact`) enabled whenever `includeArtifactToolsDocs !== false` and `contextUser` is present. Collaborative artifacts created or updated mid-run are reported in `ExecuteAgentResult.touchedArtifacts` (`GovernedRunArtifactSummary[]`), and server-side live presence + CoreAction governance run through `GovernedArtifactService`.
 - **Full-conversation artifact targeting (`targetArtifactId`)**: `AgentRunner` loads the conversation's prior output artifacts into `_CONVERSATION_ARTIFACTS` so the agent can version any earlier artifact by `targetArtifactId` (not just the immediately preceding turn's artifact).
 - **Clean payload reset on `create-new`**: When `artifactDirective.behavior === 'create-new'` and the current payload is still the unmodified inherited payload from the prior conversation turn (`payload === params.payload`, even after read-only action steps) or `replaceElements` is used, `BaseAgent.executePromptStep` applies `payloadChangeRequest` against a fresh `{}` object so fields from a prior artifact never bleed into the new artifact.
 
@@ -169,6 +208,20 @@ When a Loop agent (such as `Sage`) emits `nextStep.type: 'Tasks'`, `LoopAgentTyp
 
 - **Single-node task graphs (1 task of kind `'Agent'` or `'Action'`)**: Automatically fold inline into a standard in-process `'Sub-Agents'` or `'Actions'` step — even when `taskGraph.continuation === 'reinvoke'` is specified (`terminateAfter: false` so the parent Loop agent gets another turn to synthesize the specialist's output). This avoids durable task-graph dispatch overhead for 1-step specialist delegations (e.g., `Query Builder`, `Visualization Agent`) and keeps live sub-agent streaming in the active chat turn.
 - **Multi-node task graphs (2+ tasks with `dependsOn` / `payloadMapping` or non-trivial scheduling)**: Dispatch as durable `MJ: Tasks` rows through [`@memberjunction/task-graph`](../../TaskGraph/README.md), broadcasting real-time step transitions via `TaskGraphFrameBroadcaster` and delivering synthesized continuation replies and artifacts back to the conversation via `TaskGraphContinuationDeliverer`.
+
+##### Execution Primitive Hierarchy & Native Tool-Calling JSON Envelope Bridge
+
+Loop agents choose from four structured execution primitives depending on dataflow, iteration, and durability needs:
+
+| Primitive | When to Use | Execution & Persistence |
+|---|---|---|
+| `Actions` / Native tool calls | 1–3 independent calls whose raw results the LLM needs in context | In-turn `Actions` / `Sub-Agents` run steps |
+| `Pipeline` (`nextStep.type = 'Pipeline'`) | Linear server-side tool chains (`tool`, `jsonpath`, `select`, `grep`, `slice`, `head`, `tail`, `count`, `unique`, `sort`, `parse_json`) where intermediate outputs stay out of context | Single `Tool` (`Pipeline: N step(s)`) run step; `StructureActionResult` automatically coerces structured JSON `ActionResult.Message` payloads when an action declares no `Output` params |
+| `ForEach` / `While` (`nextStep.type = 'ForEach' \| 'While'`) | In-turn batch iteration or bounded convergence, either with a single `action` / `subAgent` body or an ordered multi-step `steps?: LoopBodyActionStep[]` sequence chaining outputs via `{{steps.<id>.<field>}}` | Single `ForEach` / `While` run step plus linked child `Actions` / `Sub-Agents` steps |
+| `Tasks` (`nextStep.type = 'Tasks'`) | Durable DAGs (`Agent`, `Action`, `Human`, `Prompt`, `ForEach` including `steps[]`, `While`, `Decision`), conditional/XOR `exclusiveGroup` forks, or long-running sleep/wake (`continuation: 'reinvoke'`) | Persisted `StepType = 'TaskGraph'` run step; submitting `AIAgentRun` parks in `Paused` until `TaskGraphDispatcher` settles the graph to `Completed` |
+
+- **Native tool-calling JSON envelope bridge**: When a model runs in `Native` (hybrid) or `NativeImplicit` tool-calling mode (`ResolveNativeToolCalling`), it uses native tool calls for ordinary `Actions` / `Sub-Agent` / `ClientTools` turns, and bridges cleanly to `Pipeline`, `ForEach`, `While`, or `Tasks` by emitting **no native tool call on that turn** and replying with a `LoopAgentResponse` JSON envelope (`{ "taskComplete": false, "nextStep": { "type": "..." } }`).
+- **Sanitized tool-name normalization**: `PipelineToolRegistry`, `BaseAgent` (`Actions`, `Sub-Agent`, `ForEach`/`While`, and `validateTasksNextStep`), and `TaskGraphService` / `TaskGraphDispatcher` normalize sanitized native tool names (`calculate_expression` → `"Calculate Expression"`, `delegate_to_query_builder` → `"Query Builder"`) via `SanitizeToolName` so JSON envelopes work seamlessly whether the model writes canonical MJ names or native tool identifiers.
 
 #### FlowAgentType
 
@@ -249,7 +302,7 @@ Key pieces in this package:
 - **`RealtimeAgentType`** (`src/agent-types/realtime-agent-type.ts`) — the registered agent type (`@RegisterClass(BaseAgentType, "RealtimeAgentType")`). Its `IsSessionDriven` getter makes `BaseAgent.ExecuteAgent` branch into `executeRealtimeSession()` instead of the loop; the loop-oriented abstract methods are implemented defensively and should never be reached.
 - **`RealtimeSessionRunner`** (`src/realtime/realtime-session-runner.ts`) — dependency-injected orchestrator for the **server-bridged** topology: opens the `IRealtimeSession`, registers the stable tool set, persists transcript turns, checkpoints usage onto the single long-lived `AIPromptRun` on a debounced cadence (crash-safe — a janitor close finalizes from the last-persisted values), and aborts an in-flight delegated run on barge-in. It also **narrates** delegated work itself: each significant progress event is fed to the session's optional `SendContextNote`, and a built-in pacing engine (first spoken update ~5 s into a burst, ≥8 s session-global spacing, deduped multi-message digests, cancellation on completion/barge-in) drives `RequestSpokenUpdate` — both feature-detected, since providers may omit either capability. Fully unit-testable against a mock realtime model.
 - **`realtime-narration.ts`** (`src/realtime/realtime-narration.ts`) — the shared narration module both topologies use: `ResolveNarrationInstructionsTemplate()` resolves the DB-driven `Realtime Co-Agent - Progress Narration` prompt (with a deprecated fallback to the pre-rename `Voice Co-Agent - Progress Narration` seed name) from `AIEngine`'s cache, and `BuildServerNarrationInstructions()` substitutes its placeholders for the server-bridged runner (the browser host has its own richer builder that chains the model's actual prior narrations — only the browser can observe those).
-- **`RealtimeTurnModerator`** (`src/realtime/realtime-turn-moderator.ts`, exported as `RealtimeTurnModeratorDecision`) — the **multi-agent turn moderator** behind the bridge engine's `SetTurnModerator` seam. In a multi-agent voice room it decides, once per turn, which agent(s) (0+, ordered) should speak next — routing direct address *and* relevance, letting a productive agent↔agent exchange run, and going quiet on unproductive ping-pong. It runs as a fast **`AIPromptRun`** (not an agent run — a stateless who-speaks classification) via `AIPromptRunner`, tied to the co-agent's `AIAgentRun` for full observability, resolving its room-wide config from the **Realtime agent type's `DefaultConfiguration`** (`turnTaking.moderator` in `realtime-coagent-config.ts`) and the per-agent `mode` from the target agent's layer. The seeded `"Realtime: Turn Moderator"` prompt is bound to a small/fast model (GPT-OSS-120B on Cerebras, swappable in metadata) because it sits on the latency-critical path. Degrades to a name-contains safety net only when no prompt is configured; the engine itself falls back to the per-agent matcher broadcast when no moderator is wired. The engine-side mechanics (lookback, serialized floor queue, pre-staging, barge-in invalidation) and the config cascade are documented in the [Real-Time Co-Agents Guide §4](../../../guides/REALTIME_CO_AGENTS_GUIDE.md#turn-moderator-multi-agent-turn-taking) and the [Realtime Bridges Guide §9](../../../guides/REALTIME_BRIDGES_GUIDE.md#turn-moderator--room-level-who-speaks-next-engine-seam).
+- **`RealtimeTurnModerator`** (`src/realtime/realtime-turn-moderator.ts`, exported as `RealtimeTurnModeratorDecision`) — the **multi-agent turn moderator** behind the bridge engine's `SetTurnModerator` seam. In a multi-agent voice room it decides, once per turn, which agent(s) (0+, ordered) should speak next — routing direct address *and* relevance, letting a productive agent↔agent exchange run, and going quiet on unproductive ping-pong. It runs as a fast **`AIPromptRun`** (not an agent run — a stateless who-speaks classification) via `AIPromptRunner`, tied to the co-agent's `AIAgentRun` for full observability, resolving its room-wide config from the **Realtime agent type's `DefaultConfiguration`** (`turnTaking.moderator` in `realtime-coagent-config.ts`) and the per-agent `mode` from the target agent's layer. The seeded `"Realtime: Turn Moderator"` prompt is bound to a small/fast model (GPT-OSS-120B on Cerebras, swappable in metadata) because it sits on the latency-critical path. Beside the prompt it can ask one decision-model Likelihood per roster agent (`turnTaking.moderator.decisionMode`: `'Shadow'` by default, which records the comparison and adds no latency; `'Decision'` once a `realtime-turn-moderator` calibration ships; see [Decision Models in Agents](docs/loop-agent-decisions.md#realtime-turn-moderator)). Degrades to a name-contains safety net only when no prompt is configured; the engine itself falls back to the per-agent matcher broadcast when no moderator is wired. The engine-side mechanics (lookback, serialized floor queue, pre-staging, barge-in invalidation) and the config cascade are documented in the [Real-Time Co-Agents Guide §4](../../../guides/REALTIME_CO_AGENTS_GUIDE.md#turn-moderator-multi-agent-turn-taking) and the [Realtime Bridges Guide §9](../../../guides/REALTIME_BRIDGES_GUIDE.md#turn-moderator--room-level-who-speaks-next-engine-seam).
 
 - **`RealtimeToolBroker`** (`src/realtime/realtime-tool-broker.ts`) — the **topology-agnostic** tool-execution path both topologies share, so a tool call produces byte-for-byte identical results whether the provider socket lives on the server or in the browser. Routes the stable `invoke-target-agent` tool (the co-agent's one headline capability — the target rides *inside* the call, never as a per-target tool) to the delegation seam, everything else to the tool executor; owns the per-call `AbortController`; serializes failures as structured errors the model can *narrate*.
 - **`RealtimeClientSessionService`** (`src/realtime/realtime-client-session-service.ts`) — the server half of the **client-direct** topology (the shipped audio path: the browser opens its own provider socket with a server-minted ephemeral token, while the server keeps prompt/tool authority and executes every relayed tool call). `PrepareClientSession` resolves the Realtime model, assembles the companion system prompt + memory context (including a resumed session's prior-leg transcript when the caller threads one in), mints the `ClientRealtimeSessionConfig`, and creates the co-agent **observability run** (an `AIAgentRun` + linked `AIPromptRun` stamped with the co-agent's `AgentID`, plus a single `Prompt`-type `AIAgentRunStep` whose `TargetLogID` points at the prompt run — finalized with a `Success` stamp by `FinalizeCoAgentRun`). `ExecuteRelayedTool` runs relayed calls through the shared broker — registering each in a per-session **in-flight delegation registry** so `CancelInFlightDelegations(sessionId, callId?)` (the engine behind the `CancelRealtimeSessionTool` mutation) can abort them on explicit user cancel — including resuming a paused (`AwaitingFeedback`) interactive run and creating artifacts from delegated-run payloads.
@@ -301,6 +354,17 @@ Optimizes agent startup by batch-loading all required metadata in parallel:
 - Actions and their parameters
 - Sub-agent data
 - Prompt configurations
+
+### AgentRunWatchdog
+
+Process-wide guard that keeps an `AIAgentRun` from being left `Running` forever when its process dies or its final save fails. `BaseAgent` calls `Track()` once the run row exists and `Untrack()` as soon as the run leaves `Running` (Completed, Failed, Cancelled, AwaitingFeedback or Paused) — first thing in `Execute()`'s teardown, before any subclass `finalizeRun` hook.
+
+- **Heartbeat** — every `heartbeatIntervalMs` (30s) it stamps `LastHeartbeatAt` on this process's in-flight runs.
+- **Sweep** — every `sweepIntervalMs` (5 min) it force-fails `Running` runs whose heartbeat went stale (`staleThresholdMinutes`, 5) and drops finished runs from its tracked set. Once the process has tracked a run, the sweep keeps running even with nothing tracked, so it also closes runs that other, crashed instances left `Running`. The host also runs `SweepOrphanedRuns` once at startup.
+- **Stop relay** — every 3s it checks whether one of its runs was marked `Cancelled` (the Stop button) and aborts that run.
+- **Idle** — the heartbeat and the stop relay run only while at least one run is tracked: the last run leaving stops them, and the next `Track()` starts them again. With `sweepIntervalMs: 0` the sweep never starts either, so an idle process issues no periodic database statements; see the [Serverless Database Auto-Pause Guide](../../../guides/SERVERLESS_DATABASE_AUTO_PAUSE_GUIDE.md) for the trade-off.
+
+Tune it with `AgentRunWatchdog.Instance.Configure({ ... })`; MJServer passes its `agentRunWatchdog` settings through at startup. `sweepIntervalMs: 0` turns the periodic sweep off (the startup sweep still runs, and the tracked-set prune moves to the heartbeat). Other values must be greater than 0; an invalid value throws.
 
 > 📖 **Memory is a big topic.** For the complete architecture — the three-tier model, injection and scoping, the in-flight write pipeline, and the Memory Manager's hardening/consolidation/decay phases — see the **[Agent Memory Guide](../../../guides/AGENT_MEMORY_GUIDE.md)**. The sections below are component-level summaries.
 
@@ -356,6 +420,16 @@ Run-level payload fields added: `scoreDistribution`, `entityTriplesExtracted`, `
 Memory Cleanup Agent has been deprecated — its responsibilities are folded into MemoryManagerAgent's pipeline.
 
 For the full design (functional requirements, threshold rationale, decay curve, contradiction taxonomy), see [`specs/001-memory-consolidation/spec.md`](../../../specs/001-memory-consolidation/spec.md) and the implementation in [`src/memory-manager-agent.ts`](./src/memory-manager-agent.ts).
+
+### DuplicateReasoningAgentProvider
+
+The `'Agent'` reasoning mode for duplicate detection. It registers under the `'Agent'` key against
+`DuplicateReasoningProvider` (from `@memberjunction/ai-vector-dupe`) and runs the **Duplicate
+Resolution Agent** — or the entity document's `ReasoningAgentID` — over one matched set, returning the
+same per-candidate verdict, proposed survivor and field choices as the single-shot `'Prompt'` mode.
+The match rows record the run in `AIAgentRunID`. It lives here, not in the dupe package, because this
+package depends on that one. See the
+[Duplicate Management Guide](../../../guides/DUPLICATE_MANAGEMENT_GUIDE.md#6-the-llm-reasoning-layer).
 
 ## Usage
 
@@ -479,6 +553,14 @@ const result = await runner.ExecuteAgent({
     }
 });
 ```
+
+For action results specifically, expiration, compaction, and per-run execution limits follow a unified 3-tier precedence (`ActionLifecycleResolver`) shared identically across directly-attached (`AIAgentAction`) and skill-bundled (`AISkillAction`) actions:
+
+1. `ExecuteAgentParams.messageExpirationOverride` — runtime caller override (passing `{ expirationMode: 'None' }` explicitly disables expiration for the run).
+2. Active `AIAgentAction` metadata — agent-specific `ResultExpirationTurns` / `ResultExpirationMode` / `CompactMode` / `CompactLength` / `CompactPromptID` / `MaxExecutionsPerRun` when `ResultExpirationTurns` is non-null (to opt a specific agent out of an `Action.Config` default via `AIAgentAction`, set `ResultExpirationMode = 'None'` with `ResultExpirationTurns = 0`).
+3. `Action.Config_Object` (`IActionConfiguration` JSON on `MJ: Actions.Config`) + `Action.DefaultCompactPromptID` — action-level defaults that apply automatically whenever no active `AIAgentAction` row sets `ResultExpirationTurns`.
+
+Mid-loop pruning/compaction runs once the conversation reaches the agent's compaction trigger (`isMidLoopCompactionThresholdReached` — 75% of `ContextWindowMaxTokens`, e.g. 90k tokens on Sage) or whenever `messageExpirationOverride` is passed, preserving provider prompt-cache prefixes on routine short turns. Large or tabular action outputs use lazy artifact spillover (`ActionResultSpilloverManager`) into `ArtifactToolManager`: results remain inline in conversation history (without mutating `_ARTIFACT_MANIFEST`) until compaction, expiration removal, or emergency context recovery actually fires, at which point they materialize as queryable workspace artifacts and leave stub pointers in the compacted message.
 
 ### With Post-Run Compaction, Scratchpad Pruning & Memory Extraction (`compactAfterRun`)
 
@@ -633,11 +715,12 @@ Self-scheduling agents such as the Chief of Staff normally wake on a cron or ada
 | `TriggerWakeOnAgentRequestResolution` | `MJAIAgentRequestEntityServer.Save()` when an action-created `MJ: AI Agent Requests` row (`OriginatingAgentRunID` and `OriginatingTaskID` both null) moves from `Requested` to `Approved`, `Rejected` or `Responded` | The request owner (`RequestForUserID`) and `AgentID` | `approval-resolution` | `AgentRequestResolution` — `requestID`, `status`, `request`, `response`, parsed `responseData` and `commentsData`, `respondedByUserID`, `respondedAt` |
 | Same method, inter-agent envelope | The resolved request's `Comments` is a `Send Inter-Agent Request` envelope (`interAgentCoordination: true`) | The **sender** user (`envelope.senderUserID`) and `senderAgentID` | envelope `workstreamKey`, else `inter-agent-resolution` | `InterAgentRequestResolved` — `requestID`, `status`, `subject`, `response`, `responseData`, `respondedByUserID`, `respondedAt`, `targetUserID`, `targetUserName` |
 | `TriggerWakeOnIncomingInterAgentRequest` | `MJAIAgentRequestEntityServer.Save()` on a **new** `Requested` row whose `Comments` is an inter-agent envelope (`interAgentCoordination: true`) | The **target** user (`envelope.targetUserID`) and the request's `AgentID` | envelope `workstreamKey`, else `inter-agent-inbox` | `InterAgentRequestReceived` — `requestID`, `senderUserID`, `senderUserName`, `senderAgentID`, `subject`, `messageBody` |
+| `TriggerWakeForWorkstream` | Generic programmatic entry point (`Trigger Agent Wake` action, `TaskType` `OnCreate` / `OnStatusChange` hooks, GitHub webhook handlers, Software Factory pipeline gates) passing `TriggerWorkstreamWakeInput` | Explicit `targetUserID` + `targetAgentID` (or `targetAgentName`) | Required `workstreamKey` (e.g., `task:<TaskID>`) | `ExternalWorkstreamEvent` (or caller's `resumeState.triggerType`) — `workstreamKey`, `wakeReason`, `triggeredAt`, and caller `resumeState` |
 | `RouteInboundUtilityMailboxWake` | An inbound-email ingestion path (none wired yet) passing an `InboundUtilityMailboxEmailInput` | The verified internal sender (`fromAddress` matches an active `MJ: Users` row) and the `AgentID` of the matching `MJ: AI Bridge Agent Identities` row (`IdentityType = 'Email'`, `IsActive`) | input `workstreamKey`, else identity `Configuration.defaultWorkstreamKey`, else `inbound-utility-mailbox` | `InboundUtilityMailboxEmail` — `identityID`, `utilityMailboxAddress`, `senderUserID`, `senderEmail`, `messageID`, `subject`, `bodyPreview`, `receivedAt` |
 
 Every `resumeState` also repeats the `workstreamKey`. Requests that carry `OriginatingAgentRunID` (a paused run) or `OriginatingTaskID` (a task graph) are skipped — those resume through the existing `lastRunId` path and the task dispatcher, not through a wake.
 
-**Policy checks.** `AgentUserPolicyEngine.GetPolicyForAgentAndUser` is consulted for the target user. A `Disabled` or `Paused` `MJ: AI Agent User Policies` row blocks every trigger; the incoming inter-agent trigger additionally requires an `Active` policy with `AllowInterAgentCoordination` not `false`; the mailbox trigger also refuses `EmailChannelMode = 'Disabled'`, enforces the identity's optional `Configuration.allowedUserID` / `allowedEmailDomains`, and rejects any sender that is not an active internal user.
+**Policy checks.** `AgentUserPolicyEngine.GetPolicyForAgentAndUser` is consulted for the target user. A `Disabled` or `Paused` `MJ: AI Agent User Policies` row blocks every trigger; the incoming inter-agent trigger additionally requires an `Active` policy with `AllowInterAgentCoordination` not `false`; `RouteInboundUtilityMailboxWake` enforces `identity.UserID` when populated on the bridge identity (`SENDER_NOT_AUTHORIZED_FOR_IDENTITY` if the sender does not match), requires an existing `Active` onboarding policy row (`POLICY_DENIED` if missing or not `Active`), refuses `EmailChannelMode = 'Disabled'`, enforces the identity's optional `Configuration.allowedUserID` / `allowedEmailDomains`, and rejects any sender that is not an active internal user.
 
 **Result.** Each method returns an `AgentWakeTriggerResult` — `{ triggered, resultCode, reason, routineID, targetUserID, targetAgentID, workstreamKey, nextRunAtISO }` — and never throws for business outcomes. `resultCode` is one of `WAKE_SCHEDULED`, `SKIPPED_NOT_APPLICABLE`, `POLICY_DENIED`, `IDENTITY_NOT_FOUND`, `UNVERIFIED_EXTERNAL_SENDER`, `SENDER_NOT_AUTHORIZED_FOR_IDENTITY`, `SAVE_FAILED`.
 
@@ -661,18 +744,30 @@ if (!result.triggered) {
 - Routines are private to their owner (`MJUserRoutineEntityServer.validateOwnership`, plus row-level security on the lookup). A wake for the caller's own agent is saved in the caller's scope; a wake for another user (inter-agent arrival, or a resolution that wakes the sender) is saved as the scheduler's **system user** from `UserCache`, which the ownership gate exempts. If no system user is cached (unit tests, unusual hosts) the service falls back to the caller and logs that the save may be rejected.
 - The service's `InterAgentCoordinationEnvelopeShape` accepts both the `InterAgentCoordinationEnvelope` field names the action writes (`protocolVersion`, `message`) and the older `envelopeVersion` / `messageBody` names. The two shapes are still declared separately because `@memberjunction/core-actions` depends on this package, not the reverse.
 - Wakes are keyed by `UserID` + `TargetID` + `workstreamKey`; events for the same workstream that land between sweeps are queued in `resumeState.pendingEvents` (see above). The queue is at-least-once: an event that lands between the dispatcher's claim save and the service's save can be delivered twice, so the agent should treat `requestID` as idempotent and re-check the request's current status.
-- `RouteInboundUtilityMailboxWake` has no production caller. Wiring it needs an inbound-email ingestion path (mailbox poller or provider webhook) that does not exist yet, and `resolveVerifiedInternalSender` should then resolve the sender through `UserCache` rather than building a role-less `UserInfo`. Deferred to a follow-up by decision.
+- `RouteInboundUtilityMailboxWake` is wired through `InboundUtilityMailboxIngestionService` (supporting webhook delivery via `HandleWebhookMessage` and 1-minute poll sweeps via `PollActiveUtilityMailboxes` with `messageID` deduplication), and `resolveVerifiedInternalSender` resolves active internal senders through `UserCache.Instance.FindUser({ Email })` so role-hydrated `UserInfo` objects pass entity permission checks.
+- `TriggerWakeOnAgentChannelMessage` wakes peer participants in `AGENT_CHANNEL` conversations while enforcing `ConsecutiveAgentTurns <= MaxConsecutiveAgentTurns` (default 10) and `HourlyWakeCount <= MaxHourlyWakes` (default 6), automatically pausing channels to `'Paused For Human'` when either limit is reached.
 - The wake is a `OneShot` `MJ: User Routines` row picked up by the dispatcher, not a direct `AgentRunner` call, so delivery latency is bounded by the sweep interval and the dispatcher's concurrency limit.
 
 ## Documentation
 
-Detailed guides are available in the [`docs/`](./docs/) directory:
+### Canonical Repo-Level Agent Guides (`guides/`)
+
+| Guide | Audience & Scope |
+|---|---|
+| [Agent Administrator Guide](../../../guides/AGENT_ADMINISTRATOR_GUIDE.md) | Security & sandbox invariants, 3-table `IAgentConfiguration` cascade, `v6.x` → `v7.0` deprecation roadmap, sliding liveness watchdog, `undici` tuning, `AgentStuckDetector`, `MJ: AI Agent Step Types` |
+| [Agent Builder & Extension Guide](../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) | ~600L `BaseAgent` facade + `AgentRunContext` + 13 helper seams, copy-paste recipes for all Four Extension Points, isolated helper testing, prefix-cache discipline |
+| [Agent End-User Guide](../../../guides/AGENT_END_USER_GUIDE.md) | Personal instances, personas, presets, memory, Plan Mode, Handoff, long-running pause/resume, and personal policy controls |
+| [BaseAgent Rebase Map](../../../guides/BASE_AGENT_REBASE_MAP.md) | Exhaustive 1-to-1 map of all 494 preserved `@deprecated` `BaseAgent` methods → `BaseAgent<Seam>Helper` classes & rebase guide for `MJ#6878` |
+
+### Package Deep-Dive Guides (`docs/` & Related)
+
+Detailed topic guides are available in the [`docs/`](./docs/) directory:
 
 | Guide | Description |
 |---|---|
 | [Actions Guide](./docs/actions-guide.md) | Action discovery, execution, result lifecycle, expiration/compaction, context recovery |
 | [Artifact Tools & Output Lifecycle Guide](./docs/ARTIFACT_TOOLS_GUIDE.md) | Inbound artifact routing (`Inline` vs `ToolsOnly`), tool libraries, output `artifactDirective` lifecycle (`create-new`, `version-source`, `suppress`), `_ARTIFACTS_ENABLED` prompt gating, full-conversation artifact targeting, and `ArtifactType.ExtractRules` |
-| [Decision Models](./docs/loop-agent-decisions.md) | The `decisionsEnabled` master switch, then each automatic use: inline decisions, finishIf gates, discovery, the payload change check, catalog narrowing, the Memory Manager note gate |
+| [Decision Models](./docs/loop-agent-decisions.md) | The `decisionsEnabled` master switch, then each automatic use: inline decisions, finishIf gates, discovery, the payload change check, catalog narrowing, the Memory Manager note gate, dedupe and contradiction decisions, and the realtime turn moderator |
 | [Prompt-Cache Performance and Cost Briefing](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md) | Before/after cached share and cost per model and topology for the trailing runtime-state layout; the action circuit breaker's before/after; what to re-measure |
 | [Agent Prompt Caching Guide](../../../guides/AGENT_PROMPT_CACHING_GUIDE.md) | Repo-level guide: the trailing-state layout, the `PrefixPromptCache` flag from the model catalog, the Anthropic breakpoint seam, specialization placement, the circuit breaker |
 | [Client Tools Guide](./docs/CLIENT_TOOLS_GUIDE.md) | Browser-side tool invocation, runtime decoration, timeout config, prompt design, security |
@@ -699,12 +794,6 @@ For backward compatibility, this package re-exports the following from `@memberj
 
 New code should import these directly from `@memberjunction/ai-reranker`.
 
-## Dependencies
-
-- `@memberjunction/ai-prompts` -- AIPromptRunner for prompt execution
-- `@memberjunction/aiengine` -- AIEngine for metadata and vector search
-- `@memberjunction/ai-core-plus` -- Shared types (ExecuteAgentParams, ExecuteAgentResult)
-- `@memberjunction/ai-engine-base` -- Base metadata cache and permissions
 ## Storage Account Resolution
 
 When agents create file-based artifacts (PDF, Excel, Word), the system resolves which `FileStorageAccount` to use via a hierarchical chain. The first non-null value wins:
@@ -719,7 +808,7 @@ When agents create file-based artifacts (PDF, Excel, Word), the system resolves 
 
 ### How it works
 
-- `BaseAgent.getStorageAccountID(params)` implements the resolution logic. It is `protected` so subclasses can override it for custom routing.
+- `BaseAgentRunSetupHelper.GetStorageAccountID(ctx, params)` (also accessible via the `@deprecated` `BaseAgent.getStorageAccountID(params)` delegate during `v6.x`) implements the resolution logic and can be customized via the `'setup'` helper seam.
 - The resolved ID is stored in `ExecuteAgentResult.resolvedStorageAccountId` and passed to `AgentRunner.ProcessFileArtifacts()` for upload routing.
 - `AgentRunner.uploadBase64ToStorage()` uses `FileStorageEngine.Instance.GetAccountWithProvider()` to get the account + provider, then `initializeDriverWithAccountCredentials()` for proper OAuth credential handling.
 
@@ -735,13 +824,31 @@ Set `DefaultStorageAccountID` at any level via the admin UI or metadata sync:
 - **Agent** -- per-agent override
 - **Runtime** -- `ExecuteAgentParams.override.storageAccountId` for programmatic callers
 
+## Agent Instances, Unified Persona & Primary Routing
+
+Derived agents (`BaseAgentID != null`) execute directly through `BaseAgent` and `AgentRunner` with full live prototype inheritance, unified text + voice persona injection, isolated per-instance memory, and primary-instance wake routing.
+
+| Component / Function | Responsibility |
+| --- | --- |
+| `BaseAgent` / `AgentRunner` / `CreateAgentInstance` | Resolves effective `TypeID`, `DriverClass`, prompts, actions, sub-agents, relationships, skills, presets, run limits, and user-policy ceilings across `BaseAgentID` chains. |
+| `BuildAgentPersonaAndInstructionsBlock` (`agent-persona-prompt.ts`) | Unifies text and Realtime voice persona by injecting `ResolveAgentPersona()` (`Tone`, `SpeakingStyle`, `StyleOverrideObject`) and `GetStackedAdditionalInstructions()` alongside the **Audience-Aware Tone Guardrail** (personal wit in 1:1 owner chat; professional on external emails, invites, and peer channels). |
+| `AgentContextInjector.filterNotesByScoping` | Inherits org/agent-wide notes (`UserID == null`) from `BaseAgentID` ancestors while keeping per-user notes (`UserID != null`) strictly isolated per sibling instance (*Pepper* vs *Cato*). |
+| `AgentWakeTriggerService.ResolvePrimaryUserAgentInstance` | Routes inbound utility mailbox wakes, colleague inter-agent requests, Agent Channels, and workstreams to the recipient's active `IsPrimaryInstance = true` derived instance (with oldest-active and base-template fallback). |
+| `RealtimeClientSessionService` | Inherits persona and stacked standing instructions when opening live voice/realtime sessions on derived instances. |
+
+Full architecture & diagrams: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
+
 ## Dependencies
 
-- `@memberjunction/ai` -- Core AI abstractions
+- `@memberjunction/ai` -- Core AI abstractions (including `httpDispatcher.ts` long-running fetch dispatcher)
+- `@memberjunction/ai-prompts` -- AIPromptRunner for prompt execution
+- `@memberjunction/aiengine` -- AIEngine for metadata and vector search
+- `@memberjunction/ai-core-plus` -- Shared types (`ExecuteAgentParams`, `ExecuteAgentResult`, `IAgentConfiguration`)
+- `@memberjunction/ai-engine-base` -- Base metadata cache, `ResolveEffectiveAgentProperties`, `AgentStepTypes`, and permissions
 - `@memberjunction/ai-reranker` -- Two-stage retrieval reranking
 - `@memberjunction/actions` -- Server-side action execution
 - `@memberjunction/actions-base` -- Action framework base types
-- `@memberjunction/core` -- MJ framework core
+- `@memberjunction/core` -- MJ framework core (Metadata, RunView, `LimitsConfigResolver`, UserInfo)
 - `@memberjunction/core-entities` -- Generated entity classes
-- `@memberjunction/global` -- Class factory and utilities
+- `@memberjunction/global` -- Class factory (`@RegisterClass`), `BaseSingleton`, and global utilities
 - `lodash` -- Utility functions

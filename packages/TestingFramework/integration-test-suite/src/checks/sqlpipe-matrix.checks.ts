@@ -27,8 +27,7 @@
 import type { DatabasePlatform } from '@memberjunction/core';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
-import { COMPOSITIONS } from './sqlpipe-composition';
-import { DIMENSIONS } from './sqlpipe-dimensions';
+import { DIMENSIONS, MatrixScopeOf, Spm2Assignments } from './sqlpipe-dimensions';
 import { CrossProduct, GeneratePairwise } from './sqlpipe-pairwise';
 import type { Assignment, Dimension } from './sqlpipe-pairwise';
 import { CheckExtractionProperties, CreateDependencies, MatrixFixture, RunPoints } from './sqlpipe-matrix-runner';
@@ -116,14 +115,11 @@ async function checkSpm1Pairwise(): Promise<void> {
     await runAndReport(PAIRWISE_BUNDLE, 'SPM1 all pairs', generated.Assignments.map(a => PointOf(a)));
 }
 
-const REFUSED_COMPOSITIONS = new Set(COMPOSITIONS.filter(c => c.Refusal).map(c => c.Key));
-
 async function checkSpm2CompositionTemplatingPaging(): Promise<void> {
     const f = requireFixture(CROSS_BUNDLE);
-    const space = dims(['Composition', 'Templating', 'MaxRows', 'StartRow'], { Composition: COMPOSITIONS.map(c => c.Key).filter(k => !REFUSED_COMPOSITIONS.has(k)) });
-    const fixed = { Schema: 'mock', Shape: 'cte', Values: 'provided', Path: 'saved' };
-    const points = CrossProduct(space, a => ValidPoint(f.Platform, { ...a, ...fixed })).map(a => PointOf({ ...a, ...fixed }));
-    await runAndReport(CROSS_BUNDLE, 'SPM2 composition × templating × MaxRows × StartRow', points);
+    const scope = MatrixScopeOf(process.env.SQLPIPE_MATRIX_SCOPE);
+    const points = Spm2Assignments(f.Platform, scope).map(a => PointOf(a));
+    await runAndReport(CROSS_BUNDLE, `SPM2 composition × templating × MaxRows × StartRow (scope '${scope}')`, points);
 }
 
 const CONDITIONAL_TEMPLATING = ['none', 'optional', 'conditionOnly', 'ifElif', 'default', 'lengthGuard', 'inlineIf'];

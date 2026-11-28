@@ -1,31 +1,41 @@
 # @memberjunction/ng-artifacts
 
-Angular artifact viewer plugin system for rendering different artifact types (JSON, Code, Markdown, HTML, SVG, React Components) with version history, message cards, and an extensible plugin architecture.
+Angular artifact viewer, real-time Yjs collaboration, unified context menu, live AI presence, and Git-style visual version comparison library for MemberJunction — powering **MJ Docs** (`Markdown Document`), **MJ Slides** (`Presentation`), **MJ Sheets** (`Excel Spreadsheet`), interactive React/Angular `ComponentSpec` forms, PDF/Office file previews, audio/video playback, and inline **MS OLE-style** embedded artifacts.
+
+> **Architectural Deep Dive:** See [`guides/DOCS_SLIDES_SHEETS_ARCHITECTURE.md`](../../../../guides/DOCS_SLIDES_SHEETS_ARCHITECTURE.md) for the end-to-end architecture covering Yjs CRDT synchronization, Magic-Link guest sharing (`/guest/artifact`), hierarchical collection ACL inheritance, viewer-scoped Live MJ Blocks (`RLS`/`FLS` + `O5` HMAC freeze), word-level Suggesting redlines, dynamic array formulas, and Visual Version Compare.
 
 ## Overview
 
-The `@memberjunction/ng-artifacts` package provides a pluggable viewer system for MemberJunction conversation artifacts. Each artifact type (JSON, Code, Markdown, HTML, SVG, Component) is rendered by a dedicated viewer plugin, selected automatically based on the artifact's type metadata. The package also includes components for artifact version history browsing, viewer panels, and inline message cards.
+`@memberjunction/ng-artifacts` provides a ClassFactory-driven plugin system (`@RegisterClass(BaseArtifactViewerPluginComponent, '<DriverClass>')`) that dynamically resolves the optimal viewer/editor for any `MJ: Artifact Types` record, paired with version history, side-by-side/visual version diffing, live agent presence indicators, unified context menus, and conversation message cards. Built with Angular 21 modern template syntax (`@if` / `@for` / `@switch`) and `@memberjunction/ng-markdown`.
 
 ```mermaid
 graph TD
-    A[ArtifactsModule] --> B[Viewer Components]
-    A --> C[Plugin System]
+    A[ArtifactsModule] --> B[Workspace, Context Menu & Presence Shells]
+    A --> C[Viewer & Collaborative Plugins]
     A --> D[Services]
 
     B --> B1[ArtifactViewerPanelComponent]
     B --> B2[ArtifactVersionHistoryComponent]
-    B --> B3[ArtifactMessageCardComponent]
-    B --> B4[ArtifactTypePluginViewerComponent]
+    B --> B3[ArtifactVersionCompareComponent]
+    B --> B4[ArtifactMessageCardComponent]
+    B --> B5[ArtifactTypePluginViewerComponent]
+    B --> B6[MjContextMenuComponent]
+    B --> B7[ArtifactAgentPresenceBarComponent & RegionIndicator]
 
-    C --> C0[BaseArtifactViewerComponent]
-    C --> C1[JsonArtifactViewerComponent]
-    C --> C2[CodeArtifactViewerComponent]
-    C --> C3[MarkdownArtifactViewerComponent]
-    C --> C4[HtmlArtifactViewerComponent]
-    C --> C5[SvgArtifactViewerComponent]
-    C --> C6[ComponentArtifactViewerComponent]
+    C --> C0[BaseArtifactViewerPluginComponent]
+    C --> C1[MarkdownArtifactViewerComponent — MJ Docs]
+    C --> C2[SlideDeckArtifactViewerComponent — MJ Slides]
+    C --> C3[SpreadsheetArtifactViewerComponent — MJ Sheets]
+    C --> C4[ComponentArtifactViewerComponent — React / Interactive Forms]
+    C --> C5[Json / Code / Html / Svg / Data / MLExperiment Viewers]
+    C --> C6[Pdf / Docx / Xlsx / Image / Audio / Video / VideoProduction Viewers]
 
-    D --> D1[ArtifactIconService]
+    D --> D1[DocumentCollaborationService — Yjs CRDT, Awareness & Suggestions]
+    D --> D2[ArtifactVersionDiffService — Visual & Structural Diffs]
+    D --> D3[DocumentImportExportService — .md / .docx / .pdf]
+    D --> D4[SlideDeckExportService — OpenXML .pptx + Charts / .pdf]
+    D --> D5[ArtifactIconService & ArtifactFileService]
+    D --> D6[InteractiveFormApplyService & AnalyzeArtifactService]
 
     style A fill:#2d6a9f,stroke:#1a4971,color:#fff
     style B fill:#7c5295,stroke:#563a6b,color:#fff
@@ -39,6 +49,8 @@ graph TD
 npm install @memberjunction/ng-artifacts
 ```
 
+Peer dependencies: `@angular/animations`, `@angular/cdk`, `@angular/common`, `@angular/core`, `@angular/forms`, `@angular/platform-browser`, `ag-grid-angular`, and `ag-grid-community` (no `@angular/router` dependency).
+
 ## Usage
 
 ### Module Import
@@ -49,177 +61,168 @@ import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 @NgModule({
   imports: [ArtifactsModule]
 })
-export class YourModule { }
+export class YourModule {}
 ```
 
-### Artifact Viewer Panel
+### Artifact Viewer Panel (Toolbar, Collaboration, Linked-Drive Sync & Version Compare)
 
-Full-featured panel with toolbar and version navigation:
+Full-featured host panel with mode switching, version selector, **Compare** toggle, **Save to Collection**, **Connected Drive Push/Pull Sync**, share actions, and plugin rendering:
 
 ```html
 <mj-artifact-viewer-panel
   [artifactId]="selectedArtifactId"
-  [versionId]="selectedVersionId"
-  (versionChanged)="onVersionChanged($event)">
+  [VersionNumber]="selectedVersionNumber"
+  [CurrentUser]="currentUser"
+  [canEdit]="userCanEdit"
+  [canShare]="userCanShare"
+  [HasConnectedDriveLink]="hasDriveLink"
+  (Closed)="onPanelClosed()"
+  (SaveToCollectionRequested)="onSaveToCollection($event)"
+  (ConnectedDriveSyncRequested)="onDriveSync($event)">
 </mj-artifact-viewer-panel>
 ```
 
-### Artifact Type Plugin Viewer
+### Git-Style Visual Version Compare (`<mj-artifact-version-compare>`)
 
-Automatically selects and loads the correct plugin based on artifact type:
+Standalone component (also embedded inside `<mj-artifact-viewer-panel>`) providing **Base (`vA`) <-> Target (`vB`)** selectors, one-click swap (`⇄`), collapsible commit history rail, change counters (`+N / -M / ~K`), and 4 compare modes (`visual`, `json-tree`, `unified`, `split`):
+
+```html
+<mj-artifact-version-compare
+  [ArtifactTypeName]="artifactTypeName"
+  [ContentType]="contentType"
+  [Versions]="artifactVersions"
+  [BaseVersionNumber]="1"
+  [TargetVersionNumber]="2"
+  (ExitRequested)="isComparing = false">
+</mj-artifact-version-compare>
+```
+
+| Artifact Type | Specialized Visual Compare Renderer |
+|---|---|
+| `Markdown Document` (`MJ Docs`) | `DocsVersionDiffComponent` — rendered document view with word-level Myers inline `<del>` strikethrough & `<ins>` insertion highlights, plus raw Markdown diff toggle |
+| `Excel Spreadsheet` (`MJ Sheets`) | `SpreadsheetVersionDiffComponent` — per-worksheet change badges + coordinate diff grid highlighting **Added**, **Removed**, **Formula Changed** (`oldFormula -> newFormula` + evaluated delta), and **Value Changed** cells |
+| `Presentation` (`MJ Slides`) | `SlidesVersionDiffComponent` — side-by-side 16:9 slide cards classifying slides as `Added`, `Removed`, `Modified`, `Moved`, or `Unchanged` across titles, layouts, regions, and speaker notes |
+| `Component` (`ComponentSpec`) | `ComponentVersionDiffComponent` — structured diff across root metadata, `dataRequirements`, child components, libraries, and unified component code |
+| `SQL` / `Query` | `QueryVersionDiffComponent` — line-numbered SQL diff with intra-line token highlights |
+| Any JSON / Code / Text | `GitDiffLinesViewComponent` + semantic JSON key-path tree diff (`added`, `removed`, `changed`) |
+
+### Artifact Type Plugin Viewer (Dynamic Plugin & MS OLE Host)
+
+Automatically resolves and mounts the registered plugin for an artifact type — used both top-level and recursively for inline **MS OLE** embedded artifacts inside Docs, Slides, and Sheets (with `AncestorArtifactIDs` cycle detection):
 
 ```html
 <mj-artifact-type-plugin-viewer
   [artifactVersion]="currentVersion"
-  [artifactTypeName]="'Code'">
+  [ArtifactTypeName]="'Markdown Document'"
+  [readonly]="!canEdit"
+  [CollaborationWsUrl]="collaborationWsUrl"
+  (ContentCommitted)="onInlineArtifactCommitted($event)">
 </mj-artifact-type-plugin-viewer>
 ```
 
-### Artifact Version History
+### Artifact Version History & Message Card
 
-Timeline of artifact versions:
+`<mj-artifact-version-history>` accepts `[Artifact]` (`MJArtifactEntity`) + `[CurrentUser]` (`UserInfo`); `<mj-artifact-message-card>` accepts `[artifactId]` (and optional `[Artifact]` / `[artifactVersion]` / `[VersionNumber]`) + `[CurrentUser]` and emits `(ActionPerformed)`:
+
+### Reusable Record-Attached Document Primitives (`P0.2`–`P0.4`)
+
+All three primitives follow strict MJ standards (`ChangeDetectionStrategy.OnPush`, `@if`/`@for`, `inject()`, `--mj-*` CSS tokens exclusively, `UserInfoEngine.Instance` for preferences, zero `localStorage`, zero `window.print()`, and zero `@angular/router` imports):
+
+- **`MJArtifactSlideoverService` + `<mj-artifact-slideover>`**: Root-injected Angular service (`Open`, `Close`, `ToggleMaximize`, `NavigateToLink` chaining with back-stack `GoBack()`, `NotifyVersionSaved`) paired with a slideover drawer wrapping `<mj-artifact-viewer-panel>`, with `Escape`-to-close keyboard handling and `UserInfoEngine.Instance` maximize persistence (`MJ.Artifacts.Slideover.Maximized`).
+- **`<mj-record-docs-list>`**: Displays `MJ: Record Artifacts` linked to `(EntityName, RecordID)` using batched `RunView` (`ResultType: 'simple'`, bounded `<= 200`-ID `IN`-clause chunks) and `ArtifactPermissionEngine.Instance.ResolvePermissionsBatch`. Hides create, promote, and slide-synthesis actions for read-only users, supports note promotion via `PromoteNoteToArtifact` (`@memberjunction/core-entities`), and emits `ArtifactOpened` / `SynthesizeSlidesRequested`.
+- **`<mj-embedded-doc-panel Mode="compact" | "full">`**: Inline wrapper over `MarkdownArtifactViewerComponent` (`[CompactMode]="true"` hides the outline rail and secondary studio toolbars), with debounced working-state autosave (`>= 1000ms` debounce floor, cleanly cancelled/flushed on `Save Version`, `[ArtifactID]` switch, and `ngOnDestroy`), delegated read-only permission enforcement, explicit **Save Version**, and **Open Full Studio** actions.
+
+See [`guides/MJ_DOCS_COMMENTS_AND_NOTES_GUIDE.md`](../../../../guides/MJ_DOCS_COMMENTS_AND_NOTES_GUIDE.md) for copy-paste Angular and Server recipes.
 
 ```html
 <mj-artifact-version-history
-  [artifactId]="selectedArtifactId"
-  (versionSelected)="onVersionSelected($event)">
+  [Artifact]="selectedArtifact"
+  [CurrentUser]="currentUser"
+  (VersionSelected)="onVersionSelected($event)"
+  (VersionRestored)="onVersionRestored($event)"
+  (Closed)="onHistoryClosed()">
 </mj-artifact-version-history>
-```
 
-### Artifact Message Card
-
-Compact card for displaying an artifact reference within a conversation message:
-
-```html
 <mj-artifact-message-card
-  [artifact]="artifactRef"
-  (clicked)="onArtifactCardClicked($event)">
+  [artifactId]="selectedArtifactId"
+  [Artifact]="artifactRef"
+  [VersionNumber]="selectedVersionNumber"
+  [CurrentUser]="currentUser"
+  (ActionPerformed)="onArtifactAction($event)">
 </mj-artifact-message-card>
 ```
 
-## Plugin Architecture
+### Unified Context Menu & Live Agent Presence Shells
 
-### IArtifactViewerPlugin Interface
+- **`<mj-context-menu>` (`MjContextMenuComponent`)**: Keyboard-accessible, nested context menu (`IsOpen`, `AnchorX`, `AnchorY`, `Items`, `AriaLabel`, `RestoreFocusElement`; outputs `ItemSelected`, `Closed`) shared across Docs (`docs-context-menu.helper.ts`), Slides (`slides-context-menu.helper.ts`), and Sheets (`sheets-context-menu.helper.ts`). *(Inline Ask AI context-menu items remain disabled via `ARTIFACT_AI_ASSISTANT_ENABLED = false` in `artifact-ai-assistant-bridge.ts`.)*
+- **`<mj-artifact-agent-presence-bar>` (`ArtifactAgentPresenceBarComponent`)**: Header presence pills showing active AI agents, acting-for attribution, phase pulse (`enter`/`working`/`settled`), and click-to-jump navigation (`Collaborators`, `ActiveDomain`; output `JumpToAgentLocation`).
+- **`<mj-artifact-agent-region-indicator>` (`ArtifactAgentRegionIndicatorComponent`)**: In-canvas anchored badge (`Agent`, `Compact`; output `JumpToAgent`) highlighting structural blocks, slides, or ranges an AI agent is actively modifying.
 
-All artifact viewer plugins implement this interface and are registered with `@RegisterClass`:
+## Plugin Architecture & MS OLE Inline Editing
 
-```typescript
-interface IArtifactViewerPlugin {
-  readonly componentType: Type<IArtifactViewerComponent>;
-  canHandle(artifactTypeName: string, contentType?: string): boolean;
-  getMetadata?(artifactVersion: ArtifactVersionEntity): ArtifactMetadata;
-}
-```
-
-### Creating a Custom Plugin
+All viewer plugins extend `BaseArtifactViewerPluginComponent` and register via `@RegisterClass(BaseArtifactViewerPluginComponent, '<DriverClass>')`:
 
 ```typescript
+import { Component } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactViewerComponent } from '@memberjunction/ng-artifacts';
+import { BaseArtifactViewerPluginComponent } from '@memberjunction/ng-artifacts';
 
-@RegisterClass(BaseArtifactViewerComponent, 'MyCustomType')
+@RegisterClass(BaseArtifactViewerPluginComponent, 'MyCustomViewerPlugin')
 @Component({
   selector: 'my-custom-viewer',
-  template: `<div>{{ artifactVersion.Content }}</div>`
+  template: `<div>{{ artifactVersion?.Content }}</div>`
 })
-export class MyCustomViewerComponent extends BaseArtifactViewerComponent {
-  // Custom rendering logic
+export class MyCustomViewerComponent extends BaseArtifactViewerPluginComponent {
+  public override get SupportsInlineEdit(): boolean {
+    return true; // Enables inline MS OLE editing inside MJ Docs, Slides, and Sheets
+  }
 }
 ```
 
-### Built-in Plugins
+### Built-in Viewer Plugins
 
-| Plugin | Artifact Type | Description |
-|--------|---------------|-------------|
-| `JsonArtifactViewerComponent` | JSON | Formatted JSON with syntax highlighting |
-| `CodeArtifactViewerComponent` | Code | Code editor with language detection |
-| `MarkdownArtifactViewerComponent` | Markdown | Rendered markdown content |
-| `HtmlArtifactViewerComponent` | HTML | Sandboxed HTML rendering |
-| `SvgArtifactViewerComponent` | SVG | SVG image rendering |
-| `AudioArtifactViewerComponent` | Audio | Audio playback via `mj-media-player` (transport, waveform scrubber, playback speed) |
-| `VideoArtifactViewerComponent` | Video | Video playback via `mj-media-player` (transport, fullscreen, playback speed) |
-| `ComponentArtifactViewerComponent` | Component | Dynamic React/Angular component rendering |
+| Component | Registered `DriverClass` | Capabilities |
+|---|---|---|
+| `MarkdownArtifactViewerComponent` | `MarkdownArtifactViewerPlugin` | Collaborative **MJ Docs** editor & viewer with progressive-disclosure toolbar, TOC outline rail, `/` slash menu, `<mj-context-menu>`, viewer-scoped Live MJ Blocks (`EntityView`, `SavedQuery`, `DashboardPart`, `InteractiveComponent`), inline OLE `Artifact` / `Whiteboard` blocks, **Word-Level Suggesting Redlines** (Myers diff + Yjs `suggestions` + per-hunk Accept/Reject), anchored `DocBlock` comment threads & replies, *"Make a Deck from This Doc"*, and `.md`/`.docx`/`.pdf` import/export |
+| `SlideDeckArtifactViewerComponent` | `SlideDeckArtifactViewerPlugin` | Collaborative **MJ Slides** 16:9 studio with 11 canonical layouts, filmstrip sorter rail, `<mj-context-menu>`, per-slide Yjs CRDT co-editing (`slidesById` + `slideOrder`), Organization Brand Color Seeds contrast theme derivation, Live MJ Blocks + inline OLE `Whiteboard` regions, `O6` Presenter View automatic live-block freeze, anchored `SlideRegion` comments/suggestions, and OpenXML `.pptx` (with native DrawingML `ppt/charts/chartN.xml` charts) / `.pdf` export |
+| `SpreadsheetArtifactViewerComponent` | `SpreadsheetArtifactViewerPlugin` | Collaborative **MJ Sheets** multi-tab workbook editor with stable `RowID`/`ColumnID` Yjs CRDT co-editing (`worksheetsById` + `sheetCellsByCoord`), `<mj-context-menu>`, formula bar (**100+ functions** including 2D dynamic arrays `FILTER`/`UNIQUE`/`SORT`/`SORTBY`/`SEQUENCE`/`LET`/`LAMBDA` + `#SPILL!`, cross-sheet refs, named ranges), merged cells (`MergeRanges`), conditional formatting, data validation rules, viewer-scoped `=MJ.QUERY`/`=MJ.VIEW`/`=MJ.AI` & bound Live Tables, `O5` freeze confirmation, anchored `SheetRange` comments/suggestions, `.xlsx` (with native DrawingML `xl/charts/chartN.xml` charts) / `.csv` round-trip, live Range Charts, and inline OLE `Whiteboard` hosting |
+| `ComponentArtifactViewerComponent` | `ComponentArtifactViewerPlugin` | Dynamic React/Angular `ComponentSpec` viewer + form-aware interactive entity preview (`ApplyFormRequested`) |
+| `DataArtifactViewerComponent` | `DataArtifactViewerPlugin` | Interactive tabular grid & export viewer for structured query/data artifacts |
+| `MLExperimentResultsViewerComponent` | `MLExperimentResultsViewerPlugin` | Leaderboard and evaluation metrics viewer for ML experiment result artifacts |
+| `JsonArtifactViewerComponent` | `JsonArtifactViewerPlugin` | Formatted JSON tree & syntax-highlighted viewer |
+| `CodeArtifactViewerComponent` | `CodeArtifactViewerPlugin` | Syntax-highlighted code viewer & editor with language detection |
+| `HtmlArtifactViewerComponent` | `HtmlArtifactViewerPlugin` | Sandboxed HTML preview |
+| `SvgArtifactViewerComponent` | `SvgArtifactViewerPlugin` | Interactive SVG preview |
+| `PdfArtifactViewerComponent` | `PdfArtifactViewerPlugin` | Native binary PDF document viewer |
+| `DocxArtifactViewerComponent` | `DocxArtifactViewerPlugin` | Binary Word (`.docx`) preview via shared `<mj-docx-preview>` |
+| `XlsxArtifactViewerComponent` | `XlsxArtifactViewerPlugin` | Read-only binary Excel (`.xlsx`) preview via shared `<mj-xlsx-preview>` |
+| `ImageArtifactViewerComponent` | `ImageArtifactViewerPlugin` | Image viewer with zoom/pan controls |
+| `AudioArtifactViewerComponent` | `AudioArtifactViewerPlugin` | Audio playback via `@memberjunction/ng-media-player` |
+| `VideoArtifactViewerComponent` | `VideoArtifactViewerPlugin` | Video playback via `@memberjunction/ng-media-player` |
+| `VideoProductionViewerComponent` | `VideoProductionViewerPlugin` | Multi-tab storyboard & review studio for AI Video Studio artifacts |
 
-> Audio and video artifacts (both the full viewer and the inline conversation **preview**) embed the
-> generic `mj-media-player` from [@memberjunction/ng-media-player](../media-player/README.md).
+## Key Services
 
-## Services
+| Service | Responsibility |
+|---|---|
+| `DocumentCollaborationService` | Manages Yjs `Y.Doc` rooms, binary `y-protocols/sync` + `awareness` WebSocket framing (`/collaboration/yjs`), live collaborator/agent awareness, `suggestions` shared map, per-slide (`slidesById`/`slideOrder`) and per-cell (`worksheetsById`/`sheetCellsByCoord`) CRDT state, and server checkpoint compaction |
+| `ArtifactVersionDiffService` | Computes Myers word/line diffs, structural JSON key-path diffs, `SpreadsheetEngine` cell/formula diffs, `SlideDeckSpec` slide diffs, and `ComponentSpec` semantic diffs |
+| `DocumentImportExportService` | Lossless Markdown, OpenXML `.docx` import/export, and print-ready `.pdf` generation for MJ Docs |
+| `SlideDeckExportService` | Generates standards-compliant OpenXML `.pptx` PKZIP packages (editable shapes, DrawingML `<a:tbl>` tables, native `ppt/charts/chartN.xml` charts, speaker notes) and 16:9 widescreen `.pdf` HTML |
+| `ArtifactIconService` | Resolves Font Awesome icon classes by `MJ: Artifact Types` metadata and MIME type |
+| `ArtifactFileService` | Authenticated binary download/preview streaming for `ContentMode = 'File'` artifacts |
+| `InteractiveFormApplyService` | End-to-end confirmation & action execution for applying `componentRole: 'form'` specs to entity forms |
 
-### ArtifactIconService
+## Form-Aware Artifact Viewer (Interactive Forms)
 
-Provides appropriate Font Awesome icons for artifact types:
+When an artifact's spec declares `componentRole: 'form'`, `ComponentArtifactViewerComponent` resolves the target entity, binds `TOP 1` real record (or `NewRecord()` fallback) into `<mj-interactive-form>` with a live record switcher, and emits `(ApplyFormRequested)` on `<mj-artifact-viewer-panel>` for `InteractiveFormApplyService` to persist via `Create Interactive Form` / `Modify Interactive Form`.
 
-```typescript
-import { ArtifactIconService } from '@memberjunction/ng-artifacts';
-
-constructor(private iconService: ArtifactIconService) {}
-
-getIcon() {
-  const icon = this.iconService.getIconForType('Code');
-  // Returns 'fa-solid fa-code'
-}
-```
-
-## Dependencies
-
-| Package | Description |
-|---------|-------------|
-| `@memberjunction/core` | Core framework |
-| `@memberjunction/core-entities` | Entity type definitions |
-| `@memberjunction/global` | Global utilities and class registration |
-| `@memberjunction/interactive-component-types` | Interactive component interfaces |
-| `@memberjunction/ng-base-types` | Base Angular component types |
-| `@memberjunction/ng-code-editor` | Code editor for code artifacts |
-| `@memberjunction/ng-media-player` | Audio/video playback (`mj-media-player`) for audio & video artifacts |
-| `@memberjunction/ng-notifications` | Notification system |
-| `@memberjunction/ng-react` | React component bridge |
-| `@memberjunction/ng-shared-generic` | Shared generic components |
-| `@memberjunction/ng-markdown` | Markdown rendering |
-| `marked` | Markdown parser |
-| `@angular/cdk` | Angular CDK |
-
-### Peer Dependencies
-
-- `@angular/common` ^21.x
-- `@angular/core` ^21.x
-- `@angular/platform-browser` ^21.x
-
-## Form-aware artifact viewer (interactive forms)
-
-When an artifact's spec declares `componentRole: 'form'`, the
-`ComponentArtifactViewerComponent` switches to its form-aware branch:
-
-- Resolves the entity from `spec.entityName` (or `spec.dataRequirements.entities[0].name`)
-- Loads `TOP 1` record (ordered by `NameField` then `__mj_CreatedAt`) and
-  mounts via `<mj-interactive-form>` bound to that real record
-- Falls back to a fresh `NewRecord()` when the entity has no rows
-- Exposes a search-as-you-type record picker so users can swap the bound record
-- Bubbles a top-level **`applyFormRequested`** `@Output` carrying
-  `{ spec, entityName }` when the user clicks "Apply to my form"
-
-The `InteractiveFormApplyService` (exported from this package) consumes
-that event end-to-end: confirms with the user via `MJDialogService`,
-calls `Get Active Form For Entity` to detect existing state, then
-routes to `Create Interactive Form` (net-new) or
-`Modify Interactive Form` (refinement → new Pending version).
-
-Consumers wire one line in their template:
-```html
-<mj-artifact-viewer-panel
-  ...
-  (applyFormRequested)="onApplyFormRequested($event)">
-</mj-artifact-viewer-panel>
-```
-…and inject `InteractiveFormApplyService` in the handler.
-
-Wired in `ConversationChatAreaComponent` (live chat) and `ArtifactResource`
-(standalone artifact viewing in Explorer).
-
-## Build
+## Build & Test
 
 ```bash
 cd packages/Angular/Generic/artifacts
 npm run build
+npm run test
 ```
 
 ## License

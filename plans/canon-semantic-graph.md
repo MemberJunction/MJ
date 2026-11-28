@@ -1,11 +1,11 @@
 # MJ Semantic Graph: extensible structure, with MJ Canon as the first graph
 
 ## Status
-- **Status**: **Design for review. Not scheduled for implementation.** This is the basic structure, for Jordan and Robert to iterate on and resolve the open questions. Do not build any phase until it is approved. Once approved, G1 can start independently; G2 needs alternate-views Phases 1 and 5 merged.
-- **Created**: 2026-10-23. **Revised** the same day: generalized from a canon-only graph to an extensible graph over any entity record and any edge type. Canon is the first graph built on it.
-- **Author**: Claude (Claude Code session), for review
-- **Proposed owners**: Jordan (lead), Robert (review), per the original note
-- **Branch**: `claude/alternate-base-views` (same PR as the alternate base views plan)
+- **Status**: **Phase G1 Substrate & Content Pipeline Graph Overlay in active implementation** (`feat/canon-first-onboarding-and-health`).
+- **Created**: 2026-10-23. **Revised**: 2026-11-02 — generalized `CanonConcept` into **`MJ: Graph Concepts` (`__mj.GraphConcept`)** scoped to `GraphID`, added `Graph.GraphType` (`'Canon' | 'Knowledge' | 'Network' | 'Custom'`), added `ContentSource.GraphID` + `IContentSourceGraphOverlayConfig` for the Content Pipeline `GraphStage`, and added deterministic `TaskGraph` DAG similarity and workflow telemetry in `@memberjunction/ai-core-plus`.
+- **Author**: Claude (Claude Code session), revised with Amith Nagarajan (`Canon-First: A Methodology for BCC`, 2026-11-02)
+- **Proposed owners**: Jordan (lead), Robert (review), Dray (`@dray-mc`)
+- **Branch**: `feat/canon-first-onboarding-and-health`
 - **Depends on**: [`plans/alternate-base-views.md`](alternate-base-views.md) Phase 1 for canon's alternate-view nodes, and Phase 5 for `Reads` edges to a specific alternate view. The graph substrate itself (G1) does not depend on it.
 - **Reviewed against**: `next` @ `48c974e76`
 
@@ -96,6 +96,9 @@ erDiagram
     Graph ||--o{ GraphEdgeType : "scopes (null = global)"
     Graph ||--o{ GraphEdgeProvider : "enables"
     Graph ||--o{ GraphEdge : "contains"
+    Graph ||--o{ GraphConcept : "owns"
+    Graph ||--o{ ContentSource : "populated by (optional GraphID)"
+    GraphConcept ||--o{ GraphConcept : "ParentID hierarchy"
     GraphEdgeType ||--o{ GraphEdgeTypeEndpoint : "constrains"
     GraphEdgeType ||--o{ GraphEdge : "types"
     Entity ||--o{ GraphEdgeTypeEndpoint : ""
@@ -104,6 +107,7 @@ erDiagram
         uniqueidentifier ID PK
         nvarchar Name "unique"
         nvarchar Description
+        nvarchar GraphType "Canon | Knowledge | Network | Custom"
         nvarchar LoadMode "Preload | OnDemand"
         nvarchar Status "Active | Disabled"
     }
@@ -148,115 +152,137 @@ erDiagram
         nvarchar Status "Proposed | Approved | Rejected"
         decimal Confidence
     }
-    CanonConcept {
+    GraphConcept {
         uniqueidentifier ID PK
-        nvarchar Name "unique"
-        nvarchar Description "the definition"
+        uniqueidentifier GraphID FK
+        uniqueidentifier ParentID FK "nullable self-FK"
+        nvarchar Name "unique per GraphID"
+        nvarchar ConceptType "Domain | Term | Policy | Metric | Process"
+        nvarchar Description "concise definition (~100 tokens)"
+        nvarchar Specification "structured rules, thresholds, decision tables"
         nvarchar Synonyms "JSON string[]"
-        nvarchar Status "Draft | Approved | Deprecated"
+        nvarchar AuthorityTier "Bylaws | BoardPolicy | ExecutiveSOP | DepartmentPractice | Reference | Inferred"
+        nvarchar Status "Draft | Proposed | Approved | Deprecated"
     }
 ```
 
-`CanonConcept` is not part of the substrate. It is an ordinary entity that the MJ Canon graph uses
-as its vocabulary node; any graph can use any entity as nodes the same way.
+`GraphConcept` (`MJ: Graph Concepts` in `__mj.GraphConcept`) is a first-class concept hub entity scoped to a `GraphID`. It replaces the earlier Canon-only `CanonConcept` table so any graph (`Canon`, `Knowledge`, `Network`, or `Custom`) can organize higher-level `Domain`, `Term`, `Policy`, `Metric`, and `Process` concepts with optional `Specification`, `AuthorityTier`, and `ParentID` hierarchy, and so `MJ: Content Sources` can populate concepts and edges into a target `GraphID` via the Content Pipeline `Graph` stage.
 
-The migration's hand-written half, following [`migrations/CLAUDE.md`](../migrations/CLAUDE.md)
+The migration's hand-written half (`migrations/v6/V202611022300__v6.2.x__Semantic_Graph_And_Graph_Concepts.sql`), following [`migrations/CLAUDE.md`](../migrations/CLAUDE.md)
 (`sp_addextendedproperty` on every column; CodeGen output appended; no `__mj_*` columns or FK
 indexes):
 
 ```sql
--- migrations/v6/V<YYYYMMDDHHMM>__v6.2.x__Semantic_Graph.sql
-CREATE TABLE ${flyway:defaultSchema}.Graph (
-    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
-    Name NVARCHAR(255) NOT NULL,
-    Description NVARCHAR(MAX) NULL,
-    LoadMode NVARCHAR(20) NOT NULL DEFAULT 'Preload',
-    Status NVARCHAR(20) NOT NULL DEFAULT 'Active',
-    CONSTRAINT PK_Graph PRIMARY KEY (ID),
-    CONSTRAINT UQ_Graph_Name UNIQUE (Name),
-    CONSTRAINT CK_Graph_LoadMode CHECK (LoadMode IN ('Preload', 'OnDemand')),
-    CONSTRAINT CK_Graph_Status CHECK (Status IN ('Active', 'Disabled'))
+-- migrations/v6/V202611022300__v6.2.x__Semantic_Graph_And_Graph_Concepts.sql
+CREATE TABLE [${flyway:defaultSchema}].[Graph] (
+    [ID]          UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_Graph_ID] DEFAULT (newsequentialid()),
+    [Name]        NVARCHAR(255)    NOT NULL,
+    [Description] NVARCHAR(MAX)    NULL,
+    [GraphType]   NVARCHAR(50)     NOT NULL CONSTRAINT [DF_Graph_GraphType] DEFAULT (N'Custom'),
+    [LoadMode]    NVARCHAR(20)     NOT NULL CONSTRAINT [DF_Graph_LoadMode] DEFAULT (N'Preload'),
+    [Status]      NVARCHAR(20)     NOT NULL CONSTRAINT [DF_Graph_Status] DEFAULT (N'Active'),
+    CONSTRAINT [PK_Graph] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [UQ_Graph_Name] UNIQUE ([Name]),
+    CONSTRAINT [CK_Graph_GraphType] CHECK ([GraphType] IN (N'Canon', N'Knowledge', N'Network', N'Custom')),
+    CONSTRAINT [CK_Graph_LoadMode] CHECK ([LoadMode] IN (N'Preload', N'OnDemand')),
+    CONSTRAINT [CK_Graph_Status] CHECK ([Status] IN (N'Active', N'Disabled'))
 );
 
-CREATE TABLE ${flyway:defaultSchema}.GraphEdgeType (
-    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
-    GraphID UNIQUEIDENTIFIER NULL,
-    Name NVARCHAR(100) NOT NULL,
-    Description NVARCHAR(MAX) NOT NULL,
-    IsDirected BIT NOT NULL DEFAULT 1,
-    InverseName NVARCHAR(100) NULL,
-    DefaultWeight DECIMAL(5,4) NOT NULL DEFAULT 1.0,
-    AllowStored BIT NOT NULL DEFAULT 1,
-    CONSTRAINT PK_GraphEdgeType PRIMARY KEY (ID),
-    CONSTRAINT FK_GraphEdgeType_Graph FOREIGN KEY (GraphID) REFERENCES ${flyway:defaultSchema}.Graph(ID),
-    CONSTRAINT UQ_GraphEdgeType_Graph_Name UNIQUE (GraphID, Name),
-    CONSTRAINT CK_GraphEdgeType_DefaultWeight CHECK (DefaultWeight >= 0 AND DefaultWeight <= 1)
+CREATE TABLE [${flyway:defaultSchema}].[GraphEdgeType] (
+    [ID]            UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_GraphEdgeType_ID] DEFAULT (newsequentialid()),
+    [GraphID]       UNIQUEIDENTIFIER NULL,
+    [Name]          NVARCHAR(100)    NOT NULL,
+    [Description]   NVARCHAR(MAX)    NOT NULL,
+    [IsDirected]    BIT              NOT NULL CONSTRAINT [DF_GraphEdgeType_IsDirected] DEFAULT (1),
+    [InverseName]   NVARCHAR(100)    NULL,
+    [DefaultWeight] DECIMAL(5, 4)    NOT NULL CONSTRAINT [DF_GraphEdgeType_DefaultWeight] DEFAULT (1.0),
+    [AllowStored]   BIT              NOT NULL CONSTRAINT [DF_GraphEdgeType_AllowStored] DEFAULT (1),
+    CONSTRAINT [PK_GraphEdgeType] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [FK_GraphEdgeType_Graph] FOREIGN KEY ([GraphID]) REFERENCES [${flyway:defaultSchema}].[Graph]([ID]),
+    CONSTRAINT [UQ_GraphEdgeType_Graph_Name] UNIQUE ([GraphID], [Name]),
+    CONSTRAINT [CK_GraphEdgeType_DefaultWeight] CHECK ([DefaultWeight] >= 0 AND [DefaultWeight] <= 1)
 );
 
-CREATE TABLE ${flyway:defaultSchema}.GraphEdgeTypeEndpoint (
-    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
-    EdgeTypeID UNIQUEIDENTIFIER NOT NULL,
-    Side NVARCHAR(10) NOT NULL,
-    EntityID UNIQUEIDENTIFIER NOT NULL,
-    CONSTRAINT PK_GraphEdgeTypeEndpoint PRIMARY KEY (ID),
-    CONSTRAINT FK_GraphEdgeTypeEndpoint_EdgeType FOREIGN KEY (EdgeTypeID) REFERENCES ${flyway:defaultSchema}.GraphEdgeType(ID),
-    CONSTRAINT FK_GraphEdgeTypeEndpoint_Entity FOREIGN KEY (EntityID) REFERENCES ${flyway:defaultSchema}.Entity(ID),
-    CONSTRAINT UQ_GraphEdgeTypeEndpoint UNIQUE (EdgeTypeID, Side, EntityID),
-    CONSTRAINT CK_GraphEdgeTypeEndpoint_Side CHECK (Side IN ('Source', 'Target'))
+CREATE TABLE [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint] (
+    [ID]         UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_GraphEdgeTypeEndpoint_ID] DEFAULT (newsequentialid()),
+    [EdgeTypeID] UNIQUEIDENTIFIER NOT NULL,
+    [Side]       NVARCHAR(10)     NOT NULL,
+    [EntityID]   UNIQUEIDENTIFIER NOT NULL,
+    CONSTRAINT [PK_GraphEdgeTypeEndpoint] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [FK_GraphEdgeTypeEndpoint_EdgeType] FOREIGN KEY ([EdgeTypeID]) REFERENCES [${flyway:defaultSchema}].[GraphEdgeType]([ID]),
+    CONSTRAINT [FK_GraphEdgeTypeEndpoint_Entity] FOREIGN KEY ([EntityID]) REFERENCES [${flyway:defaultSchema}].[Entity]([ID]),
+    CONSTRAINT [UQ_GraphEdgeTypeEndpoint] UNIQUE ([EdgeTypeID], [Side], [EntityID]),
+    CONSTRAINT [CK_GraphEdgeTypeEndpoint_Side] CHECK ([Side] IN (N'Source', N'Target'))
 );
 
-CREATE TABLE ${flyway:defaultSchema}.GraphEdgeProvider (
-    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
-    GraphID UNIQUEIDENTIFIER NOT NULL,
-    Name NVARCHAR(255) NOT NULL,
-    Description NVARCHAR(MAX) NULL,
-    DriverClass NVARCHAR(255) NOT NULL,
-    Configuration NVARCHAR(MAX) NULL,
-    Sequence INT NOT NULL DEFAULT 0,
-    IsActive BIT NOT NULL DEFAULT 1,
-    CONSTRAINT PK_GraphEdgeProvider PRIMARY KEY (ID),
-    CONSTRAINT FK_GraphEdgeProvider_Graph FOREIGN KEY (GraphID) REFERENCES ${flyway:defaultSchema}.Graph(ID),
-    CONSTRAINT UQ_GraphEdgeProvider_Graph_Name UNIQUE (GraphID, Name)
+CREATE TABLE [${flyway:defaultSchema}].[GraphEdgeProvider] (
+    [ID]            UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_GraphEdgeProvider_ID] DEFAULT (newsequentialid()),
+    [GraphID]       UNIQUEIDENTIFIER NOT NULL,
+    [Name]          NVARCHAR(255)    NOT NULL,
+    [Description]   NVARCHAR(MAX)    NULL,
+    [DriverClass]   NVARCHAR(255)    NOT NULL,
+    [Configuration] NVARCHAR(MAX)    NULL,
+    [Sequence]      INT              NOT NULL CONSTRAINT [DF_GraphEdgeProvider_Sequence] DEFAULT (0),
+    [IsActive]      BIT              NOT NULL CONSTRAINT [DF_GraphEdgeProvider_IsActive] DEFAULT (1),
+    CONSTRAINT [PK_GraphEdgeProvider] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [FK_GraphEdgeProvider_Graph] FOREIGN KEY ([GraphID]) REFERENCES [${flyway:defaultSchema}].[Graph]([ID]),
+    CONSTRAINT [UQ_GraphEdgeProvider_Graph_Name] UNIQUE ([GraphID], [Name])
 );
 
-CREATE TABLE ${flyway:defaultSchema}.GraphEdge (
-    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
-    GraphID UNIQUEIDENTIFIER NOT NULL,
-    EdgeTypeID UNIQUEIDENTIFIER NOT NULL,
-    SourceEntityID UNIQUEIDENTIFIER NOT NULL,
-    SourceRecordID NVARCHAR(400) NOT NULL,
-    TargetEntityID UNIQUEIDENTIFIER NOT NULL,
-    TargetRecordID NVARCHAR(400) NOT NULL,
-    Weight DECIMAL(5,4) NOT NULL DEFAULT 1.0,
-    Description NVARCHAR(MAX) NULL,
-    Attributes NVARCHAR(MAX) NULL,
-    Origin NVARCHAR(20) NOT NULL DEFAULT 'Declared',
-    Status NVARCHAR(20) NOT NULL DEFAULT 'Approved',
-    Confidence DECIMAL(5,4) NULL,
-    CONSTRAINT PK_GraphEdge PRIMARY KEY (ID),
-    CONSTRAINT FK_GraphEdge_Graph FOREIGN KEY (GraphID) REFERENCES ${flyway:defaultSchema}.Graph(ID),
-    CONSTRAINT FK_GraphEdge_EdgeType FOREIGN KEY (EdgeTypeID) REFERENCES ${flyway:defaultSchema}.GraphEdgeType(ID),
-    CONSTRAINT FK_GraphEdge_SourceEntity FOREIGN KEY (SourceEntityID) REFERENCES ${flyway:defaultSchema}.Entity(ID),
-    CONSTRAINT FK_GraphEdge_TargetEntity FOREIGN KEY (TargetEntityID) REFERENCES ${flyway:defaultSchema}.Entity(ID),
+CREATE TABLE [${flyway:defaultSchema}].[GraphEdge] (
+    [ID]             UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_GraphEdge_ID] DEFAULT (newsequentialid()),
+    [GraphID]        UNIQUEIDENTIFIER NOT NULL,
+    [EdgeTypeID]     UNIQUEIDENTIFIER NOT NULL,
+    [SourceEntityID] UNIQUEIDENTIFIER NOT NULL,
+    [SourceRecordID] NVARCHAR(400)    NOT NULL,
+    [TargetEntityID] UNIQUEIDENTIFIER NOT NULL,
+    [TargetRecordID] NVARCHAR(400)    NOT NULL,
+    [Weight]         DECIMAL(5, 4)    NOT NULL CONSTRAINT [DF_GraphEdge_Weight] DEFAULT (1.0),
+    [Description]    NVARCHAR(MAX)    NULL,
+    [Attributes]     NVARCHAR(MAX)    NULL,
+    [Origin]         NVARCHAR(20)     NOT NULL CONSTRAINT [DF_GraphEdge_Origin] DEFAULT (N'Declared'),
+    [Status]         NVARCHAR(20)     NOT NULL CONSTRAINT [DF_GraphEdge_Status] DEFAULT (N'Approved'),
+    [Confidence]     DECIMAL(5, 4)    NULL,
+    CONSTRAINT [PK_GraphEdge] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [FK_GraphEdge_Graph] FOREIGN KEY ([GraphID]) REFERENCES [${flyway:defaultSchema}].[Graph]([ID]),
+    CONSTRAINT [FK_GraphEdge_EdgeType] FOREIGN KEY ([EdgeTypeID]) REFERENCES [${flyway:defaultSchema}].[GraphEdgeType]([ID]),
+    CONSTRAINT [FK_GraphEdge_SourceEntity] FOREIGN KEY ([SourceEntityID]) REFERENCES [${flyway:defaultSchema}].[Entity]([ID]),
+    CONSTRAINT [FK_GraphEdge_TargetEntity] FOREIGN KEY ([TargetEntityID]) REFERENCES [${flyway:defaultSchema}].[Entity]([ID]),
     -- 4 × 16 + 2 × 800 = 1664 bytes, inside SQL Server's 1700-byte nonclustered key limit; hence NVARCHAR(400)
-    CONSTRAINT UQ_GraphEdge UNIQUE (GraphID, EdgeTypeID, SourceEntityID, SourceRecordID, TargetEntityID, TargetRecordID),
-    CONSTRAINT CK_GraphEdge_Weight CHECK (Weight >= 0 AND Weight <= 1),
-    CONSTRAINT CK_GraphEdge_Confidence CHECK (Confidence IS NULL OR (Confidence >= 0 AND Confidence <= 1)),
-    CONSTRAINT CK_GraphEdge_Origin CHECK (Origin IN ('Declared', 'Inferred')),
-    CONSTRAINT CK_GraphEdge_Status CHECK (Status IN ('Proposed', 'Approved', 'Rejected')),
-    CONSTRAINT CK_GraphEdge_NoSelfLoop CHECK (NOT (SourceEntityID = TargetEntityID AND SourceRecordID = TargetRecordID))
+    CONSTRAINT [UQ_GraphEdge] UNIQUE ([GraphID], [EdgeTypeID], [SourceEntityID], [SourceRecordID], [TargetEntityID], [TargetRecordID]),
+    CONSTRAINT [CK_GraphEdge_Weight] CHECK ([Weight] >= 0 AND [Weight] <= 1),
+    CONSTRAINT [CK_GraphEdge_Confidence] CHECK ([Confidence] >= 0 AND [Confidence] <= 1),
+    CONSTRAINT [CK_GraphEdge_Origin] CHECK ([Origin] IN (N'Declared', N'Inferred')),
+    CONSTRAINT [CK_GraphEdge_Status] CHECK ([Status] IN (N'Proposed', N'Approved', N'Rejected')),
+    CONSTRAINT [CK_GraphEdge_NoSelfLoop] CHECK (NOT ([SourceEntityID] = [TargetEntityID] AND [SourceRecordID] = [TargetRecordID]))
 );
 
-CREATE TABLE ${flyway:defaultSchema}.CanonConcept (
-    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
-    Name NVARCHAR(255) NOT NULL,
-    Description NVARCHAR(MAX) NOT NULL,
-    Synonyms NVARCHAR(MAX) NULL,
-    Status NVARCHAR(20) NOT NULL DEFAULT 'Draft',
-    CONSTRAINT PK_CanonConcept PRIMARY KEY (ID),
-    CONSTRAINT UQ_CanonConcept_Name UNIQUE (Name),
-    CONSTRAINT CK_CanonConcept_Status CHECK (Status IN ('Draft', 'Approved', 'Deprecated'))
+CREATE TABLE [${flyway:defaultSchema}].[GraphConcept] (
+    [ID]            UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_GraphConcept_ID] DEFAULT (newsequentialid()),
+    [GraphID]       UNIQUEIDENTIFIER NOT NULL,
+    [ParentID]      UNIQUEIDENTIFIER NULL,
+    [Name]          NVARCHAR(255)    NOT NULL,
+    [ConceptType]   NVARCHAR(50)     NOT NULL CONSTRAINT [DF_GraphConcept_ConceptType] DEFAULT (N'Term'),
+    [Description]   NVARCHAR(MAX)    NOT NULL,
+    [Specification] NVARCHAR(MAX)    NULL,
+    [Synonyms]      NVARCHAR(MAX)    NULL,
+    [AuthorityTier] NVARCHAR(50)     NOT NULL CONSTRAINT [DF_GraphConcept_AuthorityTier] DEFAULT (N'Reference'),
+    [Status]        NVARCHAR(20)     NOT NULL CONSTRAINT [DF_GraphConcept_Status] DEFAULT (N'Draft'),
+    CONSTRAINT [PK_GraphConcept] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [FK_GraphConcept_Graph] FOREIGN KEY ([GraphID]) REFERENCES [${flyway:defaultSchema}].[Graph]([ID]),
+    CONSTRAINT [FK_GraphConcept_Parent] FOREIGN KEY ([ParentID]) REFERENCES [${flyway:defaultSchema}].[GraphConcept]([ID]),
+    CONSTRAINT [UQ_GraphConcept_GraphID_Name] UNIQUE ([GraphID], [Name]),
+    CONSTRAINT [CK_GraphConcept_NoSelfParent] CHECK ([ParentID] <> [ID]),
+    CONSTRAINT [CK_GraphConcept_ConceptType] CHECK ([ConceptType] IN (N'Domain', N'Term', N'Policy', N'Metric', N'Process')),
+    CONSTRAINT [CK_GraphConcept_AuthorityTier] CHECK ([AuthorityTier] IN (N'Bylaws', N'BoardPolicy', N'ExecutiveSOP', N'DepartmentPractice', N'Reference', N'Inferred')),
+    CONSTRAINT [CK_GraphConcept_Status] CHECK ([Status] IN (N'Draft', N'Proposed', N'Approved', N'Deprecated'))
 );
+
+ALTER TABLE [${flyway:defaultSchema}].[ContentSource]
+    ADD [GraphID] UNIQUEIDENTIFIER NULL
+        CONSTRAINT [FK_ContentSource_Graph] FOREIGN KEY
+        REFERENCES [${flyway:defaultSchema}].[Graph]([ID])
+        ON DELETE SET NULL;
 -- + sp_addextendedproperty for every column above
 ```
 
@@ -279,7 +305,7 @@ validates against the provider's schema.
 
 **Metadata:**
 - Polymorphic-FK declarations (`SourceRecordID → SourceEntityID`, `TargetRecordID → TargetEntityID`) in `.polymorphic-fk-entity-fields.json`.
-- JSONTypes for `CanonConcept.Synonyms` (`string`, array), `GraphEdge.Attributes` (`Record<string, unknown>`-shaped `IGraphEdgeAttributes`), and `GraphEdgeProvider.Configuration` (`IGraphEdgeProviderConfiguration`, a discriminated union by `DriverClass`).
+- JSONTypes for `GraphConcept.Synonyms` (`string`, array), `GraphEdge.Attributes` (`Record<string, unknown>`-shaped `IGraphEdgeAttributes`), `GraphEdgeProvider.Configuration` (`IGraphEdgeProviderConfiguration`, a discriminated union by `DriverClass`), and `ContentSource.Configuration.GraphOverlay` (`IContentSourceGraphOverlayConfig`).
 - New `metadata/graphs/` directories, ordered after `entities` in `metadata/.mj-sync.json`.
 
 ### Edge providers
@@ -335,10 +361,14 @@ queries. Data-scale providers batch one `RunViews` per expansion step. They neve
 | Reads | Canon | Query → Entity / Alternate Base View | yes | Read By | 0.8 | no | query selects from it |
 | Composes | Canon | Query → Query | yes | Composed Into | 0.9 | no | `{{query:"…"}}` composition |
 | Field Of | Canon | Entity Field → Entity | yes | Has Field | 1.0 | no | only for fields that take part in a stored edge |
-| Defines | Canon | Alternate Base View / Query → Canon Concept | yes | Defined By | 1.0 | yes | the canonical definition |
-| Measures | Canon | Query → Canon Concept | yes | Measured By | 0.9 | yes | computes a metric about the concept |
-| Describes | Canon | Entity / Entity Field → Canon Concept | yes | Described By | 0.7 | yes | holds data about the concept |
-| Broader Than | Canon | Canon Concept → Canon Concept | yes | Narrower Than | 0.8 | yes | concept hierarchy |
+| Defines | Canon | Alternate Base View / Query → Graph Concept | yes | Defined By | 1.0 | yes | the canonical definition |
+| Measures | Canon | Query → Graph Concept | yes | Measured By | 0.9 | yes | computes a metric about the concept |
+| Describes | Canon | Entity / Entity Field → Graph Concept | yes | Described By | 0.7 | yes | holds data about the concept |
+| Implements | Canon | Workflow / TaskGraph → Graph Concept | yes | Implemented By | 0.95 | yes | executable procedure implementing a policy or process |
+| Broader Than | **global** | Graph Concept → Graph Concept | yes | Narrower Than | 0.8 | yes | concept hierarchy |
+| SourcedFrom | **global** | Graph Concept → Content Item Chunk / Content Item | yes | Evidences | 0.85 | yes | chunk evidence backing a concept |
+| Mentions | **global** | Content Item Chunk → Graph Concept / Entity | yes | Mentioned In | 0.6 | yes | chunk references a concept or entity |
+| Contradicts | **global** | Content Item Chunk ↔ Content Item Chunk | no | — | 0.9 | yes | conflicting thresholds, dates, or formulas |
 | Preferred Over | Canon | X → X | yes | Superseded By | 0.9 | yes | use the source instead of the target |
 | Same As | **global** | any ↔ any | no | — | 1.0 | yes | equivalent nodes |
 | Related To | **global** | any ↔ any | no | — | 0.5 | yes | catch-all; weight carries strength |
@@ -406,9 +436,15 @@ export interface GraphTraversalOptions {
 GetEdges(graphName: string, node: GraphNodeRef, options: GraphTraversalOptions, user: UserInfo): Promise<GraphEdgeView[]>;
 Subgraph(graphName: string, seeds: GraphNodeRef[], options: GraphTraversalOptions, user: UserInfo): Promise<{ Nodes: GraphNodeView[]; Edges: GraphEdgeView[] }>;
 DescribeForPrompt(subgraph: { Nodes: GraphNodeView[]; Edges: GraphEdgeView[] }): string;
+FindPath(graphName: string, from: GraphNodeRef, to: GraphNodeRef, options: GraphTraversalOptions, user: UserInfo): Promise<GraphPath>;
+DescribePathForPrompt(path: GraphPath): string;
 
 // packages/MJCoreEntities/src/engines/CanonGraphEngine.ts — canon conveniences over GraphEngine('MJ Canon')
 FindConcepts(text: string, user: UserInfo): GraphNodeView[];   // v1: name + synonym match
+ResolveConcepts(text: string, user: UserInfo): Promise<ConceptResolution>;   // Matched | Ambiguous | NoMatch
+ResolveGraphEndpoint(endpoint: GraphEndpointInput, graphName: string, user: UserInfo): Promise<GraphEndpointResolution>;
+FindPathBetween(graphName: string, from: GraphEndpointInput, to: GraphEndpointInput, options: GraphTraversalOptions, user: UserInfo): Promise<GraphPathRequestResult>;
+ProposeDomainConcepts(graphName: string, user: UserInfo, options?: ProposeEntityDomainsOptions): Promise<DomainProposal[]>;
 CanonContext(question: string, options: GraphTraversalOptions, user: UserInfo): Promise<{ Nodes: GraphNodeView[]; Edges: GraphEdgeView[] }>;
 ```
 
@@ -417,6 +453,20 @@ UUIDs are never compared with `===`.
 
 **Expansion is best-first.** A path's score is the product of its edge weights, decayed by depth,
 so definitional edges are followed before weak `Related To` ones. It stops at `MaxNodes`.
+
+**Paths use the same expansion.** `FindPath` starts best-first expansion at `from` and stops the
+moment `to` is admitted, then walks each node's parent back to the start. It returns the fewest-hop
+path, with the best path weight among paths of that length. `Depth` defaults to 4 and `MaxNodes` to
+200, because a path search needs more reach than a neighborhood read. A path never runs through a
+node some principal cannot see. An endpoint the caller cannot see gets the same `Found: false`
+answer as one that is not connected, so the result never reveals that a record exists.
+
+**Concept text can be ambiguous, and the engine says so.** `ResolveConcepts` tags each match `Exact`
+(the whole text is a name or synonym), `Mention` (the text contains one), `Partial` (the text is a
+fragment of one) or `Token` (words overlap). It is `Ambiguous` when two concepts match the whole text
+exactly, or when the best match is only `Partial` or `Token` and another concept scores within 0.05 of
+it. A `Mention` is never ambiguous: a question that names two concepts is asking about both. Only
+concepts the caller may see are scored, so a hidden concept never makes visible ones look ambiguous.
 
 **Labels and permissions resolve together.** After each expansion step, the engine fetches labels
 with one batched `RunViews` per entity: `ResultType: 'simple'`, primary keys plus the entity's name
@@ -435,7 +485,12 @@ Metadata nodes use metadata checks instead, with no query:
 | Canon Concept | read permission on its entity |
 
 ### Agent surface
-- **Action `Get Graph Context`** (`packages/Actions/CoreActions/src/custom/data/`). A thin wrapper over `GraphEngine`, per `packages/Actions/CLAUDE.md`. Inputs: `GraphName` (default "MJ Canon"), `Question` and/or seed nodes (entity name + record ID, or concept names), `Depth`, `MaxNodes`. Returns the subgraph as JSON and as `DescribeForPrompt` text.
+- **Action `Get Graph Context`** (`packages/Actions/CoreActions/src/custom/data/`). A thin wrapper over `GraphEngine`, per `packages/Actions/CLAUDE.md`. Inputs: `GraphName` (default "MJ Canon"), `Question` and/or seed nodes (entity name + record ID, or concept names), `Depth`, `MaxNodes`. Returns the subgraph as JSON and as `DescribeForPrompt` text. Its result code tells the agent what kind of answer it got:
+  - `SUCCESS`: the inputs resolved.
+  - `AMBIGUOUS_CONCEPT`: the text fits several concepts about equally well. The subgraph covers all of them and `Candidates` lists them, so the agent can ask which one is meant instead of answering about the wrong one.
+  - `NO_MATCH`: nothing the caller may see matched. This is an answer, not an error.
+- **Action `Find Graph Path`** and **remote operation `Graph.FindPath`**. Both run `CanonGraphEngine.FindPathBetween`, so there is one implementation. `From` and `To` are each a record or a concept name, synonym or ID. Result codes: `SUCCESS`, `NO_PATH` (an answer), `AMBIGUOUS_ENDPOINT` (with `Candidates`; no search runs) and `ENDPOINT_NOT_FOUND`. The action is for agents. The remote operation is for the Graph Explorer viewer and any client that asks "how are these two connected?"
+- **Agent bindings.** `Database Research Agent` and `Query Strategist` hold both graph actions, because they answer data questions where a canonical definition matters. Other agents do not, so their tool lists stay short.
 - **`Get Entity Details`** gains a short "Canon" section: the concepts it `Describes`, its alternate views, and the queries that `Read` it or `Measure` its concepts.
 - **Skip's consumption lives outside this repo.** The action and entity metadata are MJ's contract.
 
@@ -492,6 +547,13 @@ Bundle `semantic-graph` in the deterministic tier:
 The dashboard above, plus the record-form embed and the proposed-edge review queue.
 
 ### Phase G5: Inference and semantic lookup (later)
+0. **Domain proposals, deterministic (built).** `ProposeEntityDomains` (`packages/MJCoreEntities/src/graph/DomainClustering.ts`) runs Louvain community detection over the entity foreign-key and IS-A graph, with no AI call:
+   - Foreign keys weigh 0.6 and IS-A links 1.0, the defaults of the `References` and `Is A` edge types.
+   - Entities referenced by more than max(8, 5% of the scope) others are dropped as infrastructure hubs (users, entities, applications). They link everything and say nothing about domains.
+   - Each community of at least 3 entities becomes a `Domain` concept proposal, named after its most connected member. Each member gets a confidence: the share of its link weight that stays inside the group.
+   - Action `Propose Canon Domains` returns the proposals (dry run by default) or writes them with `SaveDomainProposals`: a `Proposed` concept plus `Inferred` + `Proposed` `Describes` edges, one transaction per proposal.
+   - A name already in the graph, in any status, is not proposed again, so a rejected proposal stays rejected.
+   - Naming stays with the reviewer. An LLM could suggest better names later, but the grouping does not need one.
 1. **A curator agent or Record Process** proposes `Describes`, `Defines`, `Measures` and `Same As` edges (canon), or edges for any graph that opts in, as `Inferred` + `Proposed` with a `Confidence`.
 2. **Vectorize** concept names, descriptions and synonyms, and edge descriptions, through MJ's existing entity-document vectorization, so lookup matches by meaning.
 

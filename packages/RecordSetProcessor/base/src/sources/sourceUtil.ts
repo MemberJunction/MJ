@@ -5,7 +5,7 @@
  * @module @memberjunction/record-set-processor-base
  */
 
-import { CompositeKey, EntityInfo, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, RunView, SqlTypeBaseName, UserInfo } from '@memberjunction/core';
 import { ProcessCursor, RecordBatch, RecordRef } from '../types';
 
 /** PK column types over which keyset (seek) pagination is safe and stable. */
@@ -36,25 +36,13 @@ export function CanUseKeyset(entity: EntityInfo): boolean {
     if (!entity.FirstPrimaryKey || entity.PrimaryKeys.length !== 1) { // first-pk-ok: this is the single-column guard for keyset eligibility
         return false;
     }
-    const normalizedType = (entity.FirstPrimaryKey.Type || '') // first-pk-ok: guarded above — PrimaryKeys.length === 1
-        .replace(/\s*\([^)]*\)\s*$/, '') // strip parameterization like "nvarchar(255)"
-        .trim()
-        .toLowerCase();
+    const normalizedType = SqlTypeBaseName(entity.FirstPrimaryKey.Type || ''); // first-pk-ok: guarded above — PrimaryKeys.length === 1
     return KEYSET_ORDERABLE_PK_TYPES.has(normalizedType);
 }
 
 /** @deprecated Use {@link CanUseKeyset}. */
 export function canUseKeyset(entity: EntityInfo): boolean {
     return CanUseKeyset(entity);
-}
-
-/**
- * Rows to request from RunView for a batch of `batchSize`. A `MaxRows: 1` read skips the total
- * count, so its `TotalRowCount` is only the rows returned (#6000). A batch of one therefore reads
- * two rows and keeps the first, which keeps `TotalRowCount` the real total.
- */
-export function ReadSizeForBatch(batchSize: number): number {
-    return batchSize === 1 ? 2 : batchSize;
 }
 
 /**
@@ -80,7 +68,7 @@ export async function PageEntityByFilter(opts: {
         EntityName: entity.Name,
         Fields: entity.PrimaryKeys.map((pk) => pk.Name),
         ResultType: 'simple' as const,
-        MaxRows: ReadSizeForBatch(batchSize),
+        MaxRows: batchSize,
         BypassCache: true,
         ExtraFilter: filter,
     };

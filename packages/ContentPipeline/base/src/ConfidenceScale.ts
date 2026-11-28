@@ -12,6 +12,9 @@
 
 /** The default scale, ordered by how much each kind of evidence deserves to be believed. */
 export const ConfidenceScale = {
+    /** A title explicitly provided by the caller (e.g. an uploaded file's display name). */
+    CallerTitle: 10,
+
     /** Byte evidence that unambiguously contradicts a declaration. */
     FileTypeByteCorrection: 9,
     /** A type declared for this item. Authoritative unless bytes prove otherwise. */
@@ -47,6 +50,8 @@ export const ConfidenceScale = {
     DiscoveredFileType: 3,
     /** A content type a source listing declared. */
     DiscoveredContentType: 3,
+    /** A decorator from a source listing (a manifest row's decorator column). */
+    DiscoveredDecorator: 4,
 } as const;
 
 /** The name of one entry on the scale. */

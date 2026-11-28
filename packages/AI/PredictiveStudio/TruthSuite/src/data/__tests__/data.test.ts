@@ -12,6 +12,13 @@ describe('seed sets', () => {
     expect(() => DatasetSeeds.SeedSet('world', 'W1-signal', 't2')).toThrow();
     expect(() => DatasetSeeds.SeedSet('scenario', 'C2', 't2')).toThrow();
   });
+  it('fixes the 400-seed sets: the spec seed, then spec*1000+1 … +399; W2-noise s100–s499', () => {
+    const c2 = DatasetSeeds.SeedSet('scenario', 'C2', 'n400');
+    expect(c2).toHaveLength(400);
+    expect([c2[0], c2[1], c2[399]]).toEqual([2201, 2201001, 2201399]);
+    expect(DatasetSeeds.SeedSet('world', 'W2-noise', 'n400')).toEqual(Array.from({ length: 400 }, (_, i) => 100 + i));
+    expect(() => DatasetSeeds.SeedSet('world', 'W1-signal', 'n400')).toThrow();
+  });
 });
 
 describe('cache', () => {

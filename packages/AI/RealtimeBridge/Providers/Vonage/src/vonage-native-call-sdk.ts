@@ -34,6 +34,7 @@
  */
 
 import { LogError } from '@memberjunction/core';
+import { ImportFromHost } from '@memberjunction/dynamic-packages';
 import { ITelephonyCallSdk } from '@memberjunction/ai-bridge-base';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -204,7 +205,9 @@ function unwrapDefault(mod: unknown): unknown {
  */
 export const DefaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeCallModule> => {
     try {
-        const mod: unknown = await import(/* @vite-ignore */ specifier);
+        // A bare package name is installed by the host application, not by this package, so it loads
+        // through ImportFromHost (#3741); a path specifier imports as before.
+        const mod: unknown = await ImportFromHost(specifier);
         const resolved = unwrapDefault(mod);
         if (!isNativeModule(resolved)) {
             throw new Error('resolved module has no createClient() factory');

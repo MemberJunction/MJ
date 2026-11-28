@@ -4,7 +4,8 @@
     "types": ["vitest/globals", "node"]
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

@@ -6,6 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import {
     DecideClaimGate,
+    IsGovernanceDebugPause,
+    IsGovernancePausedReason,
     OverrideVerdictFor,
     ParseTaskGraphDebugState,
 } from '../debug-state';
@@ -61,6 +63,32 @@ describe('ParseTaskGraphDebugState', () => {
         expect(OverrideVerdictFor(state, EDGE)).toBe('false');
         expect(OverrideVerdictFor(state, A)).toBeUndefined();
     });
+
+    it('parses checkpointPersisted and pendingCheckpointContext for durable governance pause recovery', () => {
+        const state = ParseTaskGraphDebugState(payload({
+            paused: true,
+            pausedReason: 'governance',
+            checkpointPersisted: false,
+            pendingCheckpointContext: {
+                reason: 'BudgetExceeded',
+                reasonDetail: 'PerRun cost exceeded',
+                scope: 'PerRun',
+                dimension: 'CostUsd',
+                triggerValue: 0.3,
+                thresholdValue: 0.25,
+                pausedAtIso: '2026-11-21T12:00:00.000Z',
+                pausedAtIteration: 3,
+                submittingAgentRunId: A,
+                completedTaskIds: [B, C],
+            },
+        }));
+        expect(state.paused).toBe(true);
+        expect(state.pausedReason).toBe('governance');
+        expect(state.checkpointPersisted).toBe(false);
+        expect(state.pendingCheckpointContext?.reason).toBe('BudgetExceeded');
+        expect(state.pendingCheckpointContext?.submittingAgentRunId).toBe(A);
+        expect(state.pendingCheckpointContext?.completedTaskIds).toEqual([B, C]);
+    });
 });
 
 describe('DecideClaimGate', () => {
@@ -108,6 +136,24 @@ describe('DecideClaimGate', () => {
             mode: 'breakpoint',
             taskID: B,
         });
+    });
+
+    it('parses governancePauseActive and governance:* pausedReason prefixes and detects durable governance pauses', () => {
+        const prefixed = ParseTaskGraphDebugState(payload({
+            paused: true,
+            pausedReason: 'governance:BudgetExceeded',
+            governancePauseActive: true,
+        }));
+        expect(prefixed.pausedReason).toBe('governance:BudgetExceeded');
+        expect(prefixed.governancePauseActive).toBe(true);
+        expect(IsGovernancePausedReason(prefixed.pausedReason)).toBe(true);
+        expect(IsGovernanceDebugPause(prefixed)).toBe(true);
+
+        expect(IsGovernanceDebugPause({ paused: true, pausedReason: 'user' })).toBe(false);
+        expect(IsGovernanceDebugPause({ paused: true, pausedReason: 'breakpoint', pausedAtTaskID: A })).toBe(false);
+        expect(IsGovernanceDebugPause({ governancePauseActive: true })).toBe(true);
+        expect(IsGovernanceDebugPause({ checkpointPersisted: false })).toBe(true);
+        expect(IsGovernancePausedReason('user')).toBe(false);
     });
 
     it('matches breakpoints and named steps case-insensitively', () => {

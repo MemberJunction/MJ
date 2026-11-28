@@ -10,13 +10,16 @@ import {
   OnChanges,
   SimpleChanges,
   DoCheck,
-  TemplateRef
+  TemplateRef,
+  ViewChild,
+  ElementRef
 } from '@angular/core';
 import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity, RatingJSON, UserInfoEngine } from '@memberjunction/core-entities';
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, OpenResourceCommand, ConversationUtility, MJAIAgentRunEntityExtended, GetCachedMessageCitations, type MessageCitation, type MentionContent } from '@memberjunction/ai-core-plus';
+import type { IMJChatCitedSourcesContext, MJChatCitationTransform } from '../slots/slot-interfaces';
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { FormatAgentFailureForDisplay } from '../../utils/agent-failure-display';
@@ -31,12 +34,17 @@ import {
   AfterResponseFormSubmittedEventArgs,
   BeforeStopClickedEventArgs,
 } from '../../events/chat-events';
-import { ExcludeByUUIDs, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { ExcludeByUUIDs, IsValidUUID, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
 import { EMPTY_FORK_CHIPS, ForkChipAriaLabel, ForkChipIcon, ForkChipOpenRequestOf, type ForkChipOpenRequest, type MessageForkChip } from '../../utils/conversation-forks';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import {
+  AgentAccentVar,
+  type MessageHandoffInfo,
+  type MessageHandedOffFromInfo,
+} from './agent-handoff-card.component';
 
 /** How a saved edit of a message is applied: as a new fork, in place with a rerun of its turn, or in place only. */
 export type MessageEditMode = 'Fork' | 'Resend' | 'Save';
@@ -119,6 +127,74 @@ export interface MessagePendingArtifactRef {
   artifactId: string;
   artifactName: string;
   visibility: string;
+}
+
+const ARTIFACT_RESOURCE_TYPES = new Set(['artifact', 'file']);
+const FALLBACK_ARTIFACT_RESOURCE_TYPES = new Set(['report', 'dashboard']);
+
+function matchesAttachedArtifactTarget(
+  rawResourceId: string | undefined,
+  artifacts: readonly MessageArtifactRef[],
+  pendingArtifacts: readonly MessagePendingArtifactRef[],
+  suppressNonUuidPlaceholder: boolean
+): boolean {
+  const trimmed = rawResourceId?.trim();
+  if (!trimmed) {
+    return true;
+  }
+  const normalizedName = trimmed.toLowerCase();
+  for (const ref of artifacts) {
+    if (
+      UUIDsEqual(ref.artifact.ID, trimmed) ||
+      UUIDsEqual(ref.version.ID, trimmed) ||
+      ref.artifact.Name?.trim().toLowerCase() === normalizedName ||
+      ref.version.Name?.trim().toLowerCase() === normalizedName
+    ) {
+      return true;
+    }
+  }
+  for (const pending of pendingArtifacts) {
+    if (
+      UUIDsEqual(pending.artifactId, trimmed) ||
+      pending.artifactName?.trim().toLowerCase() === normalizedName
+    ) {
+      return true;
+    }
+  }
+  return suppressNonUuidPlaceholder && !IsValidUUID(trimmed);
+}
+
+/**
+ * Filters out redundant `open:resource` actionable commands when the message already displays
+ * inline artifact card(s), preventing duplicate "Open Document" buttons underneath artifact cards
+ * while keeping valid navigation links to real dashboards, queries, views, records, and external URLs.
+ */
+export function FilterRedundantArtifactCommands(
+  commands: readonly ActionableCommand[],
+  artifacts: readonly MessageArtifactRef[],
+  pendingArtifacts: readonly MessagePendingArtifactRef[] = []
+): ActionableCommand[] {
+  if (commands.length === 0) {
+    return [];
+  }
+  const hasAttachedArtifacts = artifacts.length > 0 || pendingArtifacts.length > 0;
+  if (!hasAttachedArtifacts) {
+    return commands.slice();
+  }
+  return commands.filter((cmd) => {
+    if (cmd.type !== 'open:resource') {
+      return true;
+    }
+    const resourceCmd = cmd as OpenResourceCommand;
+    const rt = (resourceCmd.resourceType ?? '').trim().toLowerCase();
+    if (ARTIFACT_RESOURCE_TYPES.has(rt)) {
+      return !matchesAttachedArtifactTarget(resourceCmd.resourceId, artifacts, pendingArtifacts, true);
+    }
+    if (FALLBACK_ARTIFACT_RESOURCE_TYPES.has(rt)) {
+      return !matchesAttachedArtifactTarget(resourceCmd.resourceId, artifacts, pendingArtifacts, false);
+    }
+    return true;
+  });
 }
 
 /** Shared empty result so the placeholder getter allocates nothing once loading has finished. */
@@ -206,6 +282,45 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /** Emits true when this row's inline editor opens and false when it closes. */
   @Output() public EditingChanged = new EventEmitter<boolean>();
+
+  /** Outgoing agent handoff card metadata attached to this source AI message. */
+  @Input() public Handoff: MessageHandoffInfo | null = null;
+
+  /** Incoming agent handoff provenance attached to this target AI message. */
+  @Input() public HandedOffFrom: MessageHandedOffFromInfo | null = null;
+
+  /** CSS custom property reference for the target agent's accent color on a handed-off target message. */
+  public get TargetAccentVar(): string {
+    if (!this.HandedOffFrom) {
+      return 'var(--mj-brand-primary)';
+    }
+    return AgentAccentVar(this.message?.AgentID ?? this.HandedOffFrom.TargetAgent.ID);
+  }
+
+  /** CSS custom property reference for the source agent's accent color on a handed-off target message. */
+  public get HandedOffFromAccentVar(): string {
+    if (!this.HandedOffFrom) {
+      return 'var(--mj-brand-primary)';
+    }
+    return AgentAccentVar(this.HandedOffFrom.SourceAgent.ID);
+  }
+
+  /**
+   * True when this message is a handed-off target AI message that has not yet produced
+   * its first streamed token (still in its initial placeholder state).
+   */
+  public get IsHandedOffTargetJoining(): boolean {
+    if (!this.HandedOffFrom || !this.IsInProgressAIMessage) {
+      return false;
+    }
+    const raw = (this.message?.Message ?? '').trim();
+    return raw.length === 0 || raw === '⏳ Starting...';
+  }
+
+  /** True when this source message handed off to a target agent (and did not fail). */
+  public get IsSourceTransferred(): boolean {
+    return Boolean(this.Handoff) && this.Handoff?.Status !== 'Failed';
+  }
 
   /**
    * How a saved edit is applied: 'Fork' while the person may fork; with forking off, 'Resend' on the
@@ -372,6 +487,39 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public get isLastMessage(): boolean {
     return this.IsLastMessage;
   } // Whether this is the last message in the conversation
+
+  /**
+   * True when this is the most recent message in the timeline (or standalone usage).
+   * Defaults to true so standalone usages never unexpectedly auto-collapse.
+   */
+  @Input() public IsLatestMessage: boolean = true;
+
+  /** Hysteresis threshold (px): only collapse when rendered .message-text exceeds this height. */
+  private static readonly COLLAPSE_TRIGGER_HEIGHT_PX = 220;
+
+  private _isLongMessage = false;
+  private _isTextExpanded = false;
+  private _lastMessageIdForCollapse: string | null = null;
+  private _lastMeasuredDisplayMessage: string | null = null;
+  private _lastMeasuredStatus: string | null = null;
+  private _messageTextElRef?: ElementRef<HTMLElement>;
+  private _messageTextResizeObserver: ResizeObserver | null = null;
+
+  @ViewChild('messageTextEl')
+  private set messageTextEl(ref: ElementRef<HTMLElement> | undefined) {
+    if (this._messageTextElRef === ref) {
+      return;
+    }
+    this._messageTextElRef = ref;
+    this.disconnectMessageTextResizeObserver();
+    if (ref?.nativeElement) {
+      this.measureMessageTextHeight();
+      this.observeMessageTextResize(ref.nativeElement);
+    }
+  }
+  private get messageTextEl(): ElementRef<HTMLElement> | undefined {
+    return this._messageTextElRef;
+  }
   @Input() public Attachments: MessageAttachment[] = [];
 
   /** @deprecated Use {@link Attachments}. */
@@ -451,6 +599,34 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /** Show the per-message thumbs rating control on completed AI messages. */
   @Input() public ShowMessageRating: boolean = true;
 
+  /** Show the Cited Sources footer bar beneath AI messages that cite records. */
+  @Input() public ShowCitedSources: boolean = true;
+
+  /**
+   * Transform `[[Entity|ID|Label]]` and `@{type:"record",...}` citation tokens into
+   * inline clickable chips inside the message body. Set to `false` to keep inline prose
+   * clean while still optionally rendering the bottom Cited Sources bar.
+   */
+  @Input() public EnableInlineCitations: boolean = true;
+
+  /**
+   * Optional per-message hook to filter, reorder, relabel, or append custom/structured
+   * citations (records, artifacts, or external URLs) before rendering the Cited Sources bar.
+   */
+  @Input() public CitationTransform?: MJChatCitationTransform;
+
+  /**
+   * Optional custom template replacing the entire `<mj-cited-sources-bar>` footer
+   * (forwarded from `mjChatSlot="citedSources"`).
+   */
+  @Input() public CitedSourcesTemplate: TemplateRef<unknown> | null = null;
+
+  /**
+   * Optional custom template for each individual source pill inside `<mj-cited-sources-bar>`
+   * (forwarded from `mjChatSlot="citedSourcePill"`).
+   */
+  @Input() public CitedSourcePillTemplate: TemplateRef<unknown> | null = null;
+
   /** @deprecated Use {@link ShowMessageRating}. */
   @Input() public set showMessageRating(value: boolean) {
     this.ShowMessageRating = value;
@@ -509,6 +685,19 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * say which one, and the composer stops them all.
    */
   @Input() public InFlightCount = 0;
+
+  /**
+   * Whether the viewer may stop this reply's run. The host decides from who started it: a user
+   * stops their own runs, the conversation's owner stops any. Default true.
+   */
+  @Input() public StopAllowed = true;
+
+  /**
+   * Whether inline markdown links in message text open in a new browser tab (`target="_blank"`).
+   * In-page fragment links (`#heading`) and `mailto:` / `tel:` / `sms:` links stay in the
+   * current tab. Default `true`.
+   */
+  @Input() public OpenLinksInNewTab: boolean = true;
   /** Host override for the AI message display name (white-label persona). Null = the agent record's name. */
   @Input() public AssistantDisplayName: string | null = null;
 
@@ -555,12 +744,24 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this.AssistantAvatarFailed = value;
   }
 
-  /** The avatar image URL actually rendered: trimmed, and null after a load error
-   *  so a broken/whitespace URL degrades to the agent icon instead of a broken-image glyph. */
+  /** The avatar image URL actually rendered: host override -> agent LogoURL ->
+   *  default Persona PreviewImageURL, and null after a load error so a broken/whitespace
+   *  URL degrades cleanly to the agent icon instead of a broken-image glyph. */
   public get EffectiveAssistantAvatarUrl(): string | null {
     if (this.AssistantAvatarFailed) return null;
-    const url = this._assistantAvatarUrl?.trim();
-    return url ? url : null;
+    const hostUrl = this._assistantAvatarUrl?.trim();
+    if (hostUrl) return hostUrl;
+    if (!this.IsAIMessage) return null;
+    const agentID = this.message?.AgentID;
+    if (!agentID) return null;
+    const agent = AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentID));
+    const logoUrl = agent?.LogoURL?.trim();
+    if (logoUrl) return logoUrl;
+    if (typeof AIEngineBase.Instance.ResolveAgentPersona === 'function') {
+      const personaUrl = AIEngineBase.Instance.ResolveAgentPersona(agentID)?.Persona?.PreviewImageURL?.trim();
+      if (personaUrl) return personaUrl;
+    }
+    return null;
   }
 
   /** @deprecated Use {@link EffectiveAssistantAvatarUrl}. */
@@ -795,6 +996,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
+  /** Set in ngOnDestroy so async work that settles afterwards cannot re-arm the elapsed-time interval. */
+  private _isDestroyed = false;
   public ElapsedTimeFormatted: string = '0:00';
 
   /** @deprecated Use {@link ElapsedTimeFormatted}. */
@@ -895,6 +1098,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private _cachedDisplayMessage: string = '';
   /** The raw Message the cached display text was computed from. */
   private _cachedRawText: string = '';
+  private _cachedHadHandoff: boolean = false;
+  private _cachedEnableInlineCitations: boolean = true;
+  /** Memoized deduplicated (and optionally transformed) citations for the current message. */
+  private _cachedCitationsRawText: string = '';
+  private _cachedCitationsMessage: MJConversationDetailEntity | null = null;
+  private _cachedCitationsTransform: MJChatCitationTransform | undefined = undefined;
+  private _cachedCitations: readonly MessageCitation[] = [];
+
+  /** Stable bound callback handed to projected `citedSources` templates so they can invoke default navigation. */
+  public readonly OpenCitationBound = (citation: MessageCitation): void => {
+    this.OnCitedSourceClicked(citation);
+  };
 
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
   private mentionAutocomplete = MentionAutocompleteService.Instance;
@@ -1007,6 +1222,23 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this._messageClasses = this.buildMessageClasses();
     this._stableIsInProgressAIMessage = this.IsAIMessage && currentStatus === 'In-Progress';
     this._stableDisplayMessage = this.computeDisplayMessage();
+
+    const currentMessageId = this.message.ID ?? null;
+    if (currentMessageId !== this._lastMessageIdForCollapse) {
+      this._lastMessageIdForCollapse = currentMessageId;
+      this._isTextExpanded = false;
+      this._isLongMessage = false;
+      this._lastMeasuredDisplayMessage = null;
+      this._lastMeasuredStatus = null;
+    }
+
+    if (
+      this._messageTextElRef?.nativeElement &&
+      (this._lastMeasuredDisplayMessage !== this._stableDisplayMessage ||
+        this._lastMeasuredStatus !== (currentStatus ?? null))
+    ) {
+      this.measureMessageTextHeight();
+    }
 
     // Nothing in flight means nothing to watch — restart the clock so a run that begins later is
     // measured from when it began, not from when this component was created.
@@ -1147,15 +1379,79 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       this._loadTime = Date.now();
     }
     this.startElapsedTimeUpdater();
+    this.measureMessageTextHeight();
     this.cdRef.detectChanges();
   }
 
   ngOnDestroy() {
+    this._isDestroyed = true;
     this.stopElapsedTimeUpdater();
     this.clearStopRetryTimer();
+    this.disconnectMessageTextResizeObserver();
     if (this._taskGraphSub) {
       this._taskGraphSub.unsubscribe();
       this._taskGraphSub = null;
+    }
+  }
+
+  /** True when this settled, non-latest message exceeds the collapse height threshold. */
+  public get CanCollapseText(): boolean {
+    return !this.IsLatestMessage
+      && !this.IsStreaming
+      && this.MessageStatus !== 'In-Progress'
+      && !this.IsHandedOffTargetJoining
+      && !this.isEditing
+      && this._isLongMessage;
+  }
+
+  /** True when the message text is currently clipped to its collapsed max-height. */
+  public get IsTextCollapsed(): boolean {
+    return this.CanCollapseText && !this._isTextExpanded;
+  }
+
+  /** True when the Show more / Show less toggle button should be rendered. */
+  public get ShowCollapseToggle(): boolean {
+    return this.CanCollapseText;
+  }
+
+  /** Toggles between collapsed and expanded presentation for a long non-latest message. */
+  public ToggleTextExpanded(): void {
+    this._isTextExpanded = !this._isTextExpanded;
+    this.cdRef.detectChanges();
+  }
+
+  private measureMessageTextHeight(): boolean {
+    const el = this._messageTextElRef?.nativeElement;
+    if (!el) {
+      return false;
+    }
+    this._lastMeasuredDisplayMessage = this._stableDisplayMessage ?? this.displayMessage;
+    this._lastMeasuredStatus = this.message?.Status ?? null;
+    const nextIsLong = el.scrollHeight > MessageItemComponent.COLLAPSE_TRIGGER_HEIGHT_PX;
+    if (nextIsLong !== this._isLongMessage) {
+      this._isLongMessage = nextIsLong;
+      this.cdRef.markForCheck();
+      return true;
+    }
+    return false;
+  }
+
+  private observeMessageTextResize(el: HTMLElement): void {
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    this._messageTextResizeObserver = new ResizeObserver(() => {
+      if (this.measureMessageTextHeight()) {
+        this.cdRef.detectChanges();
+      }
+    });
+    this._messageTextResizeObserver.observe(el);
+  }
+
+  private disconnectMessageTextResizeObserver(): void {
+    if (this._messageTextResizeObserver) {
+      this._messageTextResizeObserver.disconnect();
+      this._messageTextResizeObserver = null;
     }
   }
 
@@ -1184,26 +1480,76 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.OnMessageBubbleClick(event);
   }
 
+  /** Keyboard accessibility (Enter / Space) for focusable inline record citation chips. */
+  public OnMessageBubbleKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+    const recordBadge = (event.target as HTMLElement | null)?.closest?.('.mention-badge.record') as HTMLElement | null;
+    if (!recordBadge) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    this.openRecordLinkBadge(recordBadge);
+  }
+
+  /** Handles clicks on a pill inside the `<mj-cited-sources-bar>` footer or custom `citedSources` slot. */
+  public OnCitedSourceClicked(citation: MessageCitation): void {
+    if (citation.Kind === 'artifact') {
+      if (citation.ArtifactID) {
+        this.ArtifactClicked.emit({ artifactId: citation.ArtifactID });
+      }
+      return;
+    }
+    if (citation.Kind === 'url') {
+      const rawUrl = citation.Url?.trim();
+      if (rawUrl && /^https?:\/\//i.test(rawUrl) && typeof window !== 'undefined') {
+        window.open(
+          rawUrl,
+          this.OpenLinksInNewTab ? '_blank' : '_self',
+          this.OpenLinksInNewTab ? 'noopener,noreferrer' : undefined
+        );
+      }
+      return;
+    }
+    if (citation.Kind !== 'record' || !citation.EntityName) {
+      return;
+    }
+    const compositeKey = this.resolveCompositeKeyForRecord(
+      citation.EntityName,
+      citation.Keys ?? (citation.RecordID ? { ID: citation.RecordID } : {}),
+      citation.RecordID
+    );
+    if (!compositeKey) {
+      console.warn('Cited source: incomplete primary key', citation.EntityName, citation.RecordID);
+      return;
+    }
+    this.OpenEntityRecord.emit({ entityName: citation.EntityName, compositeKey });
+  }
+
+  /** Builds the strongly-typed context passed to a projected `mjChatSlot="citedSources"` template. */
+  public GetCitedSourcesTemplateContext(): IMJChatCitedSourcesContext {
+    const citations = this.CitedSources;
+    return {
+      $implicit: citations,
+      citations,
+      message: this.message,
+      openCitation: this.OpenCitationBound,
+    };
+  }
+
   private openRecordLinkBadge(el: HTMLElement): void {
     const entityName = el.getAttribute('data-record-entity');
     const keysJson = el.getAttribute('data-record-keys');
     if (!entityName) return;
-    let content: { type: 'record'; name: string; entityName: string; keys?: Record<string, string | number> };
+    let keys: Record<string, string | number> = {};
     try {
-      const keys = keysJson ? JSON.parse(keysJson) as Record<string, string | number> : {};
-      content = { type: 'record', name: el.textContent?.trim() || entityName, entityName, keys };
+      keys = keysJson ? (JSON.parse(keysJson) as Record<string, string | number>) : {};
     } catch {
       return;
     }
-    const entity = this.ProviderToUse.EntityByName(entityName);
-    if (!entity) {
-      console.warn('Record link: unknown entity', entityName);
-      return;
-    }
-    const compositeKey = ConversationUtility.CompositeKeyFromRecordLink(
-      content,
-      entity.PrimaryKeys.map(pk => pk.Name)
-    );
+    const compositeKey = this.resolveCompositeKeyForRecord(entityName, keys);
     if (!compositeKey) {
       console.warn('Record link: incomplete primary key', entityName, keysJson);
       return;
@@ -1211,11 +1557,45 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this.OpenEntityRecord.emit({ entityName, compositeKey });
   }
 
+  private resolveCompositeKeyForRecord(
+    entityName: string,
+    keys: Record<string, string | number>,
+    fallbackRecordId?: string
+  ): CompositeKey | null {
+    const entity = this.ProviderToUse?.EntityByName?.(entityName);
+    if (!entity) {
+      console.warn('Record link: unknown entity', entityName);
+      return null;
+    }
+    const primaryKeyNames = entity.PrimaryKeys.map(pk => pk.Name);
+    const content: MentionContent = {
+      type: 'record',
+      name: entityName,
+      entityName,
+      keys,
+    };
+    const compositeKey = ConversationUtility.CompositeKeyFromRecordLink(content, primaryKeyNames);
+    if (compositeKey) {
+      return compositeKey;
+    }
+    // Single primary key whose column is not named `ID` (e.g. `[[Entity|42|Label]]`)
+    if (primaryKeyNames.length === 1) {
+      const singleValue = fallbackRecordId ?? (keys['ID'] != null ? String(keys['ID']) : undefined);
+      if (singleValue) {
+        return new CompositeKey([{ FieldName: primaryKeyNames[0], Value: singleValue }]);
+      }
+    }
+    return null;
+  }
+
   /**
    * Starts the elapsed time updater interval for temporary messages, active agent runs,
    * and active durable workflow task graphs.
    */
   private startElapsedTimeUpdater(): void {
+    if (this._isDestroyed) {
+      return;
+    }
     if (this.IsInProgressAIMessage || this.IsAgentRunActive || this.HasActiveWorkflowTasks) {
       // Initial update
       this.updateTimers();
@@ -1378,6 +1758,16 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.AiAgentInfo;
   }
 
+  /** Normalized Font Awesome icon class for the assistant avatar fallback. */
+  public get EffectiveAssistantIconClass(): string {
+    return this.normalizeIconClass(this.AiAgentInfo?.iconClass || 'fa-robot');
+  }
+
+  /** @deprecated Use {@link EffectiveAssistantIconClass}. */
+  public get effectiveAssistantIconClass(): string {
+    return this.EffectiveAssistantIconClass;
+  }
+
   /** The engine-resolved agent identity — no host display overrides applied.
    *  Protected (not private) so the template's run-details header — which labels
    *  the REAL agent's diagnostics and record link — can read it directly. */
@@ -1397,6 +1787,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
           role: agent.Description || 'AI Assistant'
         };
       } else {
+        // Fallback to denormalized message.Agent name when a brand-new instance hasn't refreshed cache yet
+        if (this.message.Agent) {
+          return {
+            name: this.message.Agent,
+            iconClass: 'fa-robot',
+            role: 'AI Assistant'
+          };
+        }
         // Only log if the message is complete (should have AgentID by then)
         if (this.message.Status === 'Complete') {
           console.warn('⚠️ Agent not found in cache for ID:', agentID);
@@ -1506,32 +1904,64 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
+   * Deduplicated (and optionally host-transformed) citations for the current message.
+   * Backed by `ConversationEngine`'s zero-`RunView` `WeakMap` + detail cache so repeated
+   * Angular CD passes and Overlay ↔ Full Chat Workspace switches hit O(1).
+   */
+  public get CitedSources(): readonly MessageCitation[] {
+    const raw = this.displaySourceText();
+    if (
+      raw !== this._cachedCitationsRawText ||
+      this.message !== this._cachedCitationsMessage ||
+      this.CitationTransform !== this._cachedCitationsTransform
+    ) {
+      const baseCitations = GetCachedMessageCitations(this.message, raw).Citations;
+      this._cachedCitationsRawText = raw;
+      this._cachedCitationsMessage = this.message;
+      this._cachedCitationsTransform = this.CitationTransform;
+      this._cachedCitations = this.CitationTransform
+        ? this.CitationTransform(baseCitations, this.message)
+        : baseCitations;
+    }
+    return this._cachedCitations;
+  }
+
+  /**
    * Computes the display message from the current message text. Called from
    * ngDoCheck to snapshot the value; templates read _stableDisplayMessage.
    */
   private computeDisplayMessage(): string {
     const raw = this.displaySourceText();
+    const hadHandoff = Boolean(this.Handoff);
+    const enableInlineCitations = this.EnableInlineCitations !== false;
 
     // ngDoCheck calls this every pass; an unchanged Message is the same string object, so this
-    // compare is a pointer check and nothing below runs until the text changes.
-    if (raw === this._cachedRawText && this._cachedDisplayMessage) {
+    // compare is a pointer check and nothing below runs until the text or inline-citation toggle changes.
+    if (
+      raw === this._cachedRawText &&
+      hadHandoff === this._cachedHadHandoff &&
+      enableInlineCitations === this._cachedEnableInlineCitations &&
+      this._cachedDisplayMessage
+    ) {
       return this._cachedDisplayMessage;
     }
 
     let text = raw;
 
-    // For Sage, only show the delegation line (starts with emoji)
-    if (this.IsConversationManager && text) {
+    // For legacy Sage delegation (when no Handoff card is rendered), only show the delegation line (starts with emoji)
+    if (this.IsConversationManager && text && !this.Handoff) {
       const delegationMatch = text.match(/🤖.*Delegating to.*Agent.*/);
       if (delegationMatch) {
         text = delegationMatch[0];
       }
     }
 
-    // Transform @mentions to HTML pills
-    const transformed = this.transformMentionsToHTML(text);
+    // Transform @mentions (and inline citations when EnableInlineCitations is enabled) to HTML pills
+    const transformed = this.transformMentionsToHTML(text, enableInlineCitations);
 
     this._cachedRawText = raw;
+    this._cachedHadHandoff = hadHandoff;
+    this._cachedEnableInlineCitations = enableInlineCitations;
     this._cachedDisplayMessage = transformed;
 
     return transformed;
@@ -1554,58 +1984,143 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Supports both JSON format (@{type:"agent",id:"uuid",...}) and legacy text format (@AgentName)
    * Uses inline HTML that markdown will preserve
    */
-  private transformMentionsToHTML(text: string): string {
+  private transformMentionsToHTML(text: string, enableInlineCitations: boolean = this.EnableInlineCitations !== false): string {
     if (!text) return '';
 
-    // Get available agents and users for name/icon lookup
-    const agents = this.mentionAutocomplete.getAvailableAgents();
-    const users = this.mentionAutocomplete.getAvailableUsers();
+    // Parse (or hit ConversationEngine O(1) cache for) inline citations
+    const parsedCitations = GetCachedMessageCitations(this.message, text);
 
     // Parse all @{...} tokens
     const tokens = ConversationUtility.ParseSpecialContent(text);
-    if (tokens.length === 0) return text; // No tokens found, return original text
+    const wikiOccurrences = enableInlineCitations
+      ? parsedCitations.Occurrences.filter((o) => o.Syntax === 'wiki')
+      : [];
+    if (tokens.length === 0 && wikiOccurrences.length === 0) {
+      return text;
+    }
 
-    // Replace tokens in reverse order to maintain indices
-    let result = text;
-    for (let i = tokens.length - 1; i >= 0; i--) {
-      const token = tokens[i];
+    const mentionCitationIndexByStart = new Map<number, number>();
+    if (enableInlineCitations) {
+      for (const occ of parsedCitations.Occurrences) {
+        if (occ.Syntax === 'mention') {
+          mentionCitationIndexByStart.set(occ.StartIndex, occ.Citation.Index);
+        }
+      }
+    }
+
+    // Get available agents and users for name/icon lookup (only when @{...} tokens exist)
+    const agents = tokens.length > 0 && this.mentionAutocomplete ? this.mentionAutocomplete.getAvailableAgents() : [];
+    const users = tokens.length > 0 && this.mentionAutocomplete ? this.mentionAutocomplete.getAvailableUsers() : [];
+
+    const replacements: Array<{ startIndex: number; endIndex: number; html: string }> = [];
+
+    for (const token of tokens) {
       let html = '';
-
       switch (token.mode) {
         case 'mention':
-          html = this.renderMentionHTML(token.content as any, agents, users);
+          html = this.renderMentionHTML(
+            token.content as Omit<MentionContent, 'type'> & {
+              type: MentionContent['type'] | 'skill';
+              configId?: string;
+              config?: string;
+            },
+            agents,
+            users,
+            mentionCitationIndexByStart.get(token.startIndex)
+          );
           break;
         case 'form':
-          html = this.renderFormHTML(token.content as any);
+          html = this.renderFormHTML(
+            token.content as { title?: string; fields?: Array<{ name?: string; value: unknown; label?: string; type?: string; displayValue?: string }> }
+          );
           break;
         default:
-          // Unknown mode, leave original text as-is
           html = token.originalText;
       }
+      replacements.push({ startIndex: token.startIndex, endIndex: token.endIndex, html });
+    }
 
-      result = result.substring(0, token.startIndex) + html + result.substring(token.endIndex);
+    for (const occ of wikiOccurrences) {
+      replacements.push({
+        startIndex: occ.StartIndex,
+        endIndex: occ.EndIndex,
+        html: this.renderWikiCitationHTML(occ.Citation),
+      });
+    }
+
+    // Sort ascending, discard any overlap, then splice in reverse order to preserve indices
+    replacements.sort((a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex);
+    const nonOverlapping: Array<{ startIndex: number; endIndex: number; html: string }> = [];
+    let lastEnd = -1;
+    for (const item of replacements) {
+      if (item.startIndex < lastEnd) continue;
+      lastEnd = item.endIndex;
+      nonOverlapping.push(item);
+    }
+
+    let result = text;
+    for (let i = nonOverlapping.length - 1; i >= 0; i--) {
+      const rep = nonOverlapping[i];
+      result = result.substring(0, rep.startIndex) + rep.html + result.substring(rep.endIndex);
     }
 
     return result;
   }
 
-  private renderMentionHTML(content: any, agents: any[], users: any[]): string {
+  private renderWikiCitationHTML(citation: MessageCitation): string {
+    const entityName = citation.EntityName ?? '';
+    const entity = entityName ? this.ProviderToUse?.EntityByName?.(entityName) : undefined;
+    const entityDisplayName = entity?.DisplayNameOrName?.trim() || entityName;
+    const iconClass = this.normalizeIconClass(entity?.Icon || 'fa-solid fa-up-right-from-square');
+    const keys = citation.Keys ?? (citation.RecordID ? { ID: citation.RecordID } : {});
+    const label =
+      entityName && citation.DisplayName.trim().toLowerCase() === entityName.trim().toLowerCase()
+        ? entityDisplayName
+        : citation.DisplayName;
+    const ariaLabel =
+      entityDisplayName && entityDisplayName.toLowerCase() !== label.trim().toLowerCase()
+        ? `Open ${label} (${entityDisplayName})`
+        : `Open ${label}`;
+    const indexBadge = `<span class="citation-index">[${citation.Index}]</span>`;
+
+    return (
+      `<span class="mention-badge record citation-chip" role="link" tabindex="0"` +
+      ` title="${this.escapeHtml(ariaLabel)}" aria-label="${this.escapeHtml(ariaLabel)}"` +
+      ` data-record-entity="${this.escapeHtml(entityName)}"` +
+      ` data-record-keys="${this.escapeHtml(JSON.stringify(keys))}"` +
+      ` data-citation-index="${citation.Index}">` +
+      `${indexBadge}<i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${this.escapeHtml(label)}</span>`
+    );
+  }
+
+  private renderMentionHTML(
+    content: Omit<MentionContent, 'type'> & {
+      type: MentionContent['type'] | 'skill';
+      configId?: string;
+      config?: string;
+    },
+    agents: Array<{ ID: string; Name?: string | null; IconClass?: string | null; LogoURL?: string | null }>,
+    users: Array<{ ID: string; Name?: string | null }>,
+    citationIndex?: number
+  ): string {
     let name = typeof content.name === 'string' ? content.name : '';
     let iconClass = '';
     let logoURL = '';
     let configPresetName = '';
     let inlineStyle = '';
 
+    let recordEntityDisplayName = '';
+
     // Look up actual name and icon if ID provided
     if (content.type === 'agent' && agents) {
       const agent = agents.find(a => UUIDsEqual(a.ID, content.id));
       if (agent) {
-        name = agent.Name;
+        name = agent.Name || name;
         iconClass = agent.IconClass || '';
         logoURL = agent.LogoURL || '';
 
         // Check for configuration preset (only show if non-default)
-        if (content.configId && AIEngineBase.Instance) {
+        if (content.configId && content.id && AIEngineBase.Instance) {
           const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(content.id, true);
           if (presets && presets.length > 0) {
             const defaultPreset = presets.find(p => p.IsDefault) || presets[0];
@@ -1620,7 +2135,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       }
     } else if (content.type === 'user' && users) {
       const user = users.find(u => UUIDsEqual(u.ID, content.id));
-      if (user) name = user.Name;
+      if (user?.Name) name = user.Name;
     } else if (content.type === 'entity') {
       const entity = this.mentionAutocomplete.getAvailableEntities().find(e => UUIDsEqual(e.ID, content.id));
       name = entity ? entity.DisplayNameOrName : name;
@@ -1640,34 +2155,54 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       }
     } else if (content.type === 'record') {
       name = (content.name ?? '').trim();
-      iconClass = this.normalizeIconClass('fa-solid fa-up-right-from-square');
+      const recordEntity = content.entityName
+        ? this.ProviderToUse?.EntityByName?.(content.entityName)
+        : undefined;
+      recordEntityDisplayName = recordEntity?.DisplayNameOrName?.trim() || content.entityName?.trim() || 'record';
+      if (name && content.entityName && name.toLowerCase() === content.entityName.trim().toLowerCase()) {
+        name = recordEntityDisplayName;
+      }
+      iconClass = this.normalizeIconClass(recordEntity?.Icon || 'fa-solid fa-up-right-from-square');
     }
 
     const iconOnly = content.type === 'record' && !name;
     const escapedName = name ? this.escapeHtml(name) : '';
+    const baseType =
+      content.type === 'agent' || content.type === 'entity' || content.type === 'query' || content.type === 'skill' || content.type === 'record'
+        ? content.type
+        : 'user';
     const typeClass =
-      (content.type === 'agent' || content.type === 'entity' || content.type === 'query' || content.type === 'skill' || content.type === 'record' ? content.type : 'user')
-      + (iconOnly ? ' icon-only' : '');
+      baseType +
+      (iconOnly ? ' icon-only' : '') +
+      (content.type === 'record' && citationIndex != null ? ' citation-chip' : '');
 
     // Build preset indicator HTML if present
     const presetIndicator = configPresetName
       ? `<span class="preset-indicator">${this.escapeHtml(configPresetName)}</span>`
       : '';
+    const citationIndexBadge =
+      content.type === 'record' && citationIndex != null
+        ? `<span class="citation-index">[${citationIndex}]</span>`
+        : '';
 
     const recordOpenLabel = content.type === 'record'
-      ? (name ? `Open ${name}` : `Open ${content.entityName || 'record'}`)
+      ? (name
+          ? (recordEntityDisplayName && recordEntityDisplayName.toLowerCase() !== name.toLowerCase()
+              ? `Open ${name} (${recordEntityDisplayName})`
+              : `Open ${name}`)
+          : `Open ${recordEntityDisplayName || 'record'}`)
       : '';
     const recordAttrs = content.type === 'record' && content.entityName
-      ? ` role="link" title="${this.escapeHtml(recordOpenLabel)}" aria-label="${this.escapeHtml(recordOpenLabel)}" data-record-entity="${this.escapeHtml(content.entityName)}" data-record-keys="${this.escapeHtml(JSON.stringify(ConversationUtility.RecordLinkKeyMap(content)))}"`
+      ? ` role="link" tabindex="0" title="${this.escapeHtml(recordOpenLabel)}" aria-label="${this.escapeHtml(recordOpenLabel)}" data-record-entity="${this.escapeHtml(content.entityName)}" data-record-keys="${this.escapeHtml(JSON.stringify(ConversationUtility.RecordLinkKeyMap(content as MentionContent)))}"${citationIndex != null ? ` data-citation-index="${citationIndex}"` : ''}`
       : '';
 
     // Generate HTML based on whether we have an icon
     if (logoURL) {
-      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><img src="${this.escapeHtml(logoURL)}" alt="" role="presentation" />${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}>${citationIndexBadge}<img src="${this.escapeHtml(logoURL)}" alt="" role="presentation" />${escapedName}${presetIndicator}</span>`;
     } else if (iconClass) {
-      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}>${citationIndexBadge}<i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
     } else {
-      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}>${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}>${citationIndexBadge}${escapedName}${presetIndicator}</span>`;
     }
   }
 
@@ -1765,11 +2300,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Whether this message offers a Stop control: an AI reply still in progress, in a conversation
-   * the viewer may write to, while more than one reply is in flight (see {@link InFlightCount}).
+   * the viewer may write to, when the host lets the viewer stop this run ({@link StopAllowed}),
+   * while more than one reply is in flight (see {@link InFlightCount}).
    * The server's permission check is the real gate; this only decides whether the control is shown.
    */
   public get CanStopRun(): boolean {
-    return this.IsInProgressAIMessage && !this.ReadOnly && this.AllowStopRun && this.InFlightCount > 1;
+    return this.IsInProgressAIMessage && !this.ReadOnly && this.AllowStopRun && this.StopAllowed !== false && this.InFlightCount > 1;
   }
 
   /** Stop button handler: marks the message as stopping and hands the request to the host. */
@@ -2315,6 +2851,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     } else if (this.ForkRail === 'Own') {
       classes.push('fork-rail-own');
     }
+    if (this.Handoff) {
+      classes.push('handoff-source');
+      if (this.Handoff.Status !== 'Failed') {
+        classes.push('msg--handed', 'handoff-source-transferred');
+      }
+    }
+    if (this.HandedOffFrom) {
+      classes.push('target-block', 'handoff-target');
+    }
     return classes.join(' ');
   }
 
@@ -2818,6 +3363,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         this.CurrentUser
       );
 
+      if (this._isDestroyed) {
+        return;
+      }
       if (result.Success) {
         const allTasks = result.Results || [];
         if (safeParentId) {
@@ -2844,7 +3392,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       console.error('Failed to load tasks for conversation detail:', error);
     } finally {
       this._tasksLoadInFlight = false;
-      if (this._tasksReloadQueued) {
+      if (this._tasksReloadQueued && !this._isDestroyed) {
         this._tasksReloadQueued = false;
         void this.loadTasks();
       }
@@ -3498,18 +4046,30 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Cached against the raw JSON string (see {@link responseForm} for rationale).
    */
   private _actionableCommandsRaw: string | null | undefined = undefined;
+  private _actionableCommandsArtifactSig: string = '';
   private _actionableCommandsCache: ActionableCommand[] = [];
   public get ActionableCommands(): ActionableCommand[] {
-    const rawData = this.message.ActionableCommands ?? null;
-    if (rawData === this._actionableCommandsRaw) return this._actionableCommandsCache;
+    const rawData = this.message?.ActionableCommands ?? null;
+    const artifacts = this.DisplayArtifacts ?? [];
+    const pending = this.PendingArtifacts ?? NO_PENDING_ARTIFACTS;
+    const artifactSig =
+      artifacts.map((a) => `${a.artifact?.ID ?? ''}:${a.version?.ID ?? ''}`).join('|') +
+      '#' +
+      pending.map((p) => p.artifactId).join('|');
+    if (rawData === this._actionableCommandsRaw && artifactSig === this._actionableCommandsArtifactSig) {
+      return this._actionableCommandsCache;
+    }
     this._actionableCommandsRaw = rawData;
+    this._actionableCommandsArtifactSig = artifactSig;
     if (!rawData) {
       this._actionableCommandsCache = [];
       return this._actionableCommandsCache;
     }
     try {
       const commands = JSON.parse(rawData);
-      this._actionableCommandsCache = Array.isArray(commands) ? commands : [];
+      this._actionableCommandsCache = Array.isArray(commands)
+        ? FilterRedundantArtifactCommands(commands as ActionableCommand[], artifacts, pending)
+        : [];
     } catch (error) {
       console.error('Failed to parse actionable commands:', error);
       this._actionableCommandsCache = [];

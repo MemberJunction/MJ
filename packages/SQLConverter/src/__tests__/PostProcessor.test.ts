@@ -633,6 +633,46 @@ describe('postProcess', () => {
   //  INSERT VALUES had `this.GranteeType` rewritten to `this."GranteeType"`,
   //  producing invalid TS that broke the build on a fresh PostgreSQL DB)
   // ============================================================
+  describe('T-SQL IF EXISTS pre-flight blocks (#6337)', () => {
+    it('removes an IF EXISTS (…) BEGIN … END block, reading the condition to its own closing paren', () => {
+      const input = [
+        "IF EXISTS (SELECT 1 FROM sys.objects WHERE (name = 'a)b'))",
+        'BEGIN',
+        '  PRINT 1',
+        'END;',
+        'SELECT 1 AS kept;',
+      ].join('\n');
+      const result = PostProcess(input);
+      expect(result).toContain('-- SKIPPED: SQL Server IF EXISTS check');
+      expect(result).toContain('SELECT 1 AS kept;');
+      expect(result).not.toContain('PRINT');
+    });
+
+    it('never runs from a PL/pgSQL IF EXISTS … THEN to a later BEGIN', () => {
+      const input = [
+        'DO $mj$',
+        'BEGIN',
+        '  IF EXISTS (',
+        "    SELECT 1 FROM pg_proc p WHERE p.proname = 'spUpdateWidget'",
+        '  ) THEN',
+        '    PERFORM __mj."spUpdateWidget"(p_ID := p_ID_1);',
+        '  END IF;',
+        'END $mj$;',
+        '',
+        'SELECT 1 AS between_them;',
+        '',
+        'IF NOT EXISTS (SELECT 1 FROM t)',
+        'BEGIN',
+        '  SELECT 2;',
+        'END;',
+      ].join('\n');
+      const result = PostProcess(input);
+      expect(result).toContain('PERFORM __mj."spUpdateWidget"(p_ID := p_ID_1);');
+      expect(result).toContain('SELECT 1 AS between_them;');
+      expect(result).not.toContain('SKIPPED');
+    });
+  });
+
   describe('schema.PascalCase quoting skips string literals', () => {
     it('still quotes a real schema.Table reference in code', () => {
       expect(PostProcess('SELECT * FROM __mj.OpenApp')).toContain('__mj."OpenApp"');
@@ -660,5 +700,67 @@ describe('postProcess', () => {
       expect(result).not.toContain('params."Params"');
       expect(result).not.toContain('p."Name"');
     });
+  });
+});
+
+// Issue #6097: the T-SQL IF EXISTS strip opened a lazy match on the converter's own PL/pgSQL
+// `IF EXISTS (…) THEN` and ran to the next T-SQL `) BEGIN … END` anywhere later in the file,
+// deleting every statement in between.
+describe('PostProcess — T-SQL IF EXISTS strip (issue #6097)', () => {
+  const plpgsql = [
+    'DO $mj$',
+    'BEGIN',
+    "  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'spCreateX') THEN",
+    "    PERFORM __mj.\"spCreateX\"(p_ID := 'a');",
+    '  END IF;',
+    'END $mj$;',
+  ].join('\n');
+
+  it('leaves PL/pgSQL IF EXISTS … THEN inside a DO block untouched', () => {
+    expect(PostProcess(plpgsql)).toContain("IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'spCreateX') THEN");
+  });
+
+  it('still strips a T-SQL IF EXISTS (…) BEGIN … END pre-flight block', () => {
+    const out = PostProcess("IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'x')\nBEGIN\n  DROP TABLE x;\nEND");
+    expect(out).toContain('-- SKIPPED: SQL Server IF EXISTS check');
+    expect(out).not.toContain('DROP TABLE');
+  });
+
+  it('does not delete the statements between a DO block and later T-SQL', () => {
+    const later = "IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'x')\nBEGIN\n  DROP TABLE x;\nEND";
+    const out = PostProcess(`${plpgsql}\n${plpgsql.replace(/spCreateX/g, 'spCreateY')}\n${later}`);
+    expect(out).toContain('spCreateX');
+    expect(out).toContain('spCreateY');
+    expect(out).toContain('-- SKIPPED: SQL Server IF EXISTS check');
+  });
+});
+
+// Issues #5838 / #5567 item 3: the type-name passes rewrote data inside string literals.
+describe('PostProcess — type names inside literals (issue #5838)', () => {
+  it("keeps 'nvarchar', 'int' and a JSON \"UUID\" inside literals", () => {
+    const out = PostProcess(`UPDATE __mj."EntityField" SET "Type" = 'nvarchar', "Note" = 'int', "Meta" = '{"type":"UUID"}';`);
+    expect(out).toContain("'nvarchar'");
+    expect(out).toContain("'int'");
+    expect(out).toContain(`'{"type":"UUID"}'`);
+  });
+
+  it('still converts type names in code', () => {
+    const out = PostProcess('CREATE FUNCTION f(p_a nvarchar(MAX), p_b int, p_c "UUID") RETURNS VOID');
+    expect(out).toContain('p_a TEXT');
+    expect(out).toContain('p_b INTEGER');
+    expect(out).toContain('p_c UUID');
+  });
+});
+
+
+// Issue #5955: a converted DROP INDEX must name the index the way the converted CREATE INDEX did.
+describe('PostProcess — long index names in DROP INDEX (issue #5955)', () => {
+  it('shortens a DROP INDEX name exactly as the CREATE INDEX name', () => {
+    const name = `IX_${'A'.repeat(70)}`;
+    const out = PostProcess(`CREATE INDEX IF NOT EXISTS "${name}" ON __mj."Foo" ("Name");\nDROP INDEX IF EXISTS __mj."${name}";`);
+    const created = out.match(/CREATE INDEX IF NOT EXISTS "([^"]+)"/)![1];
+    const dropped = out.match(/DROP INDEX IF EXISTS __mj\."([^"]+)"/)![1];
+    expect(created.length).toBeLessThanOrEqual(63);
+    expect(dropped).toBe(created);
   });
 });

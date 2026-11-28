@@ -4,6 +4,7 @@ import { RecordProcessorRegistry } from '@memberjunction/record-set-processor-ba
 import { MLModelInferenceProcessor, ML_INFERENCE_WORK_TYPE } from '../ml-model-inference-processor';
 import { ML_INFERENCE_WORK_TYPES } from '../register';
 import { PredictiveStudioScoringStartup } from '../startup-register';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Tests for the startup sink (PS2-1). After `HandleStartup()` runs at boot, a saved
@@ -55,6 +56,28 @@ describe('PredictiveStudioScoringStartup', () => {
       Configuration: JSON.stringify({ modelId: '22222222-2222-2222-2222-222222222222' }),
     });
 
+    expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
+  });
+
+  it('resolves a processor for a Record Process whose ChallengerConfiguration is malformed without reading it: the processor holds no challenger (D-069)', async () => {
+    await PredictiveStudioScoringStartup.Instance.HandleStartup();
+
+    const mockRp = {
+      ID: 'rp-malformed',
+      Name: 'Malformed Challenger RP',
+      get ChallengerConfigurationObject(): never {
+        throw new SyntaxError('Unexpected token in JSON: {"Enabled":true,}');
+      },
+    };
+
+    const errors = ConsoleCapture.Errors();
+    const proc = RecordProcessorRegistry.Instance.Resolve({
+      WorkType: ML_INFERENCE_WORK_TYPE,
+      Configuration: JSON.stringify({ modelId: '11111111-1111-1111-1111-111111111111' }),
+      RecordProcess: mockRp,
+    }) as MLModelInferenceProcessor;
+
+    expect(ConsoleCapture.Lines(errors)).toEqual([]);
     expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
   });
 });

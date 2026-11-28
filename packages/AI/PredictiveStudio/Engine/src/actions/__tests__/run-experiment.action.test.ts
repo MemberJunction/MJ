@@ -21,6 +21,7 @@ import {
 import type { TrainExperimentInput } from '../../experiment/types';
 import { ExperimentOrchestrator } from '../../experiment/experiment-orchestrator';
 import type { ExperimentDeps, ExperimentRunOptions, ExperimentSessionResult } from '../../experiment/types';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the Run Experiment Session action. NO live DB, NO live sidecar —
@@ -101,7 +102,7 @@ function sessionResult(over: Partial<ExperimentSessionResult> = {}): ExperimentS
     experiment: { ID: 'exp-1' } as unknown as MJExperimentEntity,
     session: { ID: 'sess-1' } as unknown as MJExperimentSessionEntity,
     iterations: [],
-    leaderboard: [{ IterationID: 'it-1', Metric: 0.8, ModelID: 'model-9' }],
+    leaderboard: [{ IterationID: 'it-1', Metric: 0.8, ModelID: 'model-9', ScoreMetric: 'AUC', OnSuccessMetric: true }],
     bestModel: { ID: 'model-9' } as unknown as MJMLModelEntity,
     stopReason: 'completed',
     ...over,
@@ -183,7 +184,7 @@ describe('PredictiveStudioRunExperimentAction — happy path', () => {
     expect(out(p, 'BestModelID')).toBe('model-9');
     expect(out(p, 'StopReason')).toBe('completed');
     const leaderboard = JSON.parse(out(p, 'Leaderboard') as string);
-    expect(leaderboard).toEqual([{ IterationID: 'it-1', Metric: 0.8, ModelID: 'model-9' }]);
+    expect(leaderboard).toEqual([{ IterationID: 'it-1', Metric: 0.8, ModelID: 'model-9', ScoreMetric: 'AUC', OnSuccessMetric: true }]);
   });
 
   it('maps a budget-paused session with no best model', async () => {
@@ -193,11 +194,21 @@ describe('PredictiveStudioRunExperimentAction — happy path', () => {
     expect(result.Success).toBe(true);
     expect(out(p, 'BestModelID')).toBeNull();
     expect(out(p, 'StopReason')).toBe('budget-maxRuns');
+    expect(result.Message).not.toMatch(/winning|best/i);
+  });
+
+  it('names the top-ranked iteration\'s model without calling it the best or the winner (the stored gate decides that)', async () => {
+    const orch = new MockOrchestrator(sessionResult());
+    const p = params([{ Name: 'PlanSpec', Type: 'Input', Value: approvedPlan() }]);
+    const result = await new TestableExperimentAction(orch).run(p);
+    expect(result.Message).toContain("the top-ranked iteration's model model-9");
+    expect(result.Message).not.toMatch(/winning|best/i);
   });
 });
 
 describe('PredictiveStudioRunExperimentAction — orchestrator error', () => {
   it('maps a thrown orchestrator error to EXPERIMENT_FAILED', async () => {
+    const errors = ConsoleCapture.Errors();
     class ThrowingOrch extends ExperimentOrchestrator {
       public override async runSession(): Promise<ExperimentSessionResult> {
         throw new Error('no pipeline resolver configured');
@@ -209,6 +220,7 @@ describe('PredictiveStudioRunExperimentAction — orchestrator error', () => {
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('EXPERIMENT_FAILED');
     expect(result.Message).toContain('pipeline resolver');
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("no pipeline resolver configured")]);
   });
 });
 

@@ -1,6 +1,6 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, RegisterClass, SafeJSONParse, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
@@ -142,38 +142,93 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
         await AIEngine.Instance.Config(false, contextUser);
         const rawAgentId = this.getStringParam(params, 'AgentID');
         const rawAgentName = this.getStringParam(params, 'AgentName') ?? 'Chief of Staff';
+        const allAgents = AIEngine.Instance.Agents ?? [];
+
         const agent = rawAgentId
-            ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawAgentId))
-            : AIEngine.Instance.Agents.find(
-                  (a) => a.Name.trim().toLowerCase() === rawAgentName.trim().toLowerCase()
-              );
+            ? allAgents.find((a) => UUIDsEqual(a.ID, rawAgentId))
+            : (typeof AIEngine.Instance.ResolveAgentForUser === 'function'
+                  ? AIEngine.Instance.ResolveAgentForUser(rawAgentName, contextUser)
+                  : undefined) ??
+              allAgents.find((a) => a.Name.trim().toLowerCase() === rawAgentName.trim().toLowerCase());
 
         if (!agent) {
             return { agentId: null, policy: null };
         }
 
-        const policy = await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
-            agent.ID,
-            contextUser.ID,
-            contextUser
-        );
-        return { agentId: agent.ID, policy };
+        // Resolve the full BaseAgentID prototype inheritance chain (root -> ... -> leaf) so derived
+        // instances like Pepper, Jarvis, and Cato enforce ancestor policy ceilings AND their own policy.
+        const chainIds = this.resolveAgentChainIds(agent.ID);
+        const engine = AgentUserPolicyEngine.Instance;
+        const policies: MJAIAgentUserPolicyEntity[] = [];
+
+        for (const chainAgentId of chainIds) {
+            const lookup = await engine.ResolvePolicyForAgentAndUser(chainAgentId, contextUser.ID, contextUser, {
+                provider: params.Provider,
+            });
+            if (lookup.status === 'error') {
+                throw new Error(`Failed to verify user communication policy: ${lookup.errorMessage}`);
+            }
+            if (lookup.status === 'found' && lookup.policy) {
+                policies.push(lookup.policy);
+            }
+        }
+
+        const effectivePolicy =
+            policies.length === 0
+                ? null
+                : policies.length === 1
+                  ? policies[0]
+                  : engine.IntersectPolicies(policies);
+        return { agentId: agent.ID, policy: effectivePolicy };
+    }
+
+    /**
+     * Resolves the ordered `[rootAgentId, ..., leafAgentId]` inheritance chain for `agentId`.
+     * Uses `AIEngine.Instance.GetAgentInheritanceChain` when available, falling back to a direct
+     * `BaseAgentID` walk over `AIEngine.Instance.Agents` for lightweight test mocks.
+     */
+    private resolveAgentChainIds(agentId: string): string[] {
+        if (typeof AIEngine.Instance.GetAgentInheritanceChain === 'function') {
+            const chain = AIEngine.Instance.GetAgentInheritanceChain(agentId);
+            if (Array.isArray(chain) && chain.length > 0) {
+                return chain.map((a) => a.ID);
+            }
+        }
+
+        const allAgents = AIEngine.Instance.Agents ?? [];
+        const agentsById = IndexByUUID(allAgents);
+        const orderedFromLeaf: string[] = [];
+        const visited = new UUIDSet();
+        let currentId: string | null | undefined = agentId;
+
+        while (currentId) {
+            if (visited.Has(currentId)) {
+                break;
+            }
+            visited.Add(currentId);
+            orderedFromLeaf.push(currentId);
+            const current = agentsById.Get(currentId);
+            currentId = current?.BaseAgentID ?? null;
+        }
+
+        return orderedFromLeaf.reverse();
     }
 
     protected async findUserUtilityMailbox(
         contextUser: UserInfo,
-        agentId: string | null
+        agentId: string | null,
+        provider?: IMetadataProvider
     ): Promise<MJAIBridgeAgentIdentityEntity | null> {
         try {
-            const rv = new RunView();
-            const safeUserId = contextUser.ID.replace(/'/g, "''");
+            const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+            const safeUserId = EscapeSQLString(contextUser.ID);
             const filterParts = [
                 `UserID='${safeUserId}'`,
                 `IdentityType='Email'`,
                 `IsActive=1`,
             ];
             if (agentId) {
-                const safeAgentId = agentId.replace(/'/g, "''");
+                const safeAgentId = EscapeSQLString(agentId);
                 filterParts.push(`AgentID='${safeAgentId}'`);
             }
             const res = await rv.RunView<MJAIBridgeAgentIdentityEntity>(
@@ -181,6 +236,7 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
                     EntityName: 'MJ: AI Bridge Agent Identities',
                     ExtraFilter: filterParts.join(' AND '),
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'entity_object',
                 },
                 contextUser
@@ -330,6 +386,70 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
         };
     }
 
+    protected isLocalJsonMockEnabled(): boolean {
+        return Boolean(process.env['MJ_MOCK_COMM_DIR']?.trim());
+    }
+
+    protected getLocalJsonMockProviderName(): string {
+        return 'Local JSON Mock';
+    }
+
+    /**
+     * Builds an active virtual view of the `'Local JSON Mock'` provider entity when
+     * `MJ_MOCK_COMM_DIR` is configured, ensuring `EnterpriseScopeMode = 'TenantWide'` and
+     * full calendar/free-busy/draft capabilities without mutating cached metadata rows.
+     */
+    protected buildVirtualLocalJsonProviderEntity(
+        existing?: MJCommunicationProviderEntity
+    ): MJCommunicationProviderEntity {
+        const providerName = this.getLocalJsonMockProviderName();
+        return Object.assign(Object.create(existing ?? Object.prototype), {
+            ID: existing?.ID ?? '693125EC-88F8-4594-B0C7-D0120A09688D',
+            Name: providerName,
+            Status: 'Active' as const,
+            SupportsSending: true,
+            SupportsReceiving: true,
+            SupportsScheduledSending: false,
+            SupportsForwarding: true,
+            SupportsReplying: true,
+            SupportsDrafts: true,
+            SupportsCalendar: true,
+            SupportsFreeBusy: true,
+            EnterpriseScopeMode: 'TenantWide' as const,
+            AllowedEmailDomains: existing?.AllowedEmailDomains ?? null,
+        }) as MJCommunicationProviderEntity;
+    }
+
+    /**
+     * Returns active communication providers for this environment, automatically activating
+     * `'Local JSON Mock'` whenever `MJ_MOCK_COMM_DIR` is non-empty.
+     */
+    protected getEffectiveActiveProviders(requireCalendar: boolean): MJCommunicationProviderEntity[] {
+        const allProviders = CommunicationEngine.Instance.Providers ?? [];
+        const mockName = this.getLocalJsonMockProviderName();
+        const mockEnabled = this.isLocalJsonMockEnabled();
+
+        const active: MJCommunicationProviderEntity[] = allProviders.filter(
+            (p) =>
+                p.Status === 'Active' &&
+                (!requireCalendar || p.SupportsCalendar) &&
+                (!mockEnabled || p.Name.trim().toLowerCase() !== mockName.toLowerCase())
+        );
+
+        if (mockEnabled) {
+            const existingMock = allProviders.find(
+                (p) => p.Name.trim().toLowerCase() === mockName.toLowerCase()
+            );
+            active.push(this.buildVirtualLocalJsonProviderEntity(existingMock));
+        }
+
+        return active;
+    }
+
+    protected resolveProviderInstanceByName(providerName: string): BaseCommunicationProvider {
+        return CommunicationEngine.Instance.GetProvider(providerName);
+    }
+
     protected async resolveActiveProvider(
         params: RunActionParams,
         contextUser: UserInfo,
@@ -340,24 +460,46 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
     } | null> {
         await CommunicationEngine.Instance.Config(false, contextUser);
         const requestedName = this.getStringParam(params, 'ProviderName');
-        const activeProviders = CommunicationEngine.Instance.Providers.filter(
-            (p) => p.Status === 'Active' && (!requireCalendar || p.SupportsCalendar)
-        );
+        const activeProviders = this.getEffectiveActiveProviders(requireCalendar);
+        const mockName = this.getLocalJsonMockProviderName();
+        const mockEnabled = this.isLocalJsonMockEnabled();
 
-        const chosenEntity = requestedName
-            ? activeProviders.find((p) => p.Name.trim().toLowerCase() === requestedName.trim().toLowerCase())
-            : activeProviders.find((p) => p.Name === 'Microsoft Graph' || p.Name === 'Gmail') ?? activeProviders[0];
+        // Candidates in preference order. When MJ_MOCK_COMM_DIR is explicitly set in local dev/CI,
+        // prefer Local JSON Mock unless the caller named another provider. Otherwise prefer MS Graph > Gmail.
+        const byPreference = (p: MJCommunicationProviderEntity): number => {
+            if (mockEnabled && p.Name.trim().toLowerCase() === mockName.toLowerCase()) return -1;
+            if (p.Name === 'Microsoft Graph') return 0;
+            if (p.Name === 'Gmail') return 1;
+            return 2;
+        };
+        const candidates = requestedName
+            ? activeProviders.filter((p) => p.Name.trim().toLowerCase() === requestedName.trim().toLowerCase())
+            : [...activeProviders].sort((a, b) => byPreference(a) - byPreference(b));
 
-        if (!chosenEntity) {
-            return null;
+        const unloadable: string[] = [];
+        for (const candidate of candidates) {
+            try {
+                const instance = this.resolveProviderInstanceByName(candidate.Name);
+                this.lastProviderResolutionNote = null;
+                return { providerEntity: candidate, providerInstance: instance };
+            } catch {
+                unloadable.push(candidate.Name);
+            }
         }
+        this.lastProviderResolutionNote =
+            candidates.length === 0
+                ? (requestedName ? `No active provider named '${requestedName}'.` : 'No communication provider is Active.')
+                : `Active provider(s) ${unloadable.join(', ')} have no class loaded in this server.`;
+        return null;
+    }
 
-        try {
-            const instance = CommunicationEngine.Instance.GetProvider(chosenEntity.Name);
-            return { providerEntity: chosenEntity, providerInstance: instance };
-        } catch {
-            return null;
-        }
+    /** Why the last {@link resolveActiveProvider} returned null, for the user-facing message. */
+    protected lastProviderResolutionNote: string | null = null;
+
+    /** The NO_EMAIL_PROVIDER / NO_CALENDAR_PROVIDER message, naming what was tried. */
+    protected noProviderMessage(): string {
+        const note = this.lastProviderResolutionNote ? ` ${this.lastProviderResolutionNote}` : '';
+        return `No active communication provider is configured.${note}`;
     }
 
     protected async createApprovalRequest(
@@ -427,11 +569,11 @@ export class VerifyMyCommunicationCapabilitiesAction extends BaseUserScopedCommu
                 CalendarGate: MailboxGateDecision | null;
             }> = [];
 
-            const activeProviders = CommunicationEngine.Instance.Providers.filter((p) => p.Status === 'Active');
+            const activeProviders = this.getEffectiveActiveProviders(false);
             for (const prov of activeProviders) {
                 let instance: BaseCommunicationProvider | null = null;
                 try {
-                    instance = CommunicationEngine.Instance.GetProvider(prov.Name);
+                    instance = this.resolveProviderInstanceByName(prov.Name);
                 } catch {
                     instance = null;
                 }
@@ -484,7 +626,7 @@ export class VerifyMyCommunicationCapabilitiesAction extends BaseUserScopedCommu
                 UserPolicy: {
                     EmailChannelMode: policy?.EmailChannelMode ?? 'DraftOnly',
                     CalendarChannelMode: policy?.CalendarChannelMode ?? 'ProposeWithApproval',
-                    PhoneChannelMode: policy?.PhoneChannelMode ?? 'OutboundWithApproval',
+                    PhoneChannelMode: policy?.PhoneChannelMode ?? 'Disabled',
                     MessagingChannelMode: policy?.MessagingChannelMode ?? 'Enabled',
                 },
                 AgentUtilityMailbox: utilityIdentity
@@ -1050,7 +1192,8 @@ export class ManageMyCalendarEventAction extends BaseUserScopedCommunicationActi
                             TargetMailbox: gate.TargetMailbox,
                             EventPreview: res.Event,
                             AttendeeEmails: attendeeEmails,
-                        }
+                        },
+                        params.Provider
                     );
                     this.setOutputParam(params, 'ApprovalRequestID', reqId);
                     this.setOutputParam(params, 'EventPreview', res.Event);
@@ -1115,7 +1258,8 @@ export class ManageMyCalendarEventAction extends BaseUserScopedCommunicationActi
                         contextUser,
                         agentId,
                         `Approve calendar update for event ${eventId}`,
-                        { Operation: 'UpdateCalendarEvent', EventID: eventId, Updates: updateParams }
+                        { Operation: 'UpdateCalendarEvent', EventID: eventId, Updates: updateParams },
+                        params.Provider
                     );
                     this.setOutputParam(params, 'ApprovalRequestID', reqId);
                     return {
@@ -1160,7 +1304,8 @@ export class ManageMyCalendarEventAction extends BaseUserScopedCommunicationActi
                         contextUser,
                         agentId,
                         `Approve RSVP '${responseType}' for event ${eventId}`,
-                        { Operation: 'RespondToCalendarEvent', EventID: eventId, Response: responseType }
+                        { Operation: 'RespondToCalendarEvent', EventID: eventId, Response: responseType },
+                        params.Provider
                     );
                     this.setOutputParam(params, 'ApprovalRequestID', reqId);
                     return {
@@ -1198,7 +1343,8 @@ export class ManageMyCalendarEventAction extends BaseUserScopedCommunicationActi
                     contextUser,
                     agentId,
                     `Approve cancellation of calendar event ${eventId}`,
-                    { Operation: 'CancelCalendarEvent', EventID: eventId }
+                    { Operation: 'CancelCalendarEvent', EventID: eventId },
+                    params.Provider
                 );
                 this.setOutputParam(params, 'ApprovalRequestID', reqId);
                 return {
@@ -1299,15 +1445,16 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
 
         try {
             const { agentId, policy } = await this.resolveAgentAndUserPolicy(params, contextUser);
-            const operation =
-                (this.getStringParam(params, 'Operation') as
-                    | 'ListMessages'
-                    | 'SearchMessages'
-                    | 'GetSingleMessage'
-                    | 'CreateDraft'
-                    | 'Reply'
-                    | 'Forward'
-                    | null) ?? 'ListMessages';
+            const rawOperation = this.getStringParam(params, 'Operation');
+            const operation = this.normalizeEmailOperation(rawOperation);
+            if (!operation) {
+                return {
+                    Success: false,
+                    ResultCode: 'INVALID_OPERATION',
+                    Message: `Unknown Operation '${rawOperation}'. Use one of: ListMessages, SearchMessages, GetSingleMessage, CreateDraft, Send, Reply, Forward.`,
+                    Params: params.Params,
+                };
+            }
 
             const opCategory: 'Read' | 'Draft' | 'Send' =
                 operation === 'ListMessages' || operation === 'SearchMessages' || operation === 'GetSingleMessage'
@@ -1326,12 +1473,43 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
                 };
             }
 
+            const to = this.getStringParam(params, 'To') ?? '';
+            const subject = this.getStringParam(params, 'Subject') ?? '';
+            const body = this.getStringParam(params, 'Body') ?? '';
+            const cc = this.parseStringArrayParam(params, 'CCRecipients');
+            const messageId = this.getStringParam(params, 'MessageID') ?? '';
+
+            // Approval comes BEFORE transport. The approval is about the content and the intent; whether
+            // a provider can deliver it is a separate question answered after the user has said yes.
+            // Checking the provider first meant a blocked mailbox silently prevented the approval from
+            // ever being raised, and the agent fell back to pasting a draft into the chat.
+            if (emailEval.verdict === 'RequireApproval' && !this.getStringParam(params, 'ConfirmedApprovalRequestID')) {
+                const fromLabel = this.describeIntendedSender(policy, contextUser);
+                const reqId = await this.createApprovalRequest(
+                    contextUser,
+                    agentId,
+                    `Approve outbound email (${operation}) from ${fromLabel} to ${to}: ${subject}`,
+                    { Operation: operation, From: fromLabel, To: to, CCRecipients: cc, Subject: subject, Body: body, MessageID: messageId || null },
+                    params.Provider
+                );
+                this.setOutputParam(params, 'ApprovalRequestID', reqId);
+                return {
+                    Success: true,
+                    ResultCode: 'APPROVAL_REQUIRED',
+                    Message:
+                        `Queued approval request${reqId ? ` (${reqId})` : ''} for ${operation} to ${to}. ` +
+                        `Nothing has been sent. When it is approved, call this action again with the same ` +
+                        `parameters plus ConfirmedApprovalRequestID='${reqId ?? '<request id>'}' to deliver it.`,
+                    Params: params.Params,
+                };
+            }
+
             const resolved = await this.resolveActiveProvider(params, contextUser, false);
             if (!resolved) {
                 return {
                     Success: false,
                     ResultCode: 'NO_EMAIL_PROVIDER',
-                    Message: 'No active communication provider is configured.',
+                    Message: this.noProviderMessage(),
                     Params: params.Params,
                 };
             }
@@ -1435,12 +1613,7 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
                 };
             }
 
-            // CreateDraft / Reply / Forward
-            const to = this.getStringParam(params, 'To') ?? '';
-            const subject = this.getStringParam(params, 'Subject') ?? '';
-            const body = this.getStringParam(params, 'Body') ?? '';
-            const cc = this.parseStringArrayParam(params, 'CCRecipients');
-
+            // CreateDraft / Send / Reply / Forward
             const draftMessage = {
                 From: gate.TargetMailbox,
                 To: to,
@@ -1478,29 +1651,51 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
                 };
             }
 
-            if (emailEval.verdict === 'RequireApproval' && !this.getStringParam(params, 'ConfirmedApprovalRequestID')) {
-                const reqId = await this.createApprovalRequest(
-                    contextUser,
-                    agentId,
-                    `Approve outbound email (${operation}) from ${gate.TargetMailbox} to ${to}`,
-                    {
-                        Operation: operation,
-                        From: gate.TargetMailbox,
-                        To: to,
-                        Subject: subject,
-                        Body: body,
+            if (operation === 'Send') {
+                if (!to) {
+                    return {
+                        Success: false,
+                        ResultCode: 'MISSING_PARAMETERS',
+                        Message: 'Send requires To.',
+                        Params: params.Params,
+                    };
+                }
+                const channelID = draftMessage.MessageType?.CommunicationBaseMessageTypeID;
+                if (channelID && process.env.MJ_COMMS_V1_COMPLIANCE_GATE === 'true') {
+                    const recipientsToGate = [to, ...(cc ?? [])].filter(Boolean);
+                    const complianceCheck = await CommunicationEngine.Instance.CheckV1ComplianceGateBatch(
+                        channelID,
+                        recipientsToGate,
+                        'Transactional',
+                        params.ContextUser,
+                    );
+                    if (!complianceCheck.Allowed) {
+                        return {
+                            Success: false,
+                            ResultCode: 'COMPLIANCE_BLOCKED',
+                            Message: complianceCheck.Detail ?? complianceCheck.Reason ?? 'Recipient blocked by compliance gate.',
+                            Params: params.Params,
+                        };
                     }
-                );
-                this.setOutputParam(params, 'ApprovalRequestID', reqId);
+                }
+                const sendRes = await resolved.providerInstance.SendSingleMessage(draftMessage);
+                if (!sendRes.Success) {
+                    return {
+                        Success: false,
+                        ResultCode: 'PROVIDER_ERROR',
+                        Message: sendRes.Error || 'Failed to send email.',
+                        Params: params.Params,
+                    };
+                }
+                this.setOutputParam(params, 'TargetMailbox', gate.TargetMailbox);
                 return {
                     Success: true,
-                    ResultCode: 'APPROVAL_REQUIRED',
-                    Message: `Queued approval request${reqId ? ` (${reqId})` : ''} for ${operation} from ${gate.TargetMailbox}.`,
+                    ResultCode: 'SUCCESS',
+                    Message: `Sent email '${subject}' to ${to} from ${gate.TargetMailbox}.`,
                     Params: params.Params,
                 };
             }
 
-            const messageId = this.getStringParam(params, 'MessageID') ?? '';
             if (operation === 'Reply') {
                 const replyRes = await resolved.providerInstance.ReplyToMessage({
                     MessageID: messageId,
@@ -1555,4 +1750,48 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
             };
         }
     }
+
+    /**
+     * The operation names this action understands, plus the aliases earlier prompt versions used
+     * (`SendEmail`, `ReplyToMessage`, `ForwardMessage`), so a stale prompt still reaches the right branch.
+     * A missing operation defaults to `ListMessages`; an unrecognised one returns null so the caller
+     * fails loudly instead of quietly doing a read the agent did not ask for.
+     */
+    private normalizeEmailOperation(raw: string | null | undefined): EmailOperation | null {
+        const value = (raw ?? '').trim().toLowerCase();
+        switch (value) {
+            case '':
+            case 'listmessages':
+                return 'ListMessages';
+            case 'searchmessages':
+                return 'SearchMessages';
+            case 'getsinglemessage':
+                return 'GetSingleMessage';
+            case 'createdraft':
+                return 'CreateDraft';
+            case 'send':
+            case 'sendemail':
+            case 'sendmessage':
+                return 'Send';
+            case 'reply':
+            case 'replytomessage':
+                return 'Reply';
+            case 'forward':
+            case 'forwardmessage':
+                return 'Forward';
+            default:
+                return null;
+        }
+    }
+
+    /** Who the email would go out as, for the approval text, before any provider has been consulted. */
+    private describeIntendedSender(policy: MJAIAgentUserPolicyEntity | null, contextUser: UserInfo): string {
+        if (policy?.EmailChannelMode === 'SendAsAgent') {
+            return 'the agent utility mailbox';
+        }
+        return contextUser.Email?.trim() || 'your mailbox';
+    }
 }
+
+/** Operations of `Manage My Email Inbox and Drafts` after alias normalization. */
+type EmailOperation = 'ListMessages' | 'SearchMessages' | 'GetSingleMessage' | 'CreateDraft' | 'Send' | 'Reply' | 'Forward';

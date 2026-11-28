@@ -1454,8 +1454,8 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
             // Use TotalRowCount for accurate KPI/badge counts (the Results arrays are
             // capped by MaxRows for feed display, but TotalRowCount reflects the full DB count)
-            this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount : 0;
-            this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount : 0;
+            this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount ?? 0 : 0;
+            this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount ?? 0 : 0;
 
             // Load Scheduled Job entities referenced by sources so cron descriptions are available
             await this.loadScheduledJobsForSources();
@@ -2404,6 +2404,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             Fields: ['ID'],
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
         if (result.Success && result.Results.length > 0) {
             return result.Results[0].ID;
@@ -4413,36 +4414,20 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
     public async MergeTags(sourceTagId: string, targetTagId: string, sourceName: string, targetName: string): Promise<void> {
         if (this.IsMerging) return; // Prevent duplicate calls from button spam
+        const provider = this.ProviderToUse as GraphQLDataProvider;
+        if (!provider) return;
         this.IsMerging = true;
         this.cdr.detectChanges();
 
         try {
-            // Re-parent tagged items from source to target
-            const itemsToMove = this.taggedItemsRaw.filter(ti => (ti['TagID'] as string) === sourceTagId);
-            const md = this.ProviderToUse;
-            for (const ti of itemsToMove) {
-                const entity = await md.GetEntityObject<BaseEntity>('MJ: Tagged Items');
-                await entity.InnerLoad(CompositeKey.FromID(ti['ID'] as string));
-                entity.Set('TagID', targetTagId);
-                await entity.Save();
+            const aiClient = new GraphQLAIClient(provider);
+            const res = await aiClient.MergeTags({
+                sourceTagIDs: [sourceTagId],
+                survivingTagID: targetTagId,
+            });
+            if (!res.Success) {
+                throw new Error(res.ErrorMessage ?? 'Merge failed');
             }
-
-            // Re-parent children of source under target
-            const childTags = this.TagsRaw.filter(t => (t['ParentID'] as string) === sourceTagId);
-            for (const child of childTags) {
-                const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                await entity.InnerLoad(CompositeKey.FromID(child['ID'] as string));
-                entity.Set('ParentID', targetTagId);
-                await entity.Save();
-            }
-
-            // Clean up co-occurrence records before delete (FK constraint)
-            await this.cleanupTagReferences(sourceTagId);
-
-            // Delete source tag (original behavior — hard delete)
-            const sourceEntity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-            await sourceEntity.InnerLoad(CompositeKey.FromID(sourceTagId));
-            await sourceEntity.Delete();
 
             this.addTaxAuditEntry('merged', `${sourceName} into ${targetName}`);
             MJNotificationService.Instance.CreateSimpleNotification(`Merged "${sourceName}" into "${targetName}"`, 'success', 3000);
@@ -4796,6 +4781,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 let deletedCount = 0;
                 for (const orphan of this.TaxOrphans) {
                     try {
+                        await this.cleanupTagReferences(orphan.ID);
                         const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
                         await entity.InnerLoad(CompositeKey.FromID(orphan.ID));
                         if (await entity.Delete()) {

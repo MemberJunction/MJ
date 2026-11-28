@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, Input, Output, EventEmitter, HostListener, ElementRef, ViewChild, NgZone, inject } from '@angular/core';
 
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
@@ -12,6 +12,10 @@ import { IndexByUUID, RegisterClass, UUIDMap, UUIDsEqual } from '@memberjunction
 import { CompositeKey, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo, LogError } from '@memberjunction/core';
 // CompositeKey is used via buildCompositeKey from ng-entity-viewer
 import { MJApplicationEntityEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
+import {
+  CreateLiveSheetHelperForProvider,
+  type LiveSheetToolResult,
+} from '@memberjunction/ng-artifacts';
 import {
   RecordSelectedEvent,
   RecordOpenedEvent,
@@ -65,10 +69,12 @@ const DATA_EXPLORER_DEFAULT_PAGE_SIZE = 100;
   ]
 })
 @RegisterClass(BaseDashboard, 'DataExplorer')
-export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, OnChanges, AfterViewInit {
+export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, AfterViewInit {
   protected override destroy$ = new Subject<void>();
   private metadata = this.ProviderToUse;
   private appManager = inject(ApplicationManager);
+  private inputsInitialized = false;
+  private _entityFilter: DataExplorerFilter | null = null;
 
   /** Reference to the filter input for keyboard shortcuts */
   @ViewChild('filterInput') FilterInputRef: ElementRef<HTMLInputElement> | undefined;
@@ -98,7 +104,16 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Optional filter to constrain which entities are shown in the explorer.
    * Can filter by applicationId, schemaNames, or explicit entityNames.
    */
-  @Input() EntityFilter: DataExplorerFilter | null = null;
+  @Input() set EntityFilter(value: DataExplorerFilter | null) {
+    const prev = this._entityFilter;
+    this._entityFilter = value;
+    if (this.inputsInitialized && value !== prev) {
+      void this.applyUpdatedEntityFilter();
+    }
+  }
+  get EntityFilter(): DataExplorerFilter | null {
+    return this._entityFilter;
+  }
 
   /** @deprecated Use {@link EntityFilter}. */
   @Input() set entityFilter(value: DataExplorerFilter | null) {
@@ -369,6 +384,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   // Timer that refreshes the pre-computed relative-time labels on recentRecords (see refreshRecentRecordTimes / NG0100 note)
   private recentTimeRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  /** Set in ngOnDestroy so async setup in ngOnInit cannot start timers after tab teardown. */
+  private isDestroyed = false;
 
   // Favorite records from User Favorites (non-entity favorites)
   public FavoriteRecords: FavoriteRecord[] = [];
@@ -825,6 +842,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   async ngOnInit(): Promise<void> {
+    this.inputsInitialized = true;
     super.ngOnInit();
     // Wired before the async setup below, so a delete during a slow load isn't missed.
     this.listenForRecordDeletes();
@@ -864,6 +882,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       await this.applyUrlState(urlState);
     } else if (this.DeepLink) {
       await this.applyDeepLink(this.DeepLink);
+    }
+
+    if (this.isDestroyed) {
+      return;
     }
 
     // Subscribe to state changes
@@ -941,6 +963,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // field + running detectChanges here (rather than calling a Date.now()-based method from the
     // template binding) is what prevents the ExpressionChangedAfterItHasBeenCheckedError (NG0100).
     const startTimer = () => {
+      if (this.isDestroyed) {
+        return;
+      }
       this.recentTimeRefreshTimer = setInterval(() => {
         if (this.RecentRecords.length > 0 && this.refreshRecentRecordTimes()) {
           if (this.ngZone) {
@@ -951,10 +976,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         }
       }, 30000);
     };
-    if (this.ngZone) {
-      this.ngZone.runOutsideAngular(startTimer);
-    } else {
-      startTimer();
+    if (!this.isDestroyed) {
+      if (this.ngZone) {
+        this.ngZone.runOutsideAngular(startTimer);
+      } else {
+        startTimer();
+      }
     }
 
     // Subscribe to favorite records changes
@@ -1419,6 +1446,29 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         },
         async (params) => this.toolSetSort(params),
       ),
+      this.buildAgentTool(
+        'CreateLiveSheetFromView',
+        'Create a new collaborative Excel Spreadsheet artifact populated with a live-linked EntityView table from the currently open entity/saved view (or an explicitly named entity/view). Returns ArtifactID, VersionID, SheetName, BoundingRange, and RowCount so it can be opened directly in the ArtifactWorkspace.',
+        {
+          type: 'object',
+          properties: {
+            entityName: { type: 'string', description: 'Optional entity name (defaults to currently selected entity)' },
+            view: { type: 'string', description: 'Optional saved view name or ID (defaults to currently active view)' },
+            extraFilter: { type: 'string', description: 'Optional SQL ExtraFilter expression' },
+            fields: { type: 'array', items: { type: 'string' }, description: 'Optional subset of field names' },
+            title: { type: 'string', description: 'Optional spreadsheet artifact title' },
+            sheetName: { type: 'string', description: 'Optional worksheet tab name' },
+            tableTitle: { type: 'string', description: 'Optional live table title' },
+            maxRows: { type: 'number', description: 'Optional row limit' },
+            anchorCell: { type: 'string', description: 'Optional top-left cell (defaults to A1)' },
+            existingArtifactId: {
+              type: 'string',
+              description: 'Optional existing Excel Spreadsheet artifact ID to append onto instead of creating a new artifact',
+            },
+          },
+        },
+        async (params) => this.toolCreateLiveSheetFromView(params),
+      ),
     ];
   }
 
@@ -1700,6 +1750,86 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
+   * Create a live EntityView-backed collaborative spreadsheet artifact from the active
+   * (or specified) entity/saved view so users and agents can explore live data together.
+   */
+  private async toolCreateLiveSheetFromView(
+    params: Parameters<Parameters<NavigationService['SetAgentClientTools']>[1][number]['Handler']>[0],
+  ): Promise<LiveSheetToolResult> {
+    const opt = (key: string): string | undefined => {
+      const v = params[key];
+      return typeof v === 'string' && v.trim().length > 0 ? v.trim() : undefined;
+    };
+
+    const requestedEntity = opt('entityName');
+    const entity = requestedEntity
+      ? this.resolveEntityByName(requestedEntity)
+      : this.SelectedEntity;
+    if (!entity) {
+      return {
+        Success: false,
+        ErrorMessage: requestedEntity
+          ? this.entityNotFoundError(requestedEntity)
+          : 'No entity is selected and no entityName was provided.',
+      };
+    }
+
+    const helper = CreateLiveSheetHelperForProvider(this.ProviderToUse, this.metadata.CurrentUser);
+    if (!helper) {
+      return {
+        Success: false,
+        ErrorMessage: 'GraphQL provider or signed-in user context is unavailable.',
+      };
+    }
+
+    let resolvedView = (!requestedEntity || UUIDsEqual(entity.ID, this.SelectedEntity?.ID))
+      ? this.SelectedViewEntity
+      : null;
+
+    const requestedViewRaw = opt('view') ?? opt('viewId');
+    if (requestedViewRaw) {
+      const lowered = requestedViewRaw.toLowerCase();
+      const userViewEngine = this.ProviderToUse
+        ? (UserViewEngine.GetProviderInstance(this.ProviderToUse, UserViewEngine) as UserViewEngine)
+        : UserViewEngine.Instance;
+      const entityViews = userViewEngine.GetAccessibleViewsForEntity(entity.ID);
+      const match =
+        entityViews.find((v) => UUIDsEqual(v.ID, requestedViewRaw)) ??
+        entityViews.find((v) => v.Name.toLowerCase() === lowered);
+      if (!match) {
+        return {
+          Success: false,
+          ErrorMessage: `No accessible saved view "${requestedViewRaw}" found for "${entity.Name}".`,
+        };
+      }
+      resolvedView = match;
+    }
+
+    const rawFields = params['fields'];
+    const fields = Array.isArray(rawFields)
+      ? rawFields.filter((f): f is string => typeof f === 'string' && f.trim().length > 0)
+      : undefined;
+    const rawMaxRows = params['maxRows'];
+    const maxRows = typeof rawMaxRows === 'number' && Number.isFinite(rawMaxRows) && rawMaxRows > 0
+      ? Math.min(Math.trunc(rawMaxRows), 5000)
+      : undefined;
+
+    return helper.CreateLiveSheetFromView({
+      EntityName: entity.Name,
+      ViewID: resolvedView?.ID,
+      ViewName: resolvedView?.Name,
+      ExtraFilter: opt('extraFilter'),
+      Fields: fields,
+      Title: opt('title'),
+      SheetName: opt('sheetName'),
+      TableTitle: opt('tableTitle'),
+      MaxRows: maxRows,
+      AnchorCell: opt('anchorCell'),
+      ExistingArtifactID: opt('existingArtifactId'),
+    });
+  }
+
+  /**
    * Export the current entity/view's records. Delegates to the inner grid's Export()
    * (via the view workspace). Optional format: csv | excel | json (defaults to excel).
    */
@@ -1930,6 +2060,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   override ngOnDestroy(): void {
+    this.isDestroyed = true;
     if (this.recentTimeRefreshTimer !== null) {
       clearInterval(this.recentTimeRefreshTimer);
       this.recentTimeRefreshTimer = null;
@@ -1939,14 +2070,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     super.ngOnDestroy();
   }
 
-  async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    // Re-apply filter when entityFilter changes
-    if (changes['entityFilter'] && !changes['entityFilter'].firstChange) {
-      // Update context for new filter (loads context-specific state)
-      await this.StateService.setContext(this.EntityFilter);
-      this.State = this.StateService.CurrentState;
-      await this.loadEntities();
-    }
+  private async applyUpdatedEntityFilter(): Promise<void> {
+    await this.StateService.setContext(this.EntityFilter);
+    this.State = this.StateService.CurrentState;
+    await this.loadEntities();
   }
 
   protected initDashboard(): void {
@@ -2644,7 +2771,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         EntityName: entityName,
         ExtraFilter: CompositeKey.FromURLSegment(entityInfo, recordId).ToWhereClause(),
         ResultType: 'simple',
-        MaxRows: 1
+        MaxRows: 1,
+        SkipTotalRowCount: true
       });
 
       if (result.Success && result.Results.length > 0) {

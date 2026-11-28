@@ -12,6 +12,7 @@ However, **your surface as the agent is comprehensive and complete**. You have f
 Your user is a business user (operations lead, analyst, product manager, rev-ops) who has elevated machine permissions (can run Docker Desktop and CLI commands), but **is not a software developer**:
 - **NEVER** ask them to write TypeScript, Angular, SQL DDL, or database migrations.
 - **NEVER** ask them to edit JSON metadata or write prompt templates by hand.
+- **NEVER run full `mj codegen` or compile TypeScript packages** inside the workspace container — Citizen Builder installs pre-built npm-distributed MemberJunction releases (`@edge` e.g. `6.3.0-edge.3` for preview/next testing vs `@latest` for certified production LTS) and pre-built `@mj-biz-apps/*` OpenApp packages. Restarting the `mj` container (`docker compose restart mj`) automatically wires installed OpenApp manifests.
 - You do the discovery, authoring, validating, database syncing, diagnostics, trace verification, and packaging. The user describes business intent, tests the experience in the UI or CLI, and gives you feedback.
 
 ---
@@ -270,7 +271,9 @@ These defaults prevent portability bugs and privilege escalation:
    - Use a `Loop` agent (`@lookup:MJ: AI Agent Types.Name=Loop`) by default — `Loop` agents are interactive, conversational in MJExplorer and CLI, and can invoke bound `MJ: AI Agent Actions` as needed. Use a `Flow` agent (`@lookup:MJ: AI Agent Types.Name=Flow`) only when you want a fixed, non-interactive multi-step pipeline.
 5. **Valid `ArtifactCreationMode` Values:**
    - Always use `"Never"`, `"Always"`, or `"System Only"` (never `"None"`).
-6. **Never Hand-Edit `ID`, `lastModified`, or `checksum`:**
+6. **AI Personas (`MJ: AI Agent Personas`):**
+   - Agents default to a neutral voice / no persona unless a specific voice or style persona is explicitly configured via `MJ: AI Agent Personas` (`DefaultPersonaID` or agent-persona mapping). Leave persona settings unset unless requested.
+7. **Never Hand-Edit `ID`, `lastModified`, or `checksum`:**
    - Let `mj sync push` manage identity and sync checksums in `.agent.json` and `.prompt.json`. Do not invent GUIDs unless authoring a new file that has not been pushed yet.
 
 ---
@@ -376,7 +379,7 @@ Test the agent with representative test cases:
   # Or pass a multi-line prompt file to avoid shell escaping issues:
   docker compose exec -T mj mj ai agents run -a "<Agent Name>" -f /work/prompt.txt --format json
   ```
-- **Interactive UI testing**: Invite the user to test in their browser at `http://localhost:4202` (Zero-Config Local Dev Auth is enabled by default on localhost).
+- **Interactive UI testing**: Check `EXPLORER_PORT` in `.env` (defaults to `4202`, or `4203+` if `4202` was busy during `mj agent init`) and invite the user to test in their browser at `http://localhost:<EXPLORER_PORT>` (Zero-Config Local Dev Auth is enabled by default on localhost).
 
 ### Step 10: Audit Execution Traces & Assert Behavior
 Inspect the run trace to verify internal execution paths and safety:

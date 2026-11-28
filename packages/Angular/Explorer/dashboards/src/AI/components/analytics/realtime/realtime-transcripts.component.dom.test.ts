@@ -4,6 +4,13 @@ import { RunViewParams } from '@memberjunction/core';
 import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { MJClickableDirective, MJRefreshButtonComponent } from '@memberjunction/ng-ui-components';
 import { AnalyticsRealtimeTranscriptsComponent } from './realtime-transcripts.component';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
+
+/** The lines these tests log on purpose: the AI engine's load against a provider double that has no datasets. Any other line fails its test. */
+ExpectConsoleLines({
+  log: [/^AIEngineBase: entity '[^']+' not found in metadata — dataset skipped/],
+  error: [/^TypeError: (p\.GetAndCacheDatasetByName is not a function|Cannot read properties of undefined \(reading '(GetAndCacheDatasetByName|RunViews)'\))/],
+});
 
 /**
  * DOM coverage for <app-analytics-realtime-transcripts> — the master-detail meeting-transcript browser.

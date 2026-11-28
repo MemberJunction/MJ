@@ -82,14 +82,14 @@ function trackLineState(line: string, state: ParseState): ParseState {
  * NOTE: SET is intentionally excluded — it would split UPDATE...SET into two
  * statements. Standalone SET commands (SET NOEXEC, SET ANSI_NULLS, etc.) are
  * already handled by preprocessor/postprocessor removal rules. */
-const STMT_KEYWORDS = /^(INSERT\s+INTO|UPDATE\s|DELETE\s|PRINT\s|PRINT\(|ALTER\s+TABLE|GRANT\s|DENY\s|REVOKE\s|IF\s+@@|IF\s+(?:NOT\s+)?EXISTS|IF\s+OBJECT_ID|EXEC\s|CREATE\s|DROP\s|DECLARE\s+@)/i;
+const STMT_KEYWORDS = /^(INSERT\s+INTO|UPDATE\s|DELETE\s|PRINT\s|PRINT\(|ALTER\s+TABLE|GRANT\s|DENY\s|REVOKE\s|IF\s+@@|IF\s+(?:NOT\s+)?EXISTS|IF\s+OBJECT_ID|IF\s+COL_LENGTH|EXEC\s|CREATE\s|DROP\s|DECLARE\s+@)/i;
 
 /** IF conditionals whose next top-level keyword is the single-statement body.
  * T-SQL allows IF without BEGIN/END for single-statement bodies:
  *   IF NOT EXISTS (...) CREATE INDEX ...
  *   IF EXISTS (...) EXEC sp_dropextendedproperty ...
  * The sub-splitter must keep these as one batch. */
-const IF_CONDITION_PATTERN = /^IF\s+(NOT\s+EXISTS|EXISTS|OBJECT_ID|@@)/i;
+const IF_CONDITION_PATTERN = /^IF\s+(NOT\s+EXISTS|EXISTS|OBJECT_ID|COL_LENGTH|@@)/i;
 
 /**
  * Sub-split a compound batch into individual statements.
@@ -107,8 +107,11 @@ export function SubSplitCompoundBatch(batch: string): string[] {
   const upperNoComments = stripLeadingComments(batch).trimStart().toUpperCase();
 
   // Don't sub-split CREATE VIEW/PROCEDURE/FUNCTION/TRIGGER blocks
-  if (/^CREATE\s+(VIEW|PROCEDURE|FUNCTION|TRIGGER)\s/i.test(upperNoComments)) return [batch];
-  if (/^CREATE\s+PROC\s/i.test(upperNoComments)) return [batch];
+  // The OR ALTER form too: splitting a CREATE OR ALTER TRIGGER at the IF/INSERT statements in its
+  // body scattered the routine into fragments, most of them passed through as live T-SQL
+  // (issue #5364 item 7).
+  if (/^CREATE\s+(?:OR\s+ALTER\s+)?(VIEW|PROCEDURE|FUNCTION|TRIGGER)\s/i.test(upperNoComments)) return [batch];
+  if (/^CREATE\s+(?:OR\s+ALTER\s+)?PROC\s/i.test(upperNoComments)) return [batch];
 
   // CREATE TABLE blocks: keep together UNLESS followed by ALTER TABLE or other
   // top-level DDL/DML. Splitting ensures the follow-up ALTER TABLE statements
@@ -116,8 +119,10 @@ export function SubSplitCompoundBatch(batch: string): string[] {
   if (/^CREATE\s+TABLE\s/i.test(upperNoComments)) {
     if (!hasFollowupStatements(batch)) return [batch];
   }
-  // Don't split ;WITH CTE ... DML blocks (the DML is part of the CTE statement)
-  if (/^;?\s*WITH\s+\w+\s+AS\s*\(/i.test(upperNoComments)) return [batch];
+  // Don't split ;WITH CTE ... DML blocks (the DML is part of the CTE statement), but do split
+  // off whatever follows that statement: a trailing `PRINT` rode inside the CTE batch and reached
+  // PostgreSQL as `"PRINT" …` (issue #5799).
+  if (/^;?\s*WITH\s+\w+\s+AS\s*\(/i.test(upperNoComments)) return splitAfterCteStatement(batch);
   // Don't split ALTER TABLE batches UNLESS they contain non-ALTER-TABLE statements
   // (like EXEC sp_addextendedproperty). Pure ALTER TABLE batches should stay together
   // because DROP CONSTRAINT, DROP COLUMN, ADD COLUMN are continuations of ALTER TABLE.
@@ -216,6 +221,73 @@ export function SubSplitCompoundBatch(batch: string): string[] {
   }
 
   return statements.length > 0 ? statements : [batch];
+}
+
+/** The DML keywords that can follow a CTE list as its statement. */
+const CTE_DML = /^(?:SELECT|INSERT|UPDATE|DELETE|MERGE)\b/i;
+
+/**
+ * Split a WITH-led batch after the statement the CTE list belongs to, and sub-split the rest.
+ * The statement ends at its first top-level `;`, or, with no `;`, where a new statement keyword
+ * (`PRINT`, `UPDATE`, `EXEC`, …; not `SELECT`, which can continue an `INSERT`) starts a line at
+ * depth 0 after the CTE's own DML. String literals, comments and parentheses
+ * are respected. Returns `[batch]` when nothing follows the statement.
+ */
+function splitAfterCteStatement(batch: string): string[] {
+  const start = batch.length - stripLeadingComments(batch).length;
+  const withAt = batch.slice(start).search(/WITH\b/i);
+  if (withAt < 0) return [batch];
+  const end = cteStatementEnd(batch, start + withAt);
+  if (end < 0) return [batch];
+  const rest = batch.slice(end);
+  if (stripLeadingComments(rest).trim() === '') return [batch];
+  return [batch.slice(0, end).trimEnd(), ...SubSplitCompoundBatch(rest.trim())];
+}
+
+/** Offset just past the CTE statement that starts at `from` (see {@link splitAfterCteStatement}); -1 if it runs to the end. */
+function cteStatementEnd(batch: string, from: number): number {
+  let depth = 0;
+  let inString = false;
+  let inBlockComment = false;
+  let sawDml = false;
+  let isMerge = false;
+  let atLineStart = false;
+  for (let i = from; i < batch.length; i++) {
+    const ch = batch[i];
+    const next = batch[i + 1];
+    if (inBlockComment) {
+      if (ch === '*' && next === '/') { inBlockComment = false; i++; }
+      continue;
+    }
+    if (inString) {
+      if (ch === "'") {
+        if (next === "'") i++;
+        else inString = false;
+      }
+      continue;
+    }
+    if (ch === '\n') { atLineStart = true; continue; }
+    if (atLineStart && (ch === ' ' || ch === '\t' || ch === '\r')) continue;
+    if (atLineStart && depth === 0) {
+      const line = batch.slice(i, batch.indexOf('\n', i) < 0 ? batch.length : batch.indexOf('\n', i));
+      // A MERGE's `WHEN … THEN UPDATE` lines start like statements, so a MERGE ends only at `;`.
+      if (!sawDml && CTE_DML.test(line)) { sawDml = true; isMerge = /^MERGE\b/i.test(line); }
+      else if (sawDml && !isMerge && STMT_KEYWORDS.test(line)) return i;
+    }
+    atLineStart = false;
+    if (ch === '-' && next === '-') {
+      const nl = batch.indexOf('\n', i);
+      if (nl < 0) return -1;
+      i = nl - 1;
+      continue;
+    }
+    if (ch === '/' && next === '*') { inBlockComment = true; i++; continue; }
+    if (ch === "'") { inString = true; continue; }
+    if (ch === '(') depth++;
+    else if (ch === ')') depth = Math.max(0, depth - 1);
+    else if (ch === ';' && depth === 0) return i + 1;
+  }
+  return -1;
 }
 
 /** @deprecated Use {@link SubSplitCompoundBatch}. */

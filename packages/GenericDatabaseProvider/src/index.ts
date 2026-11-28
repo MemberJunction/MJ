@@ -1,4 +1,14 @@
-export { GenericDatabaseProvider, DoomedTransactionError, ExecuteSQLBatchOptions } from './GenericDatabaseProvider.js';
+export {
+    GenericDatabaseProvider,
+    DoomedTransactionError,
+    ExecuteSQLBatchOptions,
+    SummarizeSqlParameters,
+    FormatSqlParameterTypesForError,
+} from './GenericDatabaseProvider.js';
+export type { SqlParameterSummary, SqlObservation, ISqlObserver } from './GenericDatabaseProvider.js';
+export { NodeAsyncServerOperationScopeTracker } from './NodeAsyncServerOperationScopeTracker.js';
+export { RecordChangeSnapshotColumnKindOf } from './recordChangeSnapshot.js';
+export type { RecordChangeSnapshotColumnKind, RecordChangeSnapshotPlatform } from './recordChangeSnapshot.js';
 // Side-effect import: registers DatabaseWellKnownUserSource with the class factory so any
 // process holding a database provider can resolve MJ's built-in accounts.
 export { DatabaseWellKnownUserSource } from './DatabaseWellKnownUserSource.js';
@@ -19,6 +29,13 @@ export {
 } from './crudSprocFieldRules.js';
 export { ResolveDbPlatformFromEnv, resolveDbPlatformFromEnv } from './dbPlatformEnv.js';
 export { UserCache } from './UserCache.js';
+export {
+    GetServerPrincipal,
+    ResolveServerPrincipalFrom,
+    LowestActiveById,
+    NormalizePrincipalValue,
+} from './serverPrincipal.js';
+export type { ServerPrincipalCandidate, ServerPrincipalReason, ServerPrincipalResolution } from './serverPrincipal.js';
 export { ClientClauseScreen, IsClientClauseScreeningProvider } from './clientClauseScreen.js';
 export type { ClientClauseText, ClientViewClauseSet, EntityBaseViewAllowList, ClientClauseScreeningProvider, StatementReads, StatementRelation } from './clientClauseScreen.js';
 export {
@@ -31,7 +48,7 @@ export {
 // Side-effect import: registers the startup sweep that reports a system user which has lost
 // field-level access on an FLS-enabled entity.
 export { SystemUserFieldAccessCheck, LoadSystemUserFieldAccessCheck } from './SystemUserFieldAccessCheck.js';
-export { SqlLoggingOptions, SqlLoggingSession, SqlSchemaPlaceholder } from './types.js';
+export { SqlLoggingOptions, SqlLoggingSession, SqlSchemaPlaceholder, DatabasePoolStats } from './types.js';
 export { SqlLoggingSessionImpl, SCHEMA_PLACEHOLDER_LOOKBEHIND } from './SqlLogger.js';
 export { QueryCompositionEngine, CompositionCTEInfo, CompositionResult } from './queryCompositionEngine.js';
 export { CountOnlyBatchCoalescer, IsCoalescibleCountBatch } from './countOnlyBatch.js';
@@ -48,5 +65,22 @@ export { DescribeStatementFailure, DescribeStatementSuccess, BaseTypeOf } from '
 export type { DescribedColumn, DescribedColumnSource, DescribeStatementResult } from './describeStatement.js';
 export { TypedQueryParameter, IsTypedQueryParameterList, TypedBindValue, NamedQueryParameter, IsNamedQueryParameterList } from './typedQueryParameter.js';
 export type { TypedQueryParameterValue } from './typedQueryParameter.js';
+export { RowFilterParameterCollector } from './rowFilterParameters.js';
+export type { RowFilterBoundParameter } from './rowFilterParameters.js';
 export { StatementMemo } from './statementMemo.js';
 export { FindProjectionStars } from './fieldSecurity/projectionStars.js';
+export {
+    AreEntityFieldValuesDifferent,
+    ClientOldValueToFieldValue,
+    DatesEqualAtColumnResolution,
+    DetectFieldConcurrencyConflicts,
+    FindEntityFieldByCodeNameOrName,
+    IsFieldOpaqueToClient,
+    JsonStringsEquivalent,
+    RedactEncryptedConflictValues,
+    WithoutEchoedOpaqueValues,
+} from './concurrency/fieldConflictDetector.js';
+export type {
+    ConflictDiagnosticEntry,
+    FieldConcurrencyCheckResult,
+} from './concurrency/fieldConflictDetector.js';

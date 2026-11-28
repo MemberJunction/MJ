@@ -1,10 +1,11 @@
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import {
   MJAIAgentRunEntity,
-  MJAIAgentRunStepEntity
+  MJAIAgentRunStepEntity,
+  MJAIPromptRunEntity
 } from '@memberjunction/core-entities';
 import { InitializeMJProvider } from '../lib/mj-provider';
-import { AuditAnalyzer } from '../lib/audit-analyzer';
+import { AuditAnalyzer, type TruncationRules } from '../lib/audit-analyzer';
 import { AuditFormatter, AuditOutputFormat } from '../lib/audit-formatter';
 
 export interface ListRunsOptions {
@@ -36,8 +37,12 @@ export interface RunSummary {
 
   // Performance metrics
   totalTokens: number;
+  tokensUsed: number;
+  totalCost?: number;
   estimatedCost: number;
   stepCount: number;
+  actionsUsed: string[];
+  stepSuccess: boolean;
 
   // Step list with identifiable information
   steps: Array<{
@@ -95,6 +100,18 @@ export interface StepDetail {
   // Error details
   errorMessage?: string;
   stackTrace?: string;
+
+  // Full prompt execution trace (populated for Prompt steps at detailLevel === 'full')
+  promptRun?: {
+    model?: string;
+    vendor?: string;
+    systemPrompt?: string;
+    messages?: string;
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+    cost?: number;
+  };
 }
 
 export interface ErrorAnalysis {
@@ -231,8 +248,13 @@ export class AgentAuditService {
 
     const steps = stepsResult.Results || [];
 
-    // Calculate metrics - note: token counts are at the run level, not step level
-    const totalTokens = runEntity.TotalTokensUsed || 0;
+    // Calculate metrics - prefer recorded run totals and fall back to rollup / estimator
+    const totalTokens =
+      runEntity.TotalTokensUsed != null && runEntity.TotalTokensUsed > 0
+        ? runEntity.TotalTokensUsed
+        : (runEntity.TotalTokensUsedRollup ?? runEntity.TotalTokensUsed ?? 0);
+    const totalCost = this.extractRecordedCost(runEntity);
+    const estimatedCost = totalCost ?? this.analyzer.estimateCost(totalTokens);
 
     const duration = runEntity.StartedAt && runEntity.CompletedAt
       ? new Date(runEntity.CompletedAt).getTime() - new Date(runEntity.StartedAt).getTime()
@@ -240,6 +262,10 @@ export class AgentAuditService {
 
     const errorSteps = steps.filter(s => s.Status === 'Failed' || s.ErrorMessage);
     const firstError = errorSteps.length > 0 ? errorSteps[0] : undefined;
+    const actionsUsed = this.analyzer.ExtractActionNames(steps);
+    const stepSuccess =
+      errorSteps.length === 0 &&
+      steps.every((s) => s.Status === 'Completed' || (s.Status as string) === 'Success');
 
     // Build summary
     const summary: RunSummary = {
@@ -247,12 +273,16 @@ export class AgentAuditService {
       agentName: runEntity.Agent || 'Unknown',
       agentId: runEntity.AgentID!,
       status: runEntity.Status || 'Unknown',
-      startedAt: runEntity.StartedAt?.toISOString() || '',
-      completedAt: runEntity.CompletedAt?.toISOString(),
+      startedAt: this.toIsoString(runEntity.StartedAt) || '',
+      completedAt: this.toIsoString(runEntity.CompletedAt),
       duration,
       totalTokens,
-      estimatedCost: this.analyzer.estimateCost(totalTokens),
+      tokensUsed: totalTokens,
+      totalCost,
+      estimatedCost,
       stepCount: steps.length,
+      actionsUsed,
+      stepSuccess,
       hasErrors: errorSteps.length > 0,
       errorCount: errorSteps.length,
       steps: steps.map((step, index) => ({
@@ -326,8 +356,8 @@ export class AgentAuditService {
       stepName: step.StepName || `Step ${stepNumber}`,
       stepType: step.StepType || 'Unknown',
       status: step.Status || 'Unknown',
-      startedAt: step.StartedAt?.toISOString() || '',
-      completedAt: step.CompletedAt?.toISOString(),
+      startedAt: this.toIsoString(step.StartedAt) || '',
+      completedAt: this.toIsoString(step.CompletedAt),
       duration: this.analyzer.calculateStepDuration(step),
       input: {
         raw: this.analyzer.truncateField(inputRaw, truncationRules.inputMaxChars),
@@ -347,6 +377,16 @@ export class AgentAuditService {
       errorMessage: step.ErrorMessage || undefined,
       stackTrace: undefined, // Stack trace not available in entity
     };
+
+    if (step.StepType === 'Prompt' && step.TargetLogID && options.detailLevel === 'full') {
+      const promptRun = await this.loadPromptRunDetail(step.TargetLogID, truncationRules);
+      if (promptRun) {
+        detail.promptRun = promptRun;
+        detail.inputTokens = promptRun.promptTokens ?? detail.inputTokens;
+        detail.outputTokens = promptRun.completionTokens ?? detail.outputTokens;
+        detail.cost = promptRun.cost ?? detail.cost;
+      }
+    }
 
     return detail;
   }
@@ -502,6 +542,95 @@ export class AgentAuditService {
   /** @deprecated Use {@link FormatErrorAnalysis}. */
   formatErrorAnalysis(analysis: ErrorAnalysis, format: AuditOutputFormat): string {
     return this.FormatErrorAnalysis(analysis, format);
+  }
+
+  private extractRecordedCost(runEntity: MJAIAgentRunEntity): number | undefined {
+    const direct = runEntity.TotalCost;
+    const rollup = runEntity.TotalCostRollup;
+    if (direct != null && Number(direct) > 0) {
+      return Number(direct);
+    }
+    if (rollup != null && Number(rollup) > 0) {
+      return Number(rollup);
+    }
+    if (direct != null) {
+      return Number(direct);
+    }
+    if (rollup != null) {
+      return Number(rollup);
+    }
+    return undefined;
+  }
+
+  private async loadPromptRunDetail(
+    promptRunId: string,
+    truncationRules: TruncationRules
+  ): Promise<StepDetail['promptRun'] | undefined> {
+    try {
+      const md = new Metadata(); // global-provider-ok: CLI tool, single-provider context
+      const promptRun = await md.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', this.contextUser);
+      const loaded = await promptRun.Load(promptRunId);
+      if (!loaded) {
+        return undefined;
+      }
+
+      const rawMessages = promptRun.Messages ?? undefined;
+      let systemPrompt: string | undefined;
+      if (rawMessages) {
+        try {
+          const parsed: unknown = JSON.parse(rawMessages);
+          if (Array.isArray(parsed)) {
+            const systemParts = parsed
+              .filter(
+                (msg): msg is { role?: string; content?: unknown } =>
+                  typeof msg === 'object' && msg !== null && (msg as { role?: unknown }).role === 'system'
+              )
+              .map((msg) => (typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)))
+              .filter((text) => text.length > 0);
+            if (systemParts.length > 0) {
+              systemPrompt = this.analyzer.truncateField(
+                systemParts.join('\n\n'),
+                truncationRules.inputMaxChars
+              );
+            }
+          }
+        } catch {
+          // Messages is not a JSON array; expose raw messages below
+        }
+      }
+
+      const cost =
+        promptRun.TotalCost != null
+          ? Number(promptRun.TotalCost)
+          : promptRun.Cost != null
+            ? Number(promptRun.Cost)
+            : undefined;
+
+      return {
+        model: promptRun.Model ?? undefined,
+        vendor: promptRun.Vendor ?? undefined,
+        systemPrompt,
+        messages: rawMessages
+          ? this.analyzer.truncateField(rawMessages, truncationRules.inputMaxChars)
+          : undefined,
+        promptTokens: promptRun.TokensPrompt ?? undefined,
+        completionTokens: promptRun.TokensCompletion ?? undefined,
+        totalTokens: promptRun.TokensUsed ?? undefined,
+        cost,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private toIsoString(val: Date | string | null | undefined): string | undefined {
+    if (val instanceof Date) {
+      return val.toISOString();
+    }
+    if (typeof val === 'string' && val.length > 0) {
+      return new Date(val).toISOString();
+    }
+    return undefined;
   }
 
   private async getContextUser(): Promise<UserInfo> {

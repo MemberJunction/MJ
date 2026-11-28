@@ -69,6 +69,8 @@ export interface RunRecordProcessOptions {
      * A version backfill passes false; it still refreshes the watermarks of the records it processes.
      */
     SkipUnchanged?: boolean;
+    /** Stops the run from the calling code; see {@link RecordSetProcessOptions.Signal}. */
+    Signal?: AbortSignal;
 }
 
 /** Builds and runs a RecordSetProcessor pass from a Record Process definition. */
@@ -98,6 +100,7 @@ export class RecordProcessExecutor {
                     ExtraFilter: `RecordProcessID = '${EscapeSQLString(rp.ID)}' AND Status = 'Completed'`,
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                 }, options.ContextUser);
                 if (lastRunRes.Success && lastRunRes.Results && lastRunRes.Results.length > 0) {
                     lastRunAt = lastRunRes.Results[0].StartedAt ?? null;
@@ -129,6 +132,7 @@ export class RecordProcessExecutor {
             LastRunAt: lastRunAt,
             OnProgress: options.OnProgress,
             OverwriteHumanValues: options.OverwriteHumanValues,
+            Signal: options.Signal,
             Configuration: { recordProcessName: rp.Name, workType: rp.WorkType, scopeType: rp.ScopeType },
         });
     }

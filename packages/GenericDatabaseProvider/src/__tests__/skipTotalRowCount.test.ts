@@ -12,7 +12,8 @@
  * load-bearing (the vector dashboard reads it as the real count on a MaxRows:1 query; the cache
  * gauntlet asserts it exceeds the truncated row count). So the caller says so instead:
  * `SkipTotalRowCount: true` skips the fallback (and the pagination count), never the
- * `count_only` count. These tests drive the REAL InternalRunView with ExecuteSQL recorded.
+ * `count_only` count, and `TotalRowCount` then comes back `undefined`, so a number is always a
+ * real total. These tests drive the REAL InternalRunView with ExecuteSQL recorded.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
@@ -165,29 +166,29 @@ describe('InternalRunView — full-page fallback COUNT and SkipTotalRowCount', (
         provider.registerEntity(makeEntity('Widgets'));
     });
 
-    it('a MaxRows:1 HIT never runs the fallback COUNT (next carves single-row probes out)', async () => {
+    it('a MaxRows:1 HIT runs the fallback COUNT like any other full page', async () => {
         provider.dataRows = [{ ID: 'r1', Name: 'w' }];
         const result = await provider.testRunView({ EntityName: 'Widgets', MaxRows: 1, ResultType: 'simple' });
         expect(result.Success).toBe(true);
-        expect(countQueries(provider.executed)).toHaveLength(0);
-        expect(result.TotalRowCount).toBe(1);
+        expect(countQueries(provider.executed)).toHaveLength(1);
+        expect(result.TotalRowCount).toBe(47);
     });
 
-    it('SkipTotalRowCount: true skips the fallback COUNT on a MaxRows:1 hit and reports the returned rows', async () => {
+    it('SkipTotalRowCount: true skips the fallback COUNT on a MaxRows:1 hit and leaves the total undefined', async () => {
         provider.dataRows = [{ ID: 'r1', Name: 'w' }];
         const result = await provider.testRunView({ EntityName: 'Widgets', MaxRows: 1, ResultType: 'simple', SkipTotalRowCount: true });
         expect(result.Success).toBe(true);
         expect(countQueries(provider.executed)).toHaveLength(0);
         expect(result.Results).toHaveLength(1);
-        expect(result.TotalRowCount).toBe(1);
+        expect(result.TotalRowCount).toBeUndefined();
     });
 
-    it('a MISS never counted and still does not — the flag changes nothing on an empty page', async () => {
+    it('a MISS never counts, and with the flag the total is still undefined rather than a data-dependent 0', async () => {
         provider.dataRows = [];
         const result = await provider.testRunView({ EntityName: 'Widgets', MaxRows: 1, ResultType: 'simple', SkipTotalRowCount: true });
         expect(result.Success).toBe(true);
         expect(countQueries(provider.executed)).toHaveLength(0);
-        expect(result.TotalRowCount).toBe(0);
+        expect(result.TotalRowCount).toBeUndefined();
     });
 
     it('count_only ignores the flag — that result IS the count', async () => {
@@ -211,7 +212,7 @@ describe('InternalRunView — full-page fallback COUNT and SkipTotalRowCount', (
         const result = await provider.testRunView({ EntityName: 'Widgets', MaxRows: 2, ResultType: 'simple', SkipTotalRowCount: true });
         expect(result.Success).toBe(true);
         expect(countQueries(provider.executed)).toHaveLength(0);
-        expect(result.TotalRowCount).toBe(2);
+        expect(result.TotalRowCount).toBeUndefined();
     });
 
     it('a paginated read (StartRow) still counts up front by default', async () => {
@@ -229,6 +230,6 @@ describe('InternalRunView — full-page fallback COUNT and SkipTotalRowCount', (
         const result = await provider.testRunView({ EntityName: 'Widgets', StartRow: 0, MaxRows: 10, ResultType: 'simple', SkipTotalRowCount: true });
         expect(result.Success).toBe(true);
         expect(countQueries(provider.executed)).toHaveLength(0);
-        expect(result.TotalRowCount).toBe(1);
+        expect(result.TotalRowCount).toBeUndefined();
     });
 });

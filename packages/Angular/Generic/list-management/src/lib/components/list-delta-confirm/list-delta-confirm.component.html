@@ -63,7 +63,12 @@
           @for (id of previewAdds; track id) {
             <li class="delta-preview__row delta-preview__row--add">
               <i class="fa-solid fa-user-plus"></i>
-              <span class="delta-preview__id">{{ id }}</span>
+              @if (RecordName(id); as name) {
+                <span class="delta-preview__name">{{ name }}</span>
+                <span class="delta-preview__id delta-preview__id--secondary">{{ id }}</span>
+              } @else {
+                <span class="delta-preview__id">{{ id }}</span>
+              }
             </li>
           }
         </ul>
@@ -77,7 +82,12 @@
           @for (id of previewRemoves; track id) {
             <li class="delta-preview__row delta-preview__row--remove">
               <i class="fa-solid fa-user-minus"></i>
-              <span class="delta-preview__id">{{ id }}</span>
+              @if (RecordName(id); as name) {
+                <span class="delta-preview__name">{{ name }}</span>
+                <span class="delta-preview__id delta-preview__id--secondary">{{ id }}</span>
+              } @else {
+                <span class="delta-preview__id">{{ id }}</span>
+              }
             </li>
           }
         </ul>

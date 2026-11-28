@@ -1,4 +1,4 @@
-import { IMetadataProvider, LogError, Metadata, UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, SharedLoad, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 import {
     FileStorageEngineBase,
@@ -119,8 +119,8 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
 
     // Loading state management (mirrors AIEngine pattern)
     private _loaded: boolean = false;
-    private _loading: boolean = false;
-    private _loadingPromise: Promise<void> | null = null;
+    /** Shares concurrent loads; a forced `Config(true)` always gets a load that starts after it. */
+    private readonly _load = new SharedLoad();
     private _contextUser: UserInfo | undefined;
 
     // Server-specific state: cached, initialized drivers keyed by account ID
@@ -203,28 +203,14 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
     /**
      * Configures the engine by loading the underlying metadata cache and any
      * server-specific state. Safe to call multiple times — uses cached data
-     * unless `forceRefresh` is true. Concurrent callers share a single loading
-     * promise to avoid redundant work.
+     * unless `forceRefresh` is true. Concurrent callers share the load that is
+     * running, except that a `forceRefresh` call gets one more load after it (see SharedLoad).
      */
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         if (this._loaded && !forceRefresh) {
             return;
         }
-
-        // If currently loading, return the existing promise so all callers wait together
-        if (this._loading && this._loadingPromise) {
-            return this._loadingPromise;
-        }
-
-        this._loading = true;
-        this._loadingPromise = this.innerLoad(forceRefresh, contextUser, provider);
-
-        try {
-            await this._loadingPromise;
-        } finally {
-            this._loading = false;
-            this._loadingPromise = null;
-        }
+        return this._load.Run(forceRefresh === true, () => this.innerLoad(forceRefresh, contextUser, provider));
     }
 
     /**

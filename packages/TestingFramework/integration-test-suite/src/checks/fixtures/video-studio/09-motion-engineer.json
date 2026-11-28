@@ -1,0 +1,21 @@
+{
+    "taskComplete": true,
+    "message": "16:9 HyperFrames composition authored and lint-clean.",
+    "payloadChangeRequest": {
+        "newElements": {
+            "Output": {
+                "Source": {
+                    "16:9": {
+                        "Format": "16:9",
+                        "EntryFile": "index.html",
+                        "AssetKeys": [],
+                        "Files": {
+                            "index.html": "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><link rel=\"stylesheet\" href=\"mj/fonts.css\"><script src=\"mj/chart-kit.js\"></script></head><body style=\"margin:0;background:#0B1020;color:#F8FAFC;font-family:'MJ Sans'\"><div id=\"stage\" data-composition-id=\"main\" data-width=\"1920\" data-height=\"1080\" data-fps=\"30\" data-duration=\"18\">Q3 Revenue Momentum</div><footer id=\"as-of\" style=\"font-family:'MJ Mono'\"></footer><script src=\"scene.js\"></script></body></html>",
+                            "scene.js": "const asOfEl = document.getElementById('as-of'); if (asOfEl) { asOfEl.textContent = String((window.MJVideo && window.MJVideo.Data && window.MJVideo.Data['__asOf']) || ''); } if (window.MJVideo && typeof window.MJVideo.OnFrame === 'function') { window.MJVideo.OnFrame(() => {}); }"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

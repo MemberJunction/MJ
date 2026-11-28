@@ -4,6 +4,8 @@
  */
 
 import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, ColumnDefinition, ValueListVerdict } from '../types/state.js';
+import { ApplyBestPrimaryKeys } from '../discovery/ApplyPrimaryKeys.js';
+import type { RelationshipDiscoveryPhase } from '../types/discovery.js';
 import { EnsureArray } from "../utils/ensureArray.js";
 import type { BaseAutoDocDriver } from "../drivers/BaseAutoDocDriver.js";
 import { CheckPKProposal } from "./PKProposalGate.js";
@@ -268,6 +270,12 @@ export class AnalysisEngine {
     }
 
     const kept = allPKs.length - removed;
+    // Pruning only changed candidate status; re-apply so a rejected candidate's columns are
+    // unflagged and each table keeps exactly its best surviving key.
+    if (removed > 0) {
+      const reapplied = ApplyBestPrimaryKeys(state, discoveryPhase.discovered.primaryKeys, this.primaryKeyFloor());
+      this.onProgress('PK flags re-applied after pruning', { tablesFlagged: reapplied.TablesFlagged, columnsCleared: reapplied.ColumnsCleared });
+    }
     console.log(`[AnalysisEngine] PK pruning complete: ${removed} removed, ${kept} kept (model: ${effectiveModel})`);
     this.onProgress('PK pruning complete', { removed, kept, model: effectiveModel });
     this.stateManager.updateSummary(state);
@@ -1436,12 +1444,7 @@ export class AnalysisEngine {
       existingCandidate.status = 'confirmed';
       existingCandidate.confidence = Math.min(existingCandidate.confidence + 20, 100);
       console.log(`[AnalysisEngine] LLM confirmed PK candidate: ${schemaName}.${tableName} (${columns.join(', ')}), confidence: ${existingCandidate.confidence}`);
-
-      // Update column flags
-      for (const colName of columns) {
-        const column = this.findColumnInState(state, schemaName, tableName, colName);
-        if (column) column.isPrimaryKey = true;
-      }
+      this.applyTablePrimaryKey(state, discoveryPhase, schemaName, tableName);
       return;
     }
 
@@ -1479,12 +1482,7 @@ export class AnalysisEngine {
     };
 
     discoveryPhase.discovered.primaryKeys.push(newPK);
-
-    // Update column flags
-    for (const colName of pkColumns) {
-      const column = this.findColumnInState(state, schemaName, tableName, colName);
-      if (column) column.isPrimaryKey = true;
-    }
+    this.applyTablePrimaryKey(state, discoveryPhase, schemaName, tableName);
 
     console.log(`[AnalysisEngine] Created PK from LLM: ${schemaName}.${tableName} (${pkColumns.join(', ')}) confidence: ${confidence}`);
   }
@@ -1728,6 +1726,25 @@ export class AnalysisEngine {
 
       discoveryPhase.feedbackFromAnalysis.push(feedback);
     }
+  }
+
+  /** The primary-key confidence floor on the candidates' 0–100 scale. */
+  private primaryKeyFloor(): number {
+    return (this.config.analysis.relationshipDiscovery?.confidence?.primaryKeyMinimum ?? 0.7) * 100;
+  }
+
+  /**
+   * Re-applies one table's primary key after a candidate changed, so the table keeps exactly its
+   * best surviving candidate and the columns of the others are unflagged.
+   */
+  private applyTablePrimaryKey(
+    state: DatabaseDocumentation,
+    discoveryPhase: RelationshipDiscoveryPhase,
+    schemaName: string,
+    tableName: string
+  ): void {
+    const tableCandidates = discoveryPhase.discovered.primaryKeys.filter(pk => pk.schemaName === schemaName && pk.tableName === tableName);
+    ApplyBestPrimaryKeys(state, tableCandidates, this.primaryKeyFloor());
   }
 
   /**

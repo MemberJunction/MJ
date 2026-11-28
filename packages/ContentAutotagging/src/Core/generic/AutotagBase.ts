@@ -3,6 +3,9 @@ import { MJContentSourceEntity, MJContentItemEntity } from '@memberjunction/core
 import {
     DiscoverRequest,
     DiscoveredItem,
+    DiscoverWalkEnd,
+    LocatorBatchFetchRequest,
+    LocatorBatchFetchResult,
     LocatorFetchRequest,
     LocatorFetchResponse,
 } from '@memberjunction/content-pipeline-base';
@@ -56,9 +59,29 @@ export abstract class AutotagBase {
      */
     public readonly SupportsExhaustiveWalk?: boolean;
 
-    /** Walk the source for the pipeline's Discover stage, yielding each item as it is found. */
-    public Discover?(request: DiscoverRequest): AsyncIterable<DiscoveredItem>;
+    /**
+     * True when items are pushed into this source on demand (such as {@link AutotagUpload}) rather than
+     * pulled by walking an external listing. `Discover` and `Sync` skip push-only sources with a `Skipped`
+     * outcome and never mark their items as orphans.
+     */
+    public readonly IsPushOnly?: boolean;
+
+    /**
+     * Walk the source for the pipeline's Discover stage, yielding each item as it is found (and each locator it
+     * knows is gone, as `{ URL, Removed: true }`). A walk that cannot finish in one run (past
+     * `request.Deadline`, or a page limit) returns `{ ResumeToken }`; the next walk receives it as
+     * `request.ResumeToken`. Written as an `async *` generator, `return { ResumeToken: '...' }` does that.
+     */
+    public Discover?(request: DiscoverRequest): AsyncIterable<DiscoveredItem> | AsyncGenerator<DiscoveredItem, DiscoverWalkEnd | void, undefined>;
 
     /** Read the bytes behind a locator this driver yielded. Without it, Extract fetches the URL over HTTP. */
     public Fetch?(request: LocatorFetchRequest): Promise<LocatorFetchResponse>;
+
+    /**
+     * Read the bytes behind several locators this driver yielded, in one session (one login, one connection,
+     * one bulk API call). Extract uses it for a page of items when present, ahead of reading them one by one;
+     * a locator missing from the results is fetched alone. Return one result per locator, with its own error
+     * when that one failed.
+     */
+    public FetchBatch?(request: LocatorBatchFetchRequest): Promise<LocatorBatchFetchResult[]>;
 }

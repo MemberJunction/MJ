@@ -96,6 +96,11 @@
 
   <!-- Tabs -->
   <div class="tabs-container">
+    <!-- Phone: the strip becomes one button that opens the Sections sheet -->
+    <mj-section-picker class="phone-section-picker"
+                       [Items]="SectionPickerItems"
+                       [ActiveKey]="ActiveTab"
+                       (ActiveKeyChange)="OnSectionPicked($event)"></mj-section-picker>
     <div class="tabs" role="tablist">
       <button class="tab"
         [class.active]="activeTab === 'overview'"

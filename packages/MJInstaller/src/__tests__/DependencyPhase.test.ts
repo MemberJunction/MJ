@@ -29,7 +29,7 @@ vi.mock('../adapters/FileSystemAdapter.js', () => ({
 // Import the phase under test AFTER mocks are set up
 // ---------------------------------------------------------------------------
 
-import { DependencyPhase, TagToNpmVersion, type DependencyContext } from '../phases/DependencyPhase.js';
+import { DependencyPhase, TagToNpmVersion, DependencyInstallTimeoutMs, type DependencyContext } from '../phases/DependencyPhase.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -362,6 +362,51 @@ describe('DependencyPhase', () => {
   });
 });
 
+describe('CLI version pin (#4598)', () => {
+  let phase: DependencyPhase;
+
+  beforeEach(() => {
+    phase = new DependencyPhase();
+    mockRunner.Run.mockClear().mockReset();
+    mockRunner.Run.mockResolvedValue(ok());
+    mockFs.ReadJSON.mockClear().mockResolvedValue({});
+    mockFs.WriteJSON.mockClear().mockResolvedValue(undefined);
+  });
+
+  function writtenCliSpec(): string | undefined {
+    const call = mockFs.WriteJSON.mock.calls.find(
+      (c) => (c[1] as Record<string, Record<string, string>>).devDependencies?.['@memberjunction/cli'] !== undefined
+    );
+    return call ? (call[1] as Record<string, Record<string, string>>).devDependencies['@memberjunction/cli'] : undefined;
+  }
+
+  it('pins the concrete version of a resolved release tag', async () => {
+    const { emitter, emitSpy } = createMockEmitter();
+    await phase.Run(makeContext({ Tag: 'v6.1.2', Emitter: emitter }));
+    expect(writtenCliSpec()).toBe('6.1.2');
+    expect(emittedEvents(emitSpy, 'warn')).toHaveLength(0);
+  });
+
+  it('warns when the tag falls back to the npm "latest" dist-tag', async () => {
+    const { emitter, emitSpy } = createMockEmitter();
+    await phase.Run(makeContext({ Tag: 'latest', Emitter: emitter }));
+    expect(writtenCliSpec()).toBe('latest');
+    const warns = emittedEvents(emitSpy, 'warn') as Array<{ Message: string }>;
+    expect(warns.some((w) => w.Message.includes('@memberjunction/cli@latest'))).toBe(true);
+  });
+});
+
+describe('DependencyInstallTimeoutMs (#4478)', () => {
+  it('gives Windows 30 minutes, matching the build cap', () => {
+    expect(DependencyInstallTimeoutMs('win32')).toBe(1_800_000);
+  });
+
+  it('keeps 15 minutes elsewhere', () => {
+    expect(DependencyInstallTimeoutMs('darwin')).toBe(900_000);
+    expect(DependencyInstallTimeoutMs('linux')).toBe(900_000);
+  });
+});
+
 describe('tagToNpmVersion', () => {
   it('strips leading v from semver tags', () => {
     expect(TagToNpmVersion('v5.38.0')).toBe('5.38.0');
@@ -614,6 +659,46 @@ describe('DependencyPhase package-manager awareness', () => {
         JSON.stringify(data).includes('@memberjunction/ng-auth-services')
       );
       expect(hoistWrite).toBeDefined();
+    });
+
+    it('writes .npmrc with shamefully-hoist=true for standalone pnpm distribution installs', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false);
+      mockFs.FileExists.mockResolvedValue(false);
+      mockFs.WriteText.mockClear();
+      mockRunner.Run.mockResolvedValue(ok());
+
+      await phase.Run(makeContext({ PackageManager: 'pnpm' }));
+
+      const npmrcWrite = mockFs.WriteText.mock.calls.find(([p]) => String(p).endsWith('.npmrc'));
+      expect(npmrcWrite).toBeDefined();
+      expect(String(npmrcWrite![1])).toContain('shamefully-hoist=true');
+    });
+
+    it('preserves existing .npmrc hoisting settings and skips .mj-dev-workspace.json workspaces', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false);
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('.npmrc'));
+      mockFs.ReadText.mockResolvedValue('public-hoist-pattern[]=*\n');
+      mockFs.WriteText.mockClear();
+      mockRunner.Run.mockResolvedValue(ok());
+
+      await phase.Run(makeContext({ PackageManager: 'pnpm' }));
+      expect(mockFs.WriteText.mock.calls.find(([p]) => String(p).endsWith('.npmrc'))).toBeUndefined();
+
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('.mj-dev-workspace.json'));
+      mockFs.WriteText.mockClear();
+      await phase.Run(makeContext({ PackageManager: 'pnpm' }));
+      expect(mockFs.WriteText.mock.calls.find(([p]) => String(p).endsWith('.npmrc'))).toBeUndefined();
+    });
+
+    it('does not write .npmrc under npm', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false);
+      mockFs.FileExists.mockResolvedValue(false);
+      mockFs.WriteText.mockClear();
+      mockRunner.Run.mockResolvedValue(ok());
+
+      await phase.Run(makeContext({ PackageManager: 'npm' }));
+
+      expect(mockFs.WriteText.mock.calls.find(([p]) => String(p).endsWith('.npmrc'))).toBeUndefined();
     });
   });
 });

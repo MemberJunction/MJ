@@ -1,8 +1,10 @@
-import { AggregateExpression, CompositeKey, DatabaseProviderBase, UserInfo, ViewPropertyValues } from '@memberjunction/core';
+import { AggregateExpression, CompositeKey, DatabaseProviderBase, RunViewParameters, UserInfo, ViewPropertyValues } from '@memberjunction/core';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import sql from 'mssql';
 import { GetSystemUser } from './auth/index.js';
+import type { ImpersonationSessionInfo } from './auth/impersonationGuard.js';
+import type { MagicLinkScopeEntry } from './auth/magicLink/types.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 
 /**
@@ -25,6 +27,13 @@ export type UserPayload = {
   apiKeyId?: string;
   /** SHA-256 hash of the MJ API key (used for scope authorization) */
   apiKeyHash?: string;
+  /** Expiration timestamp in epoch milliseconds (`APIKey.ExpiresAt.getTime()`) when authenticated via an expiring MJ API key. */
+  apiKeyExpiresAtMs?: number;
+  /**
+   * Immutable server-stamped impersonation session metadata when authenticated via a temporary
+   * `MJ-Impersonation:` API key. Never populated from client input.
+   */
+  impersonationSession?: ImpersonationSessionInfo;
   /**
    * The IdP's OIDC `email_verified` assertion from the verified JWT, when present.
    * Three-state: `true` (IdP vouched for the email), `false` (IdP explicitly says the email is
@@ -33,6 +42,10 @@ export type UserPayload = {
    * redemption; do not treat `undefined` as `false`.
    */
   emailVerified?: boolean;
+  /** Verified JWT expiration timestamp in epoch milliseconds (`payload.exp * 1000`), when authenticated by JWT. */
+  tokenExpiresAtMs?: number;
+  /** Raw Magic Link scopes (`mj_scopes` claim) carried on Magic Link session JWTs. */
+  magicLinkScopes?: MagicLinkScopeEntry[];
   /**
    * Set only on a payload elevated by `ElevateUserPayload`: the principal the elevated user stands in for (a public
    * widget guest). The run's own records are written as `userRecord`, but the guest's conversation is written as
@@ -86,11 +99,24 @@ export type AppContext = {
    * must fail closed on it.
    */
   RequestOrigin?: string;
+
+  /**
+   * Caller `User-Agent` HTTP header when available (HTTP requests only; absent on WebSocket contexts).
+   * Recorded in security audit logs (e.g., `User Impersonation Started` / `Denied`).
+   */
+  UserAgent?: string;
+
+  /**
+   * True when the raw HTTP request included an `x-api-key` or `x-mj-user-api-key` header.
+   * Used as a defense-in-depth anti-smuggling check on control-plane resolvers so dual-header
+   * requests (`Authorization: Bearer ...` + `x-api-key: ...`) can never reach impersonation APIs.
+   */
+  HasRawApiKeyHeader?: boolean;
 };
 
 export class ProviderInfo {
   provider: DatabaseProviderBase;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
-  type: 'Admin' | 'Read-Write' | 'Read-Only' | 'Other';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  type: 'Admin' | 'Read-Write' | 'Read-Only' | 'Adhoc-Read-Only' | 'Other';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 export class DataSourceInfo  {
@@ -159,6 +185,11 @@ export type RunViewGenericParams = {
    */
   includeBinaryFields?: boolean;
   /**
+   * When true, no count runs to populate `TotalRowCount`, which comes back undefined.
+   * Propagated to `RunViewParams.SkipTotalRowCount`.
+   */
+  skipTotalRowCount?: boolean;
+  /**
    * Optional registered Alternate Base View logical Name (from `EntityAlternateBaseView.Name`)
    * for this entity. Propagated to `RunViewParams.AlternateBaseView`.
    */
@@ -168,6 +199,16 @@ export type RunViewGenericParams = {
    * There is deliberately no server-properties field: those are set only by server code.
    */
   properties?: ViewPropertyValues;
+  /**
+   * Named parameter values referenced as `@paramName` in `ExtraFilter`.
+   * Propagated to `RunViewParams.Parameters`.
+   */
+  parameters?: RunViewParameters;
+  /**
+   * Optional JSON-encoded `CompositeFilterDescriptor` for structured filtering.
+   * Parsed into `RunViewParams.Filter`.
+   */
+  filter?: string;
 };
 
 

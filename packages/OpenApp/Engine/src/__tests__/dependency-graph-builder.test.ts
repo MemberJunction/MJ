@@ -306,4 +306,190 @@ describe('ResolveDependencyGraph', () => {
             expect(result.ErrorMessage).toContain("Conflicting version requirements for dependency 'common'");
         });
     });
+
+    describe('Requirements of an already-installed dependency (#6877)', () => {
+        const root: RootApp = { AppName: 'sales', Repository: repo('sales'), Dependencies: deps('tasks', 'common') };
+        const taskRequires = (range: string) => ({ common: dep('common', range) });
+
+        function installedApps(taskDependencies?: Record<string, DependencyValue>): InstalledAppMap {
+            return {
+                tasks: { Version: '1.13.0', Repository: repo('tasks'), Dependencies: taskDependencies },
+                common: { Version: '1.2.0', Repository: repo('common'), Dependencies: {} },
+            };
+        }
+
+        /** Serves `name@version` keys; a call without a version reads the default branch (`name`). Records every call. */
+        function recordingFetcher(manifests: Record<string, Record<string, DependencyValue>>, calls: string[]): ManifestFetcher {
+            return async (repoUrl, _subpath, version) => {
+                const name = repoUrl.replace('https://github.com/test/', '');
+                const key = version ? `${name}@${version}` : name;
+                calls.push(key);
+                const dependencies = manifests[key];
+                return dependencies
+                    ? { Success: true, Manifest: { name, repository: repoUrl, version, dependencies } }
+                    : { Success: false, ErrorMessage: `not found: ${key}` };
+            };
+        }
+
+        it('checks the recorded dependencies of the installed version and fetches nothing', async () => {
+            const calls: string[] = [];
+            // The default branch of tasks already asks for an unreleased common.
+            const fetcher = recordingFetcher({ tasks: taskRequires('>=1.9.0 <2.0.0') }, calls);
+
+            const result = await ResolveDependencyGraph(root, installedApps(taskRequires('^1.0.0')), fetcher);
+
+            expect(result.ErrorMessage).toBeUndefined();
+            expect(result.Success).toBe(true);
+            expect(calls).toEqual([]);
+            expect(result.InstallOrder!.map((d) => d.AppName)).toEqual(['common', 'tasks']);
+        });
+
+        it('fails when the recorded dependencies of the installed version are not satisfied', async () => {
+            const result = await ResolveDependencyGraph(root, installedApps(taskRequires('>=1.9.0 <2.0.0')), recordingFetcher({}, []));
+
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain("Dependency 'common' is installed (v1.2.0) but does not satisfy required range '>=1.9.0 <2.0.0'");
+        });
+
+        it('still resolves a missing app that the installed version depends on', async () => {
+            const fetcher = recordingFetcher({ 'extra@1.0.0': {} }, []);
+            const result = await ResolveDependencyGraph(
+                root, installedApps({ extra: dep('extra') }), fetcher, async () => ({ Version: '1.0.0' }),
+            );
+
+            expect(result.Success).toBe(true);
+            expect(result.InstallOrder!.filter((d) => !d.AlreadyInstalled).map((d) => [d.AppName, d.ResolvedVersion])).toEqual([['extra', '1.0.0']]);
+        });
+
+        it('detects a cycle that runs through recorded dependencies', async () => {
+            const result = await ResolveDependencyGraph(root, installedApps({ sales: dep('sales') }), recordingFetcher({}, []));
+
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage?.toLowerCase()).toContain('circular');
+        });
+
+        it('reads the manifest at the installed version, never the default branch, when no dependencies are recorded', async () => {
+            const calls: string[] = [];
+            const fetcher = recordingFetcher({ tasks: taskRequires('>=1.9.0 <2.0.0'), 'tasks@1.13.0': taskRequires('^1.0.0') }, calls);
+
+            const result = await ResolveDependencyGraph(root, installedApps(undefined), fetcher);
+
+            expect(result.ErrorMessage).toBeUndefined();
+            expect(result.Success).toBe(true);
+            expect(calls).toEqual(['tasks@1.13.0']);
+        });
+
+        it('warns, and stays successful, when the dependencies of an installed app cannot be read', async () => {
+            const result = await ResolveDependencyGraph(root, installedApps(undefined), recordingFetcher({}, []));
+
+            expect(result.Success).toBe(true);
+            expect(result.Warnings).toHaveLength(1);
+            expect(result.Warnings![0]).toContain("'tasks' (v1.13.0)");
+            expect(result.Warnings![0]).toContain('not found: tasks@1.13.0');
+        });
+
+        it('keeps the warning when resolution fails for another reason', async () => {
+            const unsatisfied: RootApp = { ...root, Dependencies: { tasks: dep('tasks'), common: dep('common', '>=9.0.0') } };
+            const result = await ResolveDependencyGraph(unsatisfied, installedApps(undefined), recordingFetcher({}, []));
+
+            expect(result.Success).toBe(false);
+            expect(result.Warnings).toHaveLength(1);
+        });
+
+        it.each([
+            ['the folder it was installed from', 'apps/tasks', 'declared/folder', 'apps/tasks'],
+            ['the folder its parent declares when none is recorded', null, 'declared/folder', 'declared/folder'],
+        ])('reads an installed app by name, in %s', async (_name, recorded, declared, expected) => {
+            const seen: Array<[string | undefined, string | undefined]> = [];
+            const fetcher: ManifestFetcher = async (url, subpath, _version, appName) => {
+                seen.push([subpath, appName]);
+                return { Success: true, Manifest: { name: 'tasks', repository: url, dependencies: {} } };
+            };
+            const apps: InstalledAppMap = { tasks: { Version: '1.13.0', Repository: repo('tasks'), Subpath: recorded } };
+            await ResolveDependencyGraph(
+                { ...root, Dependencies: { tasks: { version: '^1.0.0', repository: repo('tasks'), subpath: declared } } }, apps, fetcher,
+            );
+
+            expect(seen).toEqual([[expected, 'tasks']]);
+        });
+
+        describe('when the dependencies of an installed app are read from its default branch', () => {
+            /** The installed apps with `FromHead` set on tasks, as `--dependencies-from-head` does. */
+            function tasksFromHead(recorded?: Record<string, DependencyValue>): InstalledAppMap {
+                const apps = installedApps(recorded);
+                apps.tasks.FromHead = true;
+                return apps;
+            }
+
+            it('reads the default branch, not the record or the installed version', async () => {
+                const calls: string[] = [];
+                // Only the default branch allows the installed common.
+                const fetcher = recordingFetcher({ tasks: taskRequires('>=1.0.0 <3.0.0'), 'tasks@1.13.0': taskRequires('^0.9.0') }, calls);
+
+                const result = await ResolveDependencyGraph(root, tasksFromHead(taskRequires('^0.9.0')), fetcher);
+
+                expect(result.ErrorMessage).toBeUndefined();
+                expect(result.Success).toBe(true);
+                expect(calls).toEqual(['tasks']);
+            });
+
+            it('installs an app that only the default branch depends on', async () => {
+                const fetcher = recordingFetcher({ tasks: { ...taskRequires('^1.0.0'), extra: dep('extra') }, 'extra@1.0.0': {} }, []);
+
+                const result = await ResolveDependencyGraph(
+                    root, tasksFromHead(taskRequires('^1.0.0')), fetcher, async () => ({ Version: '1.0.0' }),
+                );
+
+                expect(result.Success).toBe(true);
+                expect(result.InstallOrder!.filter((d) => !d.AlreadyInstalled).map((d) => d.AppName)).toEqual(['extra']);
+            });
+
+            it('fails when the default branch is not satisfied', async () => {
+                const fetcher = recordingFetcher({ tasks: taskRequires('>=1.9.0 <2.0.0') }, []);
+
+                const result = await ResolveDependencyGraph(root, tasksFromHead(taskRequires('^1.0.0')), fetcher);
+
+                expect(result.Success).toBe(false);
+                expect(result.ErrorMessage).toContain("does not satisfy required range '>=1.9.0 <2.0.0'");
+            });
+
+            it('leaves an installed app without FromHead on its record', async () => {
+                const calls: string[] = [];
+                const apps = tasksFromHead({});
+                apps.common.FromHead = false;
+
+                await ResolveDependencyGraph(root, apps, recordingFetcher({ tasks: {}, common: {} }, calls));
+
+                expect(calls).toEqual(['tasks']);
+            });
+
+            it('warns and checks the record when the default branch cannot be read', async () => {
+                const result = await ResolveDependencyGraph(root, tasksFromHead(taskRequires('>=1.9.0 <2.0.0')), recordingFetcher({}, []));
+
+                expect(result.Warnings).toHaveLength(1);
+                expect(result.Warnings![0]).toContain("'tasks' (v1.13.0)");
+                expect(result.Warnings![0]).toContain('not found: tasks');
+                expect(result.Warnings![0]).toContain('recorded dependencies are used');
+                expect(result.Success).toBe(false);
+                expect(result.ErrorMessage).toContain("does not satisfy required range '>=1.9.0 <2.0.0'");
+            });
+
+            it('warns that nothing is checked when there is no record either', async () => {
+                const result = await ResolveDependencyGraph(root, tasksFromHead(undefined), recordingFetcher({}, []));
+
+                expect(result.Success).toBe(true);
+                expect(result.Warnings).toHaveLength(1);
+                expect(result.Warnings![0]).toContain('are not checked');
+            });
+
+            it('uses the record of an app that has no repository', async () => {
+                const apps = tasksFromHead(taskRequires('>=1.9.0 <2.0.0'));
+                apps.tasks.Repository = '';
+
+                const result = await ResolveDependencyGraph(root, apps, recordingFetcher({}, []));
+
+                expect(result.ErrorMessage).toContain("does not satisfy required range '>=1.9.0 <2.0.0'");
+            });
+        });
+    });
 });

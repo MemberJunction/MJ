@@ -1,5 +1,5 @@
 import { BaseSingleton } from '@memberjunction/global';
-import { LogError, LogStatus, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo, IMetadataProvider, SharedLoad } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import { QueryEngine } from '@memberjunction/core-entities';
 import { ReadStoredVector, SimpleVectorService, VectorInputEntry } from '@memberjunction/ai-vectors-memory';
@@ -45,8 +45,8 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
     // --- Server-specific state ---
     private _queryVectorService: SimpleVectorService<QueryEmbeddingMetadata> | null = null;
     private _loaded = false;
-    private _loading = false;
-    private _loadingPromise: Promise<void> | null = null;
+    /** Shares concurrent loads; a forced `Config(true)` always gets a load that starts after it. */
+    private readonly _load = new SharedLoad();
     private _contextUser: UserInfo | undefined;
     private _dataChangeSubscription: Subscription | null = null;
 
@@ -137,8 +137,8 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
      * Configures the QueryEngineServer by first ensuring QueryEngine is configured,
      * then building the in-memory vector index from cached query embeddings.
      *
-     * Safe to call from multiple places concurrently — returns the same promise
-     * to all callers during loading.
+     * Safe to call from multiple places concurrently: callers share the load that is
+     * running, except that a `forceRefresh` call gets one more load after it (see SharedLoad).
      *
      * @param forceRefresh - If true, forces a full reload even if already loaded
      * @param contextUser - User context for server-side operations
@@ -150,16 +150,7 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
         provider?: IMetadataProvider
     ): Promise<void> {
         if (this._loaded && !forceRefresh) return;
-        if (this._loading && this._loadingPromise) return this._loadingPromise;
-
-        this._loading = true;
-        this._loadingPromise = this.innerLoad(forceRefresh, contextUser, provider);
-        try {
-            await this._loadingPromise;
-        } finally {
-            this._loading = false;
-            this._loadingPromise = null;
-        }
+        return this._load.Run(forceRefresh === true, () => this.innerLoad(forceRefresh, contextUser, provider));
     }
 
     private async innerLoad(

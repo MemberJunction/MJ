@@ -312,6 +312,12 @@
   color: var(--mj-status-error);
 }
 
+/* Phone section picker and desktop-views note: hidden until the 768px rule below */
+.phone-section-picker,
+.phone-desktop-note {
+  display: none;
+}
+
 /* Tabs */
 .tabs {
   display: flex;
@@ -935,6 +941,11 @@
   .header-stats {
     flex-wrap: wrap;
   }
+
+  /* With Plan Mode and "Workflow still running" both showing, the badges push Refresh off the edge */
+  .header-right {
+    flex-wrap: wrap;
+  }
   
   .json-detail-pane {
     width: 100%;
@@ -1054,4 +1065,61 @@
   background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
   border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
   white-space: nowrap;
+}
+
+/* Phone (375px): the tab strip becomes one section-picker button (Timeline, Details); the
+   desktop-only views are named under the timeline with a link to open the run on a desktop. */
+@media (max-width: 768px) {
+  .tabs {
+    display: none;
+  }
+
+  .phone-section-picker {
+    display: block;
+    flex-shrink: 0;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-sunken);
+  }
+
+  .timeline-tab {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .timeline-tab > as-split {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto !important;
+  }
+
+  .phone-desktop-note {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: 10px 16px;
+    border-top: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+    font-size: 13px;
+  }
+
+  .phone-desktop-note > span {
+    min-width: 0;
+  }
+
+  .header-left,
+  .header-info {
+    min-width: 0;
+  }
+
+  .meta-info {
+    flex-wrap: wrap;
+  }
+
+  .run-id {
+    overflow-wrap: anywhere;
+  }
 }

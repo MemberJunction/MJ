@@ -2,7 +2,9 @@
 
 ## Overview
 
-MemberJunction's agent framework supports **human-in-the-loop** workflows where running agents can pause execution, request feedback or approval from a human, and resume once a response is provided. This enables agents to handle tasks that require judgment, oversight, or domain-specific input that only a human can provide.
+MemberJunction's agent framework supports **human-in-the-loop** workflows where running agents can pause execution, request feedback or approval from a human, and resume once a response is provided. While awaiting human input, `AgentLivenessWatchdog.SuspendForExternalWait()` pauses the sliding inactivity timer so multi-day approvals never time out prematurely.
+
+**Canonical Guides:** [Agent End-User Guide](../../../../guides/AGENT_END_USER_GUIDE.md) · [Agent Administrator Guide](../../../../guides/AGENT_ADMINISTRATOR_GUIDE.md) · [Agent Builder & Extension Guide](../../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) · [BaseAgent Rebase Map](../../../../guides/BASE_AGENT_REBASE_MAP.md).
 
 ### Key Concepts
 
@@ -287,6 +289,20 @@ A strategy set on a category applies to all agents in that category and its desc
     "priority": 30
 }
 ```
+
+---
+
+## Sub-Agent Consult (`ChatHandlingOption = 'Consult'`)
+
+When a sub-agent returns a `Chat` step, it does not create an `AIAgentRequest` directly (`this._depth === 0` is required to persist an `AIAgentRequest`). Instead, when the parent-child pairing resolves `ChatHandlingOption = 'Consult'` (via `AIAgentRelationship.ChatHandlingOption` or `AIAgent.ChatHandlingOption`), the parent intercepts the sub-agent's `Chat` step:
+
+1. **Answer, Escalate, or Proceed**: The sub-agent's question (and any `responseForm`) is formatted as a `"Sub-agent <Name> is asking you"` message in the parent's conversation, and an open consult record (`childRunId`, `subAgentId`, `subAgentName`, `round`, `question`) is stored on the parent's `Sub-Agent` step `OutputData.consult`. On its next turn, the parent can:
+   - **Answer directly** from its own context or payload by re-invoking the sub-agent with `resumeRunId: childRunId` and its answer in `message`.
+   - **Escalate to its own caller** by returning a `Chat` step of its own.
+   - **Tell the sub-agent to proceed without the answer** by calling it with `resumeRunId: childRunId` and instructions to use defaults.
+2. **Round Bound (`MaxSubAgentConsultRounds`)**: Each sub-agent may be consulted at most `AIAgent.MaxSubAgentConsultRounds` times per parent run (`> 0`; `NULL` uses the framework default `3`). Once a sub-agent exceeds this bound, its next `Chat` step propagates directly to the parent's caller with its `message` and `responseForm`.
+3. **Request Raised at Root & Resumed via `resumeRunId`**: Only the root agent (`depth === 0`) creates the persistent `AIAgentRequest` row. The human answers through the AI Agent Request (dashboard or API); a reply typed in the chat thread does not resume a consult until VS-CON-8. When the human responds and the root run resumes (`lastRunId`), `loadOpenConsults` and `applyOpenConsults` reload any still-open consults from the prior run's `Sub-Agent` steps (filtering out any `childRunId` already consumed by a subsequent step's `InputData.resumeRunId`) and inject the `FormatReloadedConsultsMessage` reminder (`"You asked your caller about a question from sub-agent ..."`) before the human's answer so the parent can resume the waiting sub-agent via `resumeRunId`.
+4. **Multi-Level Consult Chains**: Because each level records its own open consults on its `Sub-Agent` steps and reloads them via `loadOpenConsults` / `applyOpenConsults` when resumed with `resumeRunId` (which sets `lastRunId: resumeRunId` and `autoPopulateLastRunPayload: true` on the child run), consults compose across multiple hierarchy levels (e.g., `Root → Mid → Leaf`).
 
 ---
 

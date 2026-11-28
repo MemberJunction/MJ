@@ -1,0 +1,4 @@
+{
+    "description": "AI Prompt Model rows that failed check-prompt-model-routes.mjs when it was introduced (MJ#4915). Vendor choices belong to the AI catalog owner; remove an entry once its row is fixed. The guard fails on any failure not listed here and on any entry here that no longer fails.",
+    "entries": []
+}

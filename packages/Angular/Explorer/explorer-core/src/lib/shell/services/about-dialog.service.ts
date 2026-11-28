@@ -10,6 +10,7 @@ import { AboutDialogComponent } from '../../about/about-dialog.component';
 export interface AboutDialogOpenOptions {
     avatarUrl?: string | null;
     avatarIconClass?: string | null;
+    onReportProblem?: () => void;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -32,6 +33,10 @@ export class AboutDialogService {
             instance.AvatarUrl = options.avatarUrl ?? null;
             instance.AvatarIconClass = options.avatarIconClass ?? null;
             instance.CloseRequested.subscribe(() => this.Close());
+            instance.ReportProblemRequested.subscribe(() => {
+                this.Close();
+                options.onReportProblem?.();
+            });
         }
 
         this.dialogRef.Result.subscribe(() => {

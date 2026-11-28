@@ -12,7 +12,7 @@ import type { UserInfo } from '@memberjunction/core';
 /**
  * Source types that can contribute to search results.
  */
-export type SearchSource = 'vector' | 'fulltext' | 'entity' | 'storage' | 'tag';
+export type SearchSource = 'vector' | 'fulltext' | 'entity' | 'storage' | 'tag' | 'graph' | 'SemanticGraph';
 
 /**
  * Discriminator for how a search result should be rendered in the UI.
@@ -43,6 +43,8 @@ export interface SearchScoreBreakdown {
     Storage?: number;
     /** Score from tag-weighted search */
     Tag?: number;
+    /** Score from semantic graph expansion */
+    Graph?: number;
     /**
      * Re-rank score from the optional re-ranker stage (post-RRF, pre-dedup).
      * When present, the top-level `Score` has been replaced by this value.
@@ -80,6 +82,12 @@ export interface SearchParams {
     MinScore?: number;
     /** Search mode: 'full' applies enrichment, 'preview' skips it for speed */
     Mode?: SearchMode;
+    /**
+     * When true, enrichment attaches entity icons and display names from in-memory metadata
+     * but skips the batched `GetEntityRecordNames` database lookup. Useful for callers
+     * (such as retrieval pipelines) that only consume IDs/snippets or hydrate records separately.
+     */
+    SkipNameEnrichment?: boolean;
     /**
      * Optional array of `MJ: Search Scopes` record IDs. When provided, the engine resolves
      * each scope's metadata (providers, external indexes, entities, storage accounts) and
@@ -403,6 +411,9 @@ export interface FusionWeightsByProvider {
     fulltext?: number;
     entity?: number;
     storage?: number;
+    tag?: number;
+    graph?: number;
+    SemanticGraph?: number;
     /** Catch-all for 3rd-party / custom providers keyed by `SourceType` string. */
     [key: string]: number | undefined;
 }
@@ -453,6 +464,13 @@ export interface ScopeConstraints {
      * provider-specific knobs (e.g., vector namespace, route key).
      */
     ScopeConfig?: Record<string, unknown>;
+    /**
+     * The search's audience beyond the caller (`SearchParams.Audience`), set by the engine on every
+     * provider call when the audience adds a reader. The engine itself keeps only results every reader
+     * may read; a provider that TRAVERSES (`GraphSearchProvider`) must also apply it while it walks, so
+     * a result reachable only through something a reader cannot see is never produced.
+     */
+    AudienceReaders?: readonly UserInfo[];
 }
 
 /**
@@ -501,6 +519,17 @@ export interface ScopeStorageConstraint {
     FolderPath?: string;
     /** ID of the originating `MJ: Search Scope Storage Accounts` row (for observability). */
     SearchScopeStorageAccountID?: string;
+}
+
+/**
+ * Identifies an originating search scope (`MJ: Search Scopes`) that contributed a
+ * {@link SearchResultItem}.
+ */
+export interface SearchResultScopeAttribution {
+    /** ID of the originating `MJ: Search Scopes` record. */
+    ScopeID: string;
+    /** Display name of the originating `MJ: Search Scopes` record, when resolved. */
+    ScopeName?: string;
 }
 
 /**
@@ -578,6 +607,22 @@ export interface SearchResultItem {
      * being merged into a tagged lane by raw score, which would compare scales again.
      */
     FusionLane?: string;
+    /**
+     * Primary/winning originating `MJ: Search Scopes` record ID when this result came from a
+     * scoped search. Undefined for unscoped searches.
+     */
+    OriginatingScopeID?: string;
+    /**
+     * Display name of the primary/winning originating `MJ: Search Scopes` record, when available.
+     * Undefined for unscoped searches.
+     */
+    OriginatingScopeName?: string;
+    /**
+     * Deduplicated list of all originating scopes that surfaced this item across RRF fusion
+     * and deduplication (ordered with the primary/winning scope first, followed by additional
+     * contributing scopes). Undefined for unscoped searches.
+     */
+    OriginatingScopes?: SearchResultScopeAttribution[];
 }
 
 /**
@@ -625,7 +670,7 @@ export type SearchStreamEvent =
         /** Post-deduplication, post-permission, post-enrich result set — what Search() would have returned. */
         results: SearchResultItem[];
         /** Same shape as the synchronous SearchResult.SourceCounts. */
-        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number };
+        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number; Graph?: number };
         /** Total wall-clock duration of the stream. */
         elapsedMs: number;
     }
@@ -659,6 +704,7 @@ export interface SearchResult {
         Entity: number;
         Storage: number;
         Tag?: number;
+        Graph?: number;
     };
     /** Metadata for all active search providers (for UI filter facets and labels) */
     Providers: SearchProviderInfo[];

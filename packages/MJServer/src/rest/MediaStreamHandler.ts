@@ -27,6 +27,9 @@ import { GetSystemUser } from '../auth/index.js';
 import { MediaAccessKeyManager } from './MediaAccessKeys.js';
 import { UploadTokenManager } from './UploadTokenManager.js';
 import { ParseRange, ParseRangeHeaderLoose } from './mediaRange.js';
+import { ContentDispositionFor } from './mediaContentDisposition.js';
+import { CreateRouteRateLimiter } from './routeRateLimit.js';
+import type { RouteRateLimitSettings } from '../routeRateLimitConfigUnits.js';
 
 /** A located bytes source for a file: the driver + the provider key to read. */
 interface FileBytesSource {
@@ -36,26 +39,44 @@ interface FileBytesSource {
   fileName: string;
 }
 
+/** Options for {@link CreateMediaStreamRouter}. */
+export interface MediaStreamRouterOptions {
+  /**
+   * Per-route limiter settings (normally `configInfo.rateLimiting.routes`). Omitted groups use the
+   * defaults in `routeRateLimitConfigUnits.ts`, which are on.
+   */
+  RateLimits?: {
+    Upload?: Partial<RouteRateLimitSettings>;
+    Read?: Partial<RouteRateLimitSettings>;
+  };
+}
+
 /**
  * Builds the Express router exposing:
  * - `GET /media/:fileId` and `GET /media/:fileId/:filename` (Range streaming)
  * - `POST /media/upload-stage` (Raw binary upload staging)
  */
-export function CreateMediaStreamRouter(): Router {
+export function CreateMediaStreamRouter(options?: MediaStreamRouterOptions): Router {
   const router = express.Router();
+  // Per-IP limiters (on by default; see routeRateLimit.ts). The upload route takes 100 MB bodies,
+  // so it has its own tighter budget, applied before the body is read.
+  const uploadLimiter = CreateRouteRateLimiter('mediaUpload', options?.RateLimits?.Upload);
+  const readLimiter = CreateRouteRateLimiter('mediaRead', options?.RateLimits?.Read);
 
   router.post(
     '/upload-stage',
+    ...uploadLimiter,
+    rejectUnauthenticatedUploadsBeforeBody,
     express.raw({ type: () => true, limit: '100mb' }),
     async (req: Request, res: Response) => {
       await handleUploadStageRequest(req, res);
     }
   );
 
-  router.get('/:fileId', async (req: Request, res: Response) => {
+  router.get('/:fileId', ...readLimiter, async (req: Request, res: Response) => {
     await handleMediaRequest(req, res);
   });
-  router.get('/:fileId/:filename', async (req: Request, res: Response) => {
+  router.get('/:fileId/:filename', ...readLimiter, async (req: Request, res: Response) => {
     await handleMediaRequest(req, res);
   });
   return router;
@@ -64,6 +85,28 @@ export function CreateMediaStreamRouter(): Router {
 /** @deprecated Use {@link CreateMediaStreamRouter}. */
 export function createMediaStreamRouter(): Router {
   return CreateMediaStreamRouter();
+}
+
+/** Reads the signed upload token from the Authorization header (Bearer or bare). */
+function extractUploadToken(req: Request): string {
+  const authHeader = req.headers.authorization || '';
+  return authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader.trim();
+}
+
+/**
+ * Verifies the signed upload token BEFORE `express.raw` buffers the body. Without this gate an
+ * unauthenticated POST gets its full payload (up to 100 MB) read into process memory before the
+ * 401 — a cheap memory-pressure lever. The handler re-verifies after parsing; this middleware
+ * only decides whether the body is worth reading at all.
+ */
+function rejectUnauthenticatedUploadsBeforeBody(req: Request, res: Response, next: express.NextFunction): void {
+  const token = extractUploadToken(req);
+  if (!token || !MediaAccessKeyManager.Instance.VerifyUpload(token).Valid) {
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.status(401).json({ Success: false, ErrorMessage: 'Authorization header with a valid Bearer upload token required.' });
+    return;
+  }
+  next();
 }
 
 /**
@@ -159,6 +202,8 @@ async function handleMediaRequest(req: Request, res: Response): Promise<void> {
 
   // Never let CDNs or shared caches retain authorized media bytes.
   res.setHeader('Cache-Control', 'private, no-store');
+  // The capability token travels in the query string; never leak it via the Referer header.
+  res.setHeader('Referrer-Policy', 'no-referrer');
 
   try {
     const source = await resolveFileBytesSource(fileId);
@@ -274,9 +319,10 @@ async function serveViaStream(res: Response, source: FileBytesSource, rangeHeade
 
   const result = await source.driver.GetObjectStream({ fullPath: source.providerKey, Range: streamRange });
 
+  const streamContentType = result.ContentType ?? source.contentType;
   res.setHeader('Accept-Ranges', 'bytes');
-  res.setHeader('Content-Type', result.ContentType ?? source.contentType);
-  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(source.fileName)}"`);
+  res.setHeader('Content-Type', streamContentType);
+  res.setHeader('Content-Disposition', ContentDispositionFor(streamContentType, source.fileName));
   res.setHeader('X-Content-Type-Options', 'nosniff');
   if (result.ContentLength != null) {
     res.setHeader('Content-Length', String(result.ContentLength));
@@ -310,7 +356,7 @@ async function serveViaBuffer(res: Response, source: FileBytesSource, rangeHeade
 
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Type', source.contentType);
-  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(source.fileName)}"`);
+  res.setHeader('Content-Disposition', ContentDispositionFor(source.contentType, source.fileName));
   res.setHeader('X-Content-Type-Options', 'nosniff');
 
   if (!rangeHeader) {

@@ -194,6 +194,29 @@ export interface SuiteRunOptions extends TestRunOptions {
    * when tests perform repeated logins from the same IP.
    */
   delayBetweenTests?: number;
+
+  /**
+   * Filter tests by transport layer ('server' | 'client' | 'all').
+   * Reads `Configuration.transport` off each test (falling back to bundle-based inference
+   * or 'server' when omitted). Server-side wire-companion bundles that seed state for or
+   * connect a secondary GraphQL client to MJAPI (`realtime-session-guard`,
+   * `calendar-event-links`) are grouped with `'client'` so they run in the MJAPI-attached
+   * worker process ahead of client-transport bundles.
+   */
+  transport?: 'server' | 'client' | 'all';
+
+  /**
+   * Deterministic shard specification for partitioning a suite across multiple isolated
+   * worker processes (`1 <= index <= total`). Applied after all other test filters using
+   * duration-aware Longest Processing Time (LPT) bucketing while preserving original suite
+   * sequence order within each shard.
+   */
+  shard?: {
+    /** 1-based shard index (`1 <= index <= total`). */
+    index: number;
+    /** Total number of shards (`total >= 1`). */
+    total: number;
+  };
 }
 
 /**

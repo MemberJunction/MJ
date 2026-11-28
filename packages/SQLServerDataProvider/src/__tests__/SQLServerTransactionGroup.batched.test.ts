@@ -261,4 +261,75 @@ describe('SQLServerTransactionGroup.scopeItemVariables', () => {
         const src = "EXEC [__mj].[spDeleteTask] @ID='00000000-0000-0000-0000-000000000000';";
         expect(SQLServerTransactionGroup.scopeItemVariables(src, 0)).toBe(src);
     });
+
+    it('renames @ID assignments after a semicolon-free EXEC without mistaking callee @Set params for statements', () => {
+        const src = `
+            DECLARE @ResultTable TABLE (ID UNIQUEIDENTIFIER)
+            INSERT INTO @ResultTable
+            EXEC [__mj].[spDeleteMJQueryParameter] @ID='p-1', @Set=1
+            DECLARE @ID UNIQUEIDENTIFIER
+            SELECT @ID=ID FROM @ResultTable
+            IF @ID IS NOT NULL
+            BEGIN
+                EXEC [__mj].[spCreateRecordChange_Internal] @EntityName=N'MJ: Query Parameters', @RecordID='p-1', @SuppressReturn=1
+            END
+            SELECT @ID AS [ID]`;
+        const out = SQLServerTransactionGroup.scopeItemVariables(src, 0);
+        expect(out).toContain("EXEC [__mj].[spDeleteMJQueryParameter] @ID='p-1', @Set=1");
+        expect(out).toContain('DECLARE @ID_mjb0 UNIQUEIDENTIFIER');
+        expect(out).toContain('SELECT @ID_mjb0=ID FROM @ResultTable_mjb0');
+        expect(out).toContain('IF @ID_mjb0 IS NOT NULL');
+        expect(out).toContain('SELECT @ID_mjb0 AS [ID]');
+    });
+
+    describe('Parameter-Limit Chunking (MaxBatchParameterCount = 1800)', () => {
+        it('exposes MaxBatchParameterCount as 1800 to maintain safe margin below SQL Server 2100 limit', () => {
+            expect(SQLServerTransactionGroup.MaxBatchParameterCount).toBe(1800);
+        });
+
+        it('splits items into multiple sequential query chunks when cumulative parameter count exceeds 1800', async () => {
+            queryCalls.length = 0;
+            throwOnQuery = undefined;
+            // 2 items, each with 1,000 parameters = 2,000 parameters total
+            // Since 1000 + 1000 = 2000 > 1800, this must chunk into 2 queries
+            const paramsA = new Array(1000).fill('valA');
+            const paramsB = new Array(1000).fill('valB');
+            const placeholdersA = paramsA.map(() => '?').join(', ');
+            const placeholdersB = paramsB.map(() => '?').join(', ');
+
+            scriptedRecordsets = [
+                [{ __mj_batch_item: 0 }],
+                [{ ID: 'item-0-result' }],
+            ];
+
+            const itemA = makeItem(`EXEC spCreateLargeA @args=${placeholdersA}`, paramsA, 'LargeA');
+            const itemB = makeItem(`EXEC spCreateLargeB @args=${placeholdersB}`, paramsB, 'LargeB');
+
+            const results: TransactionResult[] = [];
+            await run([itemA, itemB], results);
+
+            // Verified: 2 separate queries executed on the transaction rather than one crashing query
+            expect(queryCalls.length).toBe(2);
+            expect(Object.keys(queryCalls[0].inputs).length).toBe(1000);
+            expect(Object.keys(queryCalls[1].inputs).length).toBe(1000);
+            expect(results.length).toBe(2);
+        });
+
+        it('rolls back the group and marks all items failed when any chunk fails', async () => {
+            queryCalls.length = 0;
+            const paramsA = new Array(1000).fill('valA');
+            const paramsB = new Array(1000).fill('valB');
+            const itemA = makeItem(`EXEC spA @args=${paramsA.map(() => '?').join(',')}`, paramsA, 'A');
+            const itemB = makeItem(`EXEC spB @args=${paramsB.map(() => '?').join(',')}`, paramsB, 'B');
+
+            throwOnQuery = new Error('TDS protocol simulated error');
+
+            const results: TransactionResult[] = [];
+            await expect(run([itemA, itemB], results)).rejects.toThrow(/Transaction rolled back due to operation failure: TDS protocol simulated error/);
+
+            expect(results.length).toBe(2);
+            expect(results[0].Success).toBe(false);
+            expect(results[1].Success).toBe(false);
+        });
+    });
 });

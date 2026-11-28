@@ -14,6 +14,7 @@ export type {
   ForeignKeyDefinition,
   ExistingTableInfo,
   ExistingColumnInfo,
+  IndexDefinition,
   SchemaDiff,
   ColumnModification,
   SchemaEvolutionInput,

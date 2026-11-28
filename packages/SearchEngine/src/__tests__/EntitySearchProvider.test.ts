@@ -842,6 +842,79 @@ describe('EntitySearchProvider', () => {
             expect(mockLogErrorEx).not.toHaveBeenCalled();
         });
     });
+
+    describe('multi-word token matching in convertResults', () => {
+        it('retains and scores records when multi-word query tokens match across separate fields (token match weighted equally with full match)', async () => {
+            mockEntities.push({
+                Name: 'Contacts',
+                AllowUserSearchAPI: true,
+                Fields: [
+                    { Name: 'ID', IncludeInUserSearchAPI: false, IsNameField: false, Sequence: 1 },
+                    { Name: 'FirstName', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 2 },
+                    { Name: 'LastName', IncludeInUserSearchAPI: true, IsNameField: false, Sequence: 3 },
+                ],
+                NameField: { Name: 'FirstName' },
+            });
+
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [
+                    // Neither field contains the full string "alice smith", but each field matches a token.
+                    // By design, a token match counts the same as a full match toward matchedFields (2/2 fields + nameBoost = 0.95).
+                    { ID: 'c-1', FirstName: 'Alice', LastName: 'Smith' },
+                    // Zero tokens match -> must still be dropped by `if (matchedFields === 0) return null`.
+                    { ID: 'c-2', FirstName: 'Bob', LastName: 'Jones' },
+                ],
+            });
+
+            const results = await provider.Search('Alice Smith', 10, undefined, contextUser);
+
+            expect(results).toHaveLength(1);
+            expect(results[0].RecordID).toBe('c-1');
+            expect(results[0].Score).toBe(0.95);
+        });
+
+        it('keeps a record a quoted one-word query matches (agents quote their searches)', async () => {
+            mockEntities.push({
+                Name: 'Tasks',
+                AllowUserSearchAPI: true,
+                Fields: [{ Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 }],
+                NameField: { Name: 'Name' },
+            });
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ ID: 't-1', Name: 'SOW 2026 Extension' }] });
+
+            const results = await provider.Search('"SOW"', 10, undefined, contextUser);
+
+            expect(results).toHaveLength(1);
+            expect(results[0].RecordID).toBe('t-1');
+        });
+
+        it('keeps a record whose text holds a quote the query also holds (only a wrapping pair is dropped)', async () => {
+            mockEntities.push({
+                Name: 'Parts',
+                AllowUserSearchAPI: true,
+                Fields: [{ Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 }],
+                NameField: { Name: 'Name' },
+            });
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ ID: 'p-1', Name: '6" pipe fitting' }] });
+
+            const results = await provider.Search('6" pipe', 10, undefined, contextUser);
+
+            expect(results.map(r => r.RecordID)).toEqual(['p-1']);
+        });
+
+        it('measures the minimum term length without the quotes: `"a"` is one character', async () => {
+            mockEntities.push({
+                Name: 'Tasks',
+                AllowUserSearchAPI: true,
+                Fields: [{ Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 }],
+                NameField: { Name: 'Name' },
+            });
+
+            expect(await provider.Search('"a"', 10, undefined, contextUser)).toEqual([]);
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+    });
 });
 
 /**

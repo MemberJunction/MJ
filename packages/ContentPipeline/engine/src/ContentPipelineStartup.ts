@@ -8,14 +8,17 @@
 
 import { IMetadataProvider, IStartupSink, LogStatusEx, RegisterForStartup, UserInfo } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
+import { AutotagUpload } from '@memberjunction/content-autotagging';
 import { CredentialAccessDriver } from './AccessResolver.js';
 import { ManagedPromptClassifier } from './ManagedPromptClassifier.js';
+import { ManagedPromptConceptSynthesizer } from './ManagedPromptConceptSynthesizer.js';
 import { RegisterPipelineWorkType } from './PipelineStageRegistration.js';
+import { ArtifactGraphIndexer } from './ArtifactGraphIndexer.js';
 import { LoadContentPipelineStages } from './stages/index.js';
 import { LoadContentPipelineExtractors } from './extractors/index.js';
 
 @RegisterForStartup({
-    description: 'Content pipeline: Pipeline Stage work type, built-in stages and extractors',
+    description: 'Content pipeline: Pipeline Stage work type, built-in stages and extractors, artifact indexing',
 })
 export class ContentPipelineStartup extends BaseSingleton<ContentPipelineStartup> implements IStartupSink {
     public static get Instance(): ContentPipelineStartup {
@@ -23,15 +26,21 @@ export class ContentPipelineStartup extends BaseSingleton<ContentPipelineStartup
     }
 
     /**
-     * Registers the work type and forces the built-in classes into the bundle. Idempotent (the
-     * registry is last-wins); needs no user or provider.
+     * Registers the work type, forces the built-in classes into the bundle and starts the artifact
+     * indexer. Idempotent (the registry is last-wins, the indexer subscribes once); needs no user
+     * or provider.
      */
     public async HandleStartup(_contextUser?: UserInfo, _provider?: IMetadataProvider): Promise<void> {
         LoadContentPipelineStages();
         LoadContentPipelineExtractors();
         void CredentialAccessDriver;
         void ManagedPromptClassifier;
+        void ManagedPromptConceptSynthesizer;
+        void AutotagUpload;
         RegisterPipelineWorkType();
+        // Indexes saved artifacts into the Content Sources configured for them; does nothing when
+        // no source sets Configuration.Artifacts.
+        ArtifactGraphIndexer.Instance.Start();
         LogStatusEx({
             message: '[ContentPipelineStartup] Registered the Pipeline Stage work type and the built-in stages.',
             verboseOnly: true,

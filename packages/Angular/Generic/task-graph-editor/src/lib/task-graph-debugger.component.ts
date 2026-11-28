@@ -31,10 +31,12 @@ import {
 } from './workflow-debug-host';
 import {
     TaskGraphRunViewComponent,
+    type TaskGraphDensity,
     type TaskGraphRunConnectionSelectedEvent,
     type TaskGraphRunFrame,
     type TaskGraphRunNodeSelectedEvent,
 } from './task-graph-run-view.component';
+import { ComputeBlastRadiusTaskIDs } from './task-graph-diagnostics';
 
 /** A provider that can push dispatcher frames. GraphQL does; others simply do not. */
 type FrameCapableProvider = IMetadataProvider & {
@@ -95,11 +97,26 @@ export class TaskGraphDebuggerComponent extends BaseAngularComponent implements 
     @Input() public ToolbarVisibility: FlowToolbarVisibility = 'minimized';
     @Input() public ToolbarAlign: FlowToolbarAlign = 'left';
     @Input() public AllowBreakpointEditing: boolean = true;
+    /**
+     * Breakpoints the person keeps for future runs of this workflow, as stable step IDs (#3798). The host loads
+     * them from the user's settings, stores changes from {@link RememberBreakpointToggled}, and passes them as
+     * `taskGraphDebug.breakpointStepIDs` when it starts the next debug run. Generic components hold no settings
+     * of their own.
+     */
+    @Input() public RememberedStepIDs: readonly string[] = [];
+    /** Offer "Remember Breakpoint for Future Runs" on a step. Off unless the host stores the set. */
+    @Input() public AllowRememberBreakpoints: boolean = false;
     @Input() public ShowVariables: boolean = true;
     /** VCR + error line above the canvas. Off if the host already has its own bar. */
     @Input() public ShowChrome: boolean = true;
     @Input() public Enabled: boolean = true;
     @Input() public ReplayAt: Date | null = null;
+    /** Adaptive layout density ('auto' | 'console' | 'embedded'). */
+    @Input() public Density: TaskGraphDensity = 'auto';
+    /** Expand inline X-Ray telemetry panels on step nodes (`X` key toggles). */
+    @Input() public XRayEnabled: boolean = false;
+    /** Show docked interactive Replay Scrubber for settled runs with timestamps. */
+    @Input() public ShowReplayScrubber: boolean = false;
 
     /** Claim-gated. Public so a host toolbar can bind the same flag. */
     public Paused = false;
@@ -111,6 +128,10 @@ export class TaskGraphDebuggerComponent extends BaseAngularComponent implements 
     public EdgeOverrides: Readonly<Record<string, 'true' | 'false'>> = {};
     public Invocation: WorkflowInvocationRoots | null = null;
     public LatestFrame: TaskGraphRunFrame | null = null;
+    public BlastRadiusEnabled = false;
+    public BlastRadiusTaskIDs: readonly string[] = [];
+    public SelectedTaskID: string | null = null;
+    public EnginePulseText: string | null = null;
 
     @Output() public NodeSelected = new EventEmitter<TaskGraphRunNodeSelectedEvent>();
     @Output() public ConnectionSelected = new EventEmitter<TaskGraphRunConnectionSelectedEvent>();
@@ -120,6 +141,10 @@ export class TaskGraphDebuggerComponent extends BaseAngularComponent implements 
     @Output() public Frame = new EventEmitter<TaskGraphRunFrame>();
     @Output() public ControlFailed = new EventEmitter<string>();
     @Output() public Settled = new EventEmitter<void>();
+    /** A step's remembered breakpoint was turned on or off. Intent only — the host stores it. */
+    @Output() public RememberBreakpointToggled = new EventEmitter<{ TaskID: string; StepID: string; Remember: boolean }>();
+    /** Emitted when the user clicks Expand in compact embedded density. */
+    @Output() public ExpandRequested = new EventEmitter<void>();
 
     @ViewChild(TaskGraphRunViewComponent) public RunView: TaskGraphRunViewComponent | undefined;
 
@@ -144,7 +169,7 @@ export class TaskGraphDebuggerComponent extends BaseAngularComponent implements 
         return this.executeControl('TaskGraph.Resume', { parentTaskID: this.parentTaskID });
     }
 
-    public Step(target: 'one' | 'wave' = 'one'): Promise<boolean> {
+    public Step(target: 'one' | 'wave' | string = 'one'): Promise<boolean> {
         return this.executeControl('TaskGraph.Step', { parentTaskID: this.parentTaskID, target });
     }
 
@@ -220,7 +245,52 @@ export class TaskGraphDebuggerComponent extends BaseAngularComponent implements 
     }
 
     public OnRunNodeSelected(event: TaskGraphRunNodeSelectedEvent): void {
+        this.SelectedTaskID = event.TaskID;
+        if (this.BlastRadiusEnabled) {
+            this.recomputeBlastRadius(event.TaskID);
+        }
         this.NodeSelected.emit(event);
+    }
+
+    public OnToggleXRay(enabled: boolean): void {
+        this.XRayEnabled = enabled;
+        this.cdr.markForCheck();
+    }
+
+    public OnToggleBlastRadius(enabled: boolean, explicitTargetID?: string): void {
+        this.BlastRadiusEnabled = enabled;
+        if (!enabled) {
+            this.BlastRadiusTaskIDs = [];
+            this.cdr.markForCheck();
+            return;
+        }
+        const target =
+            explicitTargetID ??
+            this.SelectedTaskID ??
+            this.PausedAtTaskID ??
+            this.RunView?.Tasks.find((t) => t.Status === 'Failed')?.ID ??
+            this.RunView?.Tasks[0]?.ID ??
+            null;
+        this.recomputeBlastRadius(target);
+    }
+
+    public OnBlastRadiusRequested(taskID: string): void {
+        const alreadyShowingSame = this.BlastRadiusEnabled && UUIDsEqual(this.SelectedTaskID ?? '', taskID);
+        this.SelectedTaskID = taskID;
+        this.OnToggleBlastRadius(!alreadyShowingSame, taskID);
+    }
+
+    public OnRunStepRequested(taskID: string): void {
+        void this.Step(taskID);
+    }
+
+    public OnRetryStepRequested(taskID: string): void {
+        void this.RetryTask(taskID);
+    }
+
+    private recomputeBlastRadius(targetTaskID: string | null): void {
+        this.BlastRadiusTaskIDs = ComputeBlastRadiusTaskIDs(this.RunView?.Spec, targetTaskID);
+        this.cdr.markForCheck();
     }
 
     public OnRunConnectionSelected(event: TaskGraphRunConnectionSelectedEvent): void {
@@ -283,6 +353,10 @@ export class TaskGraphDebuggerComponent extends BaseAngularComponent implements 
     private onFrame(frame: TaskGraphRunFrame): void {
         this.LatestFrame = frame;
         this.Frame.emit(frame);
+        if (frame.kind === 'PassCompleted') {
+            const pass = frame.passNumber != null ? `#${frame.passNumber}` : 'Pass';
+            this.EnginePulseText = `${pass} · ${frame.eligibleCount ?? 0} ready · ${frame.heldCount ?? 0} held`;
+        }
         if (this.IsSettled && (frame.kind === 'GraphPaused' || frame.kind === 'BreakpointHit')) {
             return;
         }
@@ -336,5 +410,9 @@ export class TaskGraphDebuggerComponent extends BaseAngularComponent implements 
         this.EdgeOverrides = {};
         this.Invocation = null;
         this.LatestFrame = null;
+        this.BlastRadiusEnabled = false;
+        this.BlastRadiusTaskIDs = [];
+        this.SelectedTaskID = null;
+        this.EnginePulseText = null;
     }
 }

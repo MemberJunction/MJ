@@ -1,283 +1,239 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import '@angular/compiler';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { ChangeDetectorRef } from '@angular/core';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import { MJCollectionEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ArtifactIconService } from '@memberjunction/ng-artifacts';
+import { CollectionsFullViewComponent } from '../lib/components/collection/collections-full-view.component';
+import { CollectionFormModalComponent } from '../lib/components/collection/collection-form-modal.component';
+import { ArtifactPermissionService } from '../lib/services/artifact-permission.service';
+import { ArtifactStateService } from '../lib/services/artifact-state.service';
+import { CollectionPermissionService } from '../lib/services/collection-permission.service';
+import { CollectionStateService } from '../lib/services/collection-state.service';
+import { DialogService } from '../lib/services/dialog.service';
+import { ToastService } from '../lib/services/toast.service';
+import { CreateFakeProvider } from '@memberjunction/ng-test-utils';
 
-/**
- * Tests for collections-full-view logic — extracted from the component
- * to verify bug fixes without Angular DI.
- *
- * Bug 1: Renaming a collection set ParentID to itself (self-referencing)
- * Bug 2: All collections showed "Empty" because itemCount was hardcoded to 0
- */
+const TEST_USER = {
+  ID: '11111111-1111-4111-8111-111111111111',
+  Name: 'Amith Nagarajan',
+  Email: 'amith@example.com',
+} as UserInfo;
 
-// ============================================================
-// Bug 1: parentCollection binding when editing vs creating
-// ============================================================
-
-interface MockCollection {
-  ID: string;
-  Name: string;
-  ParentID: string | null;
-}
-
-/**
- * Reproduces the template binding logic:
- *   [parentCollection]="editingCollection ? undefined : (currentCollection || undefined)"
- */
-function resolveParentCollection(
-  editingCollection: MockCollection | undefined,
-  currentCollection: MockCollection | null
-): MockCollection | undefined {
-  return editingCollection ? undefined : (currentCollection || undefined);
-}
-
-describe('Bug 1: parentCollection binding logic', () => {
-  const rootCollection: MockCollection = {
-    ID: 'root-1',
-    Name: 'Root Collection',
-    ParentID: null
-  };
-
-  const childCollection: MockCollection = {
-    ID: 'child-1',
-    Name: 'Child Collection',
-    ParentID: 'root-1'
-  };
-
-  describe('when creating a new collection', () => {
-    it('should pass currentCollection as parentCollection at root level', () => {
-      // At root level, currentCollection is null
-      const parent = resolveParentCollection(undefined, null);
-      expect(parent).toBeUndefined();
-    });
-
-    it('should pass currentCollection as parentCollection when inside a collection', () => {
-      // Inside rootCollection, creating a new sub-collection
-      const parent = resolveParentCollection(undefined, rootCollection);
-      expect(parent).toBe(rootCollection);
-    });
-  });
-
-  describe('when editing an existing collection', () => {
-    it('should NOT pass parentCollection when editing the current collection', () => {
-      // Inside rootCollection, editing rootCollection itself
-      // Before fix: parentCollection = rootCollection (the collection being edited!)
-      // After fix: parentCollection = undefined
-      const parent = resolveParentCollection(rootCollection, rootCollection);
-      expect(parent).toBeUndefined();
-    });
-
-    it('should NOT pass parentCollection when editing a child collection from the list', () => {
-      // Inside rootCollection, editing childCollection from the grid
-      const parent = resolveParentCollection(childCollection, rootCollection);
-      expect(parent).toBeUndefined();
-    });
-
-    it('should NOT pass parentCollection when editing at root level', () => {
-      // At root level, editing rootCollection
-      const parent = resolveParentCollection(rootCollection, null);
-      expect(parent).toBeUndefined();
-    });
-  });
-});
-
-/**
- * Reproduces the form-modal save logic for ParentID:
- *
- *   if (!this.collection) {
- *     // creating new — set ParentID from parentCollection
- *   } else if (this.parentCollection) {
- *     collection.ParentID = this.parentCollection.ID;
- *   }
- */
-function simulateSave(
-  existingCollection: MockCollection | undefined,
-  parentCollection: MockCollection | undefined
-): { parentIdOverwritten: boolean; newParentId: string | null } {
-  if (!existingCollection) {
-    // Creating new collection — parentCollection sets ParentID (expected)
-    return {
-      parentIdOverwritten: !!parentCollection,
-      newParentId: parentCollection?.ID ?? null
-    };
-  } else if (parentCollection) {
-    // Editing existing — parentCollection would overwrite ParentID
-    return {
-      parentIdOverwritten: true,
-      newParentId: parentCollection.ID
-    };
-  }
-  // Editing existing, no parentCollection — ParentID unchanged
+function createMockCollection(overrides: Partial<MJCollectionEntity> = {}): MJCollectionEntity {
   return {
-    parentIdOverwritten: false,
-    newParentId: existingCollection.ParentID
-  };
-}
-
-describe('Bug 1: form-modal save logic for ParentID', () => {
-  const collection: MockCollection = {
     ID: 'col-1',
-    Name: 'My Collection',
-    ParentID: 'parent-1'
-  };
-
-  it('should not overwrite ParentID when editing with no parentCollection (the fix)', () => {
-    // After fix: parentCollection is undefined when editing
-    const result = simulateSave(collection, undefined);
-    expect(result.parentIdOverwritten).toBe(false);
-    expect(result.newParentId).toBe('parent-1'); // Preserved
-  });
-
-  it('would overwrite ParentID if parentCollection were passed during edit (the bug)', () => {
-    // Before fix: parentCollection = the collection itself
-    const result = simulateSave(collection, collection);
-    expect(result.parentIdOverwritten).toBe(true);
-    expect(result.newParentId).toBe('col-1'); // Self-referencing — the bug!
-  });
-
-  it('should set ParentID when creating a new child collection', () => {
-    const parent: MockCollection = { ID: 'parent-1', Name: 'Parent', ParentID: null };
-    const result = simulateSave(undefined, parent);
-    expect(result.parentIdOverwritten).toBe(true);
-    expect(result.newParentId).toBe('parent-1');
-  });
-
-  it('should leave ParentID null when creating a new root collection', () => {
-    const result = simulateSave(undefined, undefined);
-    expect(result.parentIdOverwritten).toBe(false);
-    expect(result.newParentId).toBeNull();
-  });
-});
-
-// ============================================================
-// Bug 2: Item counts always showing "Empty"
-// ============================================================
-
-/**
- * Reproduces the getItemCountText display logic
- */
-function getItemCountText(itemCount?: number): string {
-  if (itemCount !== undefined) {
-    if (itemCount === 0) return 'Empty';
-    if (itemCount === 1) return '1 item';
-    return `${itemCount} items`;
-  }
-  return '';
+    Name: 'Quarterly Reports',
+    Description: 'Finance deliverables',
+    ParentID: 'parent-root-1',
+    OwnerID: TEST_USER.ID,
+    EnvironmentID: 'env-1',
+    Save: vi.fn().mockResolvedValue(true),
+    ...overrides,
+  } as Partial<MJCollectionEntity> as MJCollectionEntity;
 }
 
-/**
- * Reproduces the item count calculation from loadItemCounts:
- * counts child collections + collection artifacts per parent collection
- */
-function buildItemCountMap(
-  childCollections: Array<{ ParentID: string }>,
-  collectionArtifacts: Array<{ CollectionID: string }>
-): Map<string, number> {
-  const map = new Map<string, number>();
+describe('CollectionsFullViewComponent (real production implementation)', () => {
+  let component: CollectionsFullViewComponent;
+  let permissionService: CollectionPermissionService;
+  let savedRecords: MJCollectionEntity[];
 
-  for (const child of childCollections) {
-    map.set(child.ParentID, (map.get(child.ParentID) || 0) + 1);
-  }
+  beforeEach(() => {
+    savedRecords = [];
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
 
-  for (const ca of collectionArtifacts) {
-    map.set(ca.CollectionID, (map.get(ca.CollectionID) || 0) + 1);
-  }
+    const cdr = {
+      detectChanges: vi.fn(),
+      markForCheck: vi.fn(),
+    } as Partial<ChangeDetectorRef> as ChangeDetectorRef;
 
-  return map;
-}
+    const dialogService = {} as DialogService;
+    permissionService = new CollectionPermissionService();
+    const artifactPermissionService = new ArtifactPermissionService(permissionService);
+    const artifactState = new ArtifactStateService(artifactPermissionService);
+    const collectionState = new CollectionStateService();
+    const artifactIconService = new ArtifactIconService();
 
-describe('Bug 2: item count display', () => {
-  describe('getItemCountText', () => {
-    it('should return "Empty" for count 0', () => {
-      expect(getItemCountText(0)).toBe('Empty');
-    });
-
-    it('should return "1 item" for count 1', () => {
-      expect(getItemCountText(1)).toBe('1 item');
-    });
-
-    it('should return "N items" for count > 1', () => {
-      expect(getItemCountText(5)).toBe('5 items');
-    });
-
-    it('should return empty string for undefined', () => {
-      expect(getItemCountText(undefined)).toBe('');
-    });
+    component = new CollectionsFullViewComponent(
+      dialogService,
+      artifactState,
+      collectionState,
+      permissionService,
+      artifactIconService,
+      cdr,
+    );
+    component.CurrentUser = TEST_USER;
+    component.EnvironmentId = 'env-1';
   });
 
-  describe('buildItemCountMap', () => {
-    it('should count child collections per parent', () => {
-      const children = [
-        { ParentID: 'col-1' },
-        { ParentID: 'col-1' },
-        { ParentID: 'col-2' }
-      ];
-      const map = buildItemCountMap(children, []);
-
-      expect(map.get('col-1')).toBe(2);
-      expect(map.get('col-2')).toBe(1);
-    });
-
-    it('should count artifacts per collection', () => {
-      const artifacts = [
-        { CollectionID: 'col-1' },
-        { CollectionID: 'col-1' },
-        { CollectionID: 'col-1' }
-      ];
-      const map = buildItemCountMap([], artifacts);
-
-      expect(map.get('col-1')).toBe(3);
-    });
-
-    it('should sum child collections and artifacts together', () => {
-      const children = [
-        { ParentID: 'col-1' },
-        { ParentID: 'col-1' }
-      ];
-      const artifacts = [
-        { CollectionID: 'col-1' },
-        { CollectionID: 'col-1' },
-        { CollectionID: 'col-1' }
-      ];
-      const map = buildItemCountMap(children, artifacts);
-
-      // 2 children + 3 artifacts = 5 items
-      expect(map.get('col-1')).toBe(5);
-    });
-
-    it('should return 0 (via map miss) for collections with no items', () => {
-      const map = buildItemCountMap([], []);
-      expect(map.get('col-1') || 0).toBe(0);
-    });
-
-    it('should handle multiple collections independently', () => {
-      const children = [
-        { ParentID: 'col-1' },
-        { ParentID: 'col-2' },
-        { ParentID: 'col-2' }
-      ];
-      const artifacts = [
-        { CollectionID: 'col-1' },
-        { CollectionID: 'col-3' }
-      ];
-      const map = buildItemCountMap(children, artifacts);
-
-      expect(map.get('col-1')).toBe(2); // 1 child + 1 artifact
-      expect(map.get('col-2')).toBe(2); // 2 children
-      expect(map.get('col-3')).toBe(1); // 1 artifact
-    });
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  describe('end-to-end: count map feeds display text', () => {
-    it('should show correct text from calculated counts', () => {
-      const children = [{ ParentID: 'col-1' }];
-      const artifacts = [
-        { CollectionID: 'col-1' },
-        { CollectionID: 'col-2' }
-      ];
-      const map = buildItemCountMap(children, artifacts);
+  it('persists view mode and sort preferences through UserInfoEngine instead of localStorage', () => {
+    const setSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced');
 
-      expect(getItemCountText(map.get('col-1') || 0)).toBe('2 items');
-      expect(getItemCountText(map.get('col-2') || 0)).toBe('1 item');
-      expect(getItemCountText(map.get('col-3') || 0)).toBe('Empty');
+    component.ViewMode = 'grid';
+    component.ToggleViewMode();
+    expect(component.ViewMode).toBe('list');
+    expect(setSpy).toHaveBeenCalledWith('collections-view-mode', 'list');
+
+    component.SetViewMode('grid');
+    expect(component.ViewMode).toBe('grid');
+    expect(setSpy).toHaveBeenCalledWith('collections-view-mode', 'grid');
+
+    component.SetSortBy('date');
+    expect(component.SortBy).toBe('date');
+    expect(component.SortOrder).toBe('asc');
+    expect(setSpy).toHaveBeenCalledWith('collections-sort-by', 'date');
+    expect(setSpy).toHaveBeenCalledWith('collections-sort-order', 'asc');
+
+    component.SetSortBy('date');
+    expect(component.SortOrder).toBe('desc');
+    expect(setSpy).toHaveBeenCalledWith('collections-sort-order', 'desc');
+  });
+
+  it('restores view mode and sort preferences from UserInfoEngine during loadData()', async () => {
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) => {
+      if (key === 'collections-view-mode') return 'list';
+      if (key === 'collections-sort-by') return 'type';
+      if (key === 'collections-sort-order') return 'desc';
+      return undefined;
     });
+
+    const fakeProvider = CreateFakeProvider({
+      runViewResults: () => [],
+    });
+    vi.spyOn(permissionService, 'checkPermission').mockResolvedValue(null);
+    component.Provider = fakeProvider;
+
+    await component.loadData();
+
+    expect(component.ViewMode).toBe('list');
+    expect(component.SortBy).toBe('type');
+    expect(component.SortOrder).toBe('desc');
+  });
+
+  it('computes real collection item counts (child collections + collection artifacts) and formats item text', async () => {
+    expect(component.GetItemCountText(undefined)).toBe('No items');
+    expect(component.GetItemCountText(0)).toBe('Empty');
+    expect(component.GetItemCountText(1)).toBe('1 item');
+    expect(component.GetItemCountText(4)).toBe('4 items');
+
+    const rootCol = createMockCollection({ ID: 'col-1', Name: 'Alpha', ParentID: null });
+    const emptyCol = createMockCollection({ ID: 'col-2', Name: 'Beta', ParentID: null });
+
+    const fakeProvider = CreateFakeProvider<object>({
+      runViewResults: (params: RunViewParams): object[] => {
+        if (params.EntityName === 'MJ: Collections') {
+          if (typeof params.ExtraFilter === 'string' && params.ExtraFilter.includes('ParentID IN')) {
+            return [
+              { ID: 'child-1', ParentID: 'col-1' },
+              { ID: 'child-2', ParentID: 'col-1' },
+            ];
+          }
+          return [rootCol, emptyCol];
+        }
+        if (params.EntityName === 'MJ: Collection Artifacts') {
+          if (typeof params.ExtraFilter === 'string' && params.ExtraFilter.includes('CollectionID IN')) {
+            return [
+              { ID: 'ca-1', CollectionID: 'col-1' },
+              { ID: 'ca-2', CollectionID: 'col-1' },
+              { ID: 'ca-3', CollectionID: 'col-1' },
+            ];
+          }
+          return [];
+        }
+        return [];
+      },
+    });
+    vi.spyOn(permissionService, 'checkPermission').mockResolvedValue(null);
+    component.Provider = fakeProvider;
+
+    await component.loadData();
+
+    const byId = new Map(component.UnifiedItems.map((item) => [item.id, item]));
+    expect(byId.get('col-1')?.itemCount).toBe(5); // 2 child collections + 3 artifacts
+    expect(byId.get('col-2')?.itemCount).toBe(0);
+    expect(component.GetItemCountText(byId.get('col-1')?.itemCount)).toBe('5 items');
+    expect(component.GetItemCountText(byId.get('col-2')?.itemCount)).toBe('Empty');
+  });
+
+  it('clears editingCollection for create vs sets editingCollection for edit, and template clears parentCollection when editing', async () => {
+    const templateSource = readFileSync(
+      resolve(__dirname, '../lib/components/collection/collections-full-view.component.ts'),
+      'utf8',
+    );
+    expect(templateSource).toContain(
+      '[parentCollection]="editingCollection ? undefined : (currentCollection || undefined)"',
+    );
+
+    const existing = createMockCollection({ ID: 'col-edit-1', ParentID: 'parent-9' });
+    vi.spyOn(permissionService, 'checkPermission').mockResolvedValue({
+      id: 'perm-col-edit-1',
+      collectionId: existing.ID,
+      userId: TEST_USER.ID,
+      userName: TEST_USER.Name,
+      canRead: true,
+      canEdit: true,
+      canDelete: true,
+      canShare: true,
+      sharedByUserId: TEST_USER.ID,
+      sharedByUserName: TEST_USER.Name,
+      sharedAt: new Date(),
+    });
+
+    await component.EditCollection(existing);
+    expect(component.editingCollection).toBe(existing);
+    expect(component.IsFormModalOpen).toBe(true);
+
+    // Real CollectionFormModalComponent preserves existing ParentID when ParentCollection is undefined
+    const toastService = {
+      success: vi.fn(),
+      error: vi.fn(),
+      info: vi.fn(),
+      warning: vi.fn(),
+    } as Partial<ToastService> as ToastService;
+    const modal = new CollectionFormModalComponent(toastService, permissionService);
+    modal.CurrentUser = TEST_USER;
+    modal.EnvironmentId = 'env-1';
+    modal.Collection = existing;
+    modal.ParentCollection = undefined;
+    modal.FormData = { name: 'Renamed Collection', description: 'Updated' };
+    modal.Provider = {
+      GetEntityObject: vi.fn(async <T>() => existing as T),
+    } as Partial<IMetadataProvider> as IMetadataProvider;
+
+    await modal.OnSave();
+    expect(existing.ParentID).toBe('parent-9');
+    expect(existing.Name).toBe('Renamed Collection');
+    expect(existing.Save).toHaveBeenCalledTimes(1);
+
+    // Create mode clears editingCollection so ParentCollection flows from CurrentCollection
+    component.CurrentCollection = existing;
+    await component.CreateCollection();
+    expect(component.editingCollection).toBeUndefined();
+
+    const newChild = createMockCollection({ ID: 'col-new', ParentID: null, Save: vi.fn(async () => {
+      savedRecords.push(newChild);
+      return true;
+    }) });
+    const createModal = new CollectionFormModalComponent(toastService, permissionService);
+    createModal.CurrentUser = TEST_USER;
+    createModal.EnvironmentId = 'env-1';
+    createModal.Collection = undefined;
+    createModal.ParentCollection = existing;
+    createModal.FormData = { name: 'Child Folder', description: '' };
+    createModal.Provider = {
+      GetEntityObject: vi.fn(async <T>() => newChild as T),
+    } as Partial<IMetadataProvider> as IMetadataProvider;
+    vi.spyOn(permissionService, 'copyParentPermissions').mockResolvedValue(undefined);
+
+    await createModal.OnSave();
+    expect(newChild.ParentID).toBe('col-edit-1');
+    expect(savedRecords).toHaveLength(1);
   });
 });

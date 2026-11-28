@@ -1,8 +1,9 @@
-import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver } from 'type-graphql';
+import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver, AuthorizationError } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, DatasetItemFilterType, DatasetItemResultType, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { GetImpersonationSession, IsEntityForbiddenDuringImpersonation } from '../auth/impersonationGuard.js';
 
 @ObjectType()
 export class DatasetResultType {
@@ -33,6 +34,11 @@ export class DatasetItemFilterTypeGQL {
   @Field(() => String)
   Filter: string;
 }
+
+export const DatasetItemJsonCache = new WeakMap<
+  object,
+  { code: string; entityName: string; entityId: string; dateIso: string; rowCount: number; itemJson: string }
+>();
 
 /**
  * Request handling shared by the dataset queries. Every read runs as the session's user, so the
@@ -76,9 +82,20 @@ export abstract class DatasetResolverBase extends ResolverBase {
     items: DatasetItemResultType[],
     provider: DatabaseProviderBase,
     user: UserInfo,
+    datasetName?: string,
   ): Promise<DatasetItemResultType[]> {
+    const isImpersonating = GetImpersonationSession(user) !== null;
+    const isSystemMetadataDataset = (datasetName ?? '').trim().toLowerCase() === 'mj_metadata';
     return Promise.all(
       items.map(async (item) => {
+        if (isImpersonating && IsEntityForbiddenDuringImpersonation(item.EntityName, user)) {
+          if (!isSystemMetadataDataset) {
+            throw new AuthorizationError(
+              `Dataset item '${item.EntityName}' is prohibited during user impersonation sessions.`
+            );
+          }
+          return { ...item, Results: [] };
+        }
         const entity = provider.EntityByName(item.EntityName);
         if (!item.Results?.length || !entity?.EncryptedFields.some((field) => !field.AllowDecryptInAPI)) {
           return item;
@@ -87,6 +104,54 @@ export abstract class DatasetResolverBase extends ResolverBase {
         return { ...item, Results: await this.ArrayFilterEncryptedFieldsForAPI(item.EntityName, rows, user, provider, 'Name') };
       }),
     );
+  }
+
+  /**
+   * Serializes dataset items to JSON, caching the JSON representation of items whose Results
+   * array is frozen and only contains standard fields.
+   */
+  protected SerializeDatasetItems(items: DatasetItemResultType[]): string {
+    const standardKeys = new Set(['Code', 'EntityName', 'EntityID', 'LatestUpdateDate', 'Results']);
+    const serializedItems: string[] = [];
+
+    for (const item of items) {
+      const isArrayAndFrozen = Array.isArray(item.Results) && Object.isFrozen(item.Results);
+      const hasOnlyStandardKeys = isArrayAndFrozen && Object.keys(item).every((k) => standardKeys.has(k));
+
+      if (hasOnlyStandardKeys) {
+        const dateIso = item.LatestUpdateDate instanceof Date
+          ? item.LatestUpdateDate.toISOString()
+          : String(item.LatestUpdateDate ?? '');
+        const cached = DatasetItemJsonCache.get(item.Results);
+
+        if (
+          cached &&
+          cached.code === item.Code &&
+          cached.entityName === item.EntityName &&
+          cached.entityId === item.EntityID &&
+          cached.dateIso === dateIso &&
+          cached.rowCount === item.Results.length
+        ) {
+          serializedItems.push(cached.itemJson);
+          continue;
+        }
+
+        const itemJson = JSON.stringify(item);
+        DatasetItemJsonCache.set(item.Results, {
+          code: item.Code,
+          entityName: item.EntityName,
+          entityId: item.EntityID,
+          dateIso,
+          rowCount: item.Results.length,
+          itemJson,
+        });
+        serializedItems.push(itemJson);
+      } else {
+        serializedItems.push(JSON.stringify(item));
+      }
+    }
+
+    return `[${serializedItems.join(',')}]`;
   }
 }
 
@@ -113,7 +178,7 @@ export class DatasetResolverExtended extends DatasetResolverBase {
           Success: result.Success,
           Status: result.Status,
           LatestUpdateDate: result.LatestUpdateDate,
-          Results: JSON.stringify(await this.ProtectEncryptedFields(result.Results, md, user)),
+          Results: this.SerializeDatasetItems(await this.ProtectEncryptedFields(result.Results, md, user, DatasetName)),
         };
       } else {
         throw new Error('Error retrieving Dataset: ' + DatasetName);

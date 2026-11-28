@@ -1,10 +1,12 @@
 import type { UserInfo, EntityInfo } from '@memberjunction/core';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import type { UUIDMap } from '@memberjunction/global';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJProcessRunEntity,
   MJProcessRunDetailEntity, PredictiveStudioScoreRecordSetInput,
-  PredictiveStudioTrainAsOf, PredictiveStudioModelTargetStatus } from '@memberjunction/core-entities';
+  PredictiveStudioTrainAsOf, PredictiveStudioModelTransition, PredictiveStudioTransitionRefusal, PredictiveStudioMonitoredPeriod } from '@memberjunction/core-entities';
 import type { ModelingPlanSpec, TrustVerdict, ValidationStrategy, AsOfStrategy, ProblemType,
   PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
+import type { ProvenanceCheck } from '../fixtures/provenance-resolver';
 import type { RunRecords } from './cleanup';
 
 export type WorldID = 'W1-signal' | 'W2-noise' | 'W3-leak-row' | 'W4-pit' | 'W5-censor' | 'W6-drift'
@@ -17,6 +19,9 @@ export type AlgorithmKey = 'logistic_regression' | 'xgboost' | 'lightgbm' | 'ran
 
 // The result shapes are new and mirror no shipped camelCase shape, so their members are PascalCase.
 export interface LoadedDataset { Ref: DatasetRef; Dir: string; Entity: EntityInfo; RowCount: number; RowsSha256: string }
+
+/** A `pstruth` copy table filled from a dataset (`TruthHarness.FillRenamedCopy`): its entity and its row count. */
+export interface RenamedCopy { readonly Entity: EntityInfo; readonly Rows: number }
 
 export interface PipelineSpec {
   Name: string;                       // always prefixed "PSTruth:" (marks suite fixtures)
@@ -44,19 +49,37 @@ export interface TrainAttempt {
 
 export interface CandidateModel {
   // Status unions are derived from the generated entities (never widened to string), so a value CodeGen adds reaches
-  // every comparison as a compile-time change. `Trust` is Core's shipped TrustVerdict, whose members stay camelCase.
+  // every comparison as a compile-time change. `Trust` is Core's TrustVerdict: the model's training run's stored gate decision.
   ModelID: string; PipelineID: string; Algorithm: AlgorithmKey; Status: MJMLModelEntity['Status']; TrainingRowCount: number | null;
+  /** The registry columns (§5.2): the artifact's health as last checked and the SHA-256 the trainer registered. */
+  ArtifactStatus: MJMLModelEntity['ArtifactStatus']; ArtifactSha256: MJMLModelEntity['ArtifactSha256'];
   HoldoutRowCount: number | null; Metrics: Record<string, number>; HoldoutMetrics: Record<string, number>;
   Trust: TrustVerdict; TrainingRunStatus: MJMLTrainingRunEntity['Status'] | null; TrainingRunNotes: string | null; LineageJSON: string | null;
   ValidationResultsJSON: string | null;
+  /** The model row's training run (`MJ: ML Models.TrainingRunID`): the key its publish and refusal records carry (D4-56). */
+  TrainingRunID: MJMLModelEntity['TrainingRunID'];
+  /** The model row's registered delivery (`MJ: ML Models.Delivery` JSON), whose `gate` is its stored gate decision (D-015). */
+  DeliveryJSON: MJMLModelEntity['Delivery'];
 }
 
 // The operation's shipped input minus the model, so the request keeps the operation's own wire names.
 export type ScoreRequest = Omit<PredictiveStudioScoreRecordSetInput, 'modelId'>;
+/** One `PredictiveStudio.ScoreRecordSet` call, read from the operation's result (the `ScoringResult` union on the wire). */
 export interface ScoreAttempt { Ok: boolean; ErrorMessage: string | null;
   /** The operation's refusal code (`RemoteOpResult.ResultCode`) when it refused; null on success or a generic failure. */
-  RefusalCode: PredictiveStudioRefusalCode | null; Scored: number; Failed: number; Skipped: number;
-  WroteBack: boolean; Predictions: Array<{ RecordID: string; Score: number; Class: string | null }>; DurationMs: number }
+  RefusalCode: PredictiveStudioRefusalCode | null;
+  /** The call's `MJ: ML Scoring Runs` row: the output's, or the one a refusal's message names; null when the call wrote none. */
+  ScoringRunID: string | null;
+  /** The scoring run's status; null when the call wrote no run (an input error, a transport failure). */
+  Status: 'completed' | 'refused' | 'failed' | null;
+  /** Records in the scope (a completed or failed run). */
+  Total: number;
+  /** Feature Values written (a completed run with a binding; 0 otherwise). */
+  Written: number;
+  /** Records that failed (a failed run). */
+  Failed: number;
+  /** The predictions returned when nothing was written (no binding, or a dry run), by bare record id. */
+  Predictions: Array<{ RecordID: string; Score: number; Class: string | null }>; DurationMs: number }
 
 export interface RecordProcessScoring {
   ProcessRunID: string; Status: MJProcessRunEntity['Status'];
@@ -69,6 +92,8 @@ export interface AgentStepResult {
   /** The pipelines the run created (whether or not it succeeded), so cleanup can delete them. */
   PipelineIDs: string[];
   WallMs: number;
+  /** The experiment report the run delivered (its payload's `Markdown`); null when the run delivered none. */
+  ReportMarkdown: string | null;
 }
 
 /** What a gate body returns: whether its threshold is met, the measured values and one plain sentence. */
@@ -81,8 +106,29 @@ export interface GateMeasurement {
   Detail: string;
 }
 
-/** What `Promote` reports: whether the operation applied the transition and the model's status after it. */
-export interface PromoteAttempt { Promoted: boolean; Status: MJMLModelEntity['Status'] }
+/** One row of a world's truth.csv (`MembershipYearID,Cycle,TrueP,Drawn,Censored`). */
+export interface WorldTruthRow { readonly Cycle: number; readonly TrueP: number; readonly Censored: boolean }
+
+/** How one builder-agent run is started, beyond its plan. */
+export interface BuilderRunOptions {
+  /**
+   * Supply the protocol the build creates with `autoPublishKeepBaseline: true` (OF4-30, the owner's ruling for the gate
+   * runs of 2026-11-16): a kept simple baseline publishes automatically, so the checks after it decide the publish.
+   */
+  readonly AutoPublishKeepBaseline?: boolean;
+}
+
+/** What `RunMonitoring` reports: the monitored periods as `PredictiveStudio.RunModelMonitoring` returned them, or why it failed. */
+export interface MonitoringAttempt {
+  readonly Ok: boolean;
+  readonly ErrorMessage: string | null;
+  /** Why nothing was monitored (the model is no longer Published); null when the period ran. */
+  readonly Skipped: string | null;
+  readonly Periods: readonly PredictiveStudioMonitoredPeriod[];
+}
+
+/** What `Promote` reports: whether the lifecycle gate applied the transition, the model's status after it, and the gate's refusal (null when applied). */
+export interface PromoteAttempt { Applied: boolean; Status: MJMLModelEntity['Status']; Refusal: PredictiveStudioTransitionRefusal | null }
 
 export interface TruthHarness {
   readonly Provider: GraphQLDataProvider;
@@ -94,17 +140,31 @@ export interface TruthHarness {
   CreatePipeline(spec: PipelineSpec): Promise<MJMLTrainingPipelineEntity>;
   /** Never throws for a failed operation: Ok false, ModelID null, ErrorMessage set. */
   Train(pipeline: MJMLTrainingPipelineEntity, opts?: { MaxRows?: number; AsOf?: PredictiveStudioTrainAsOf }): Promise<TrainAttempt>;
-  RunBuilderAgent(plan: ModelingPlanSpec): Promise<AgentStepResult>;
-  /** Trust = TrustVerdicts.DeriveTrustVerdict(<the loaded MJ: ML Models entity>) — the whole entity, so Lineage reaches the verdict. */
+  /** One Pipeline Builder run of `plan` with publishing on; `options` supplies the protocol's promotion setting. */
+  RunBuilderAgent(plan: ModelingPlanSpec, options?: BuilderRunOptions): Promise<AgentStepResult>;
+  /** Trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults, Lineage }): the model's training run's stored gate decision, with the model's lineage. */
   ReadModel(modelId: string): Promise<CandidateModel>;
   ModelsForPipelineNamePrefix(prefix: string): Promise<CandidateModel[]>;
-  Promote(modelId: string, target: PredictiveStudioModelTargetStatus, reason: string): Promise<PromoteAttempt>;
+  /** Applies one lifecycle transition through `PredictiveStudio.PromoteModel`; a refusal is returned, an operation error thrown. */
+  Promote(modelId: string, transition: PredictiveStudioModelTransition, reason: string): Promise<PromoteAttempt>;
   Score(modelId: string, req: ScoreRequest): Promise<ScoreAttempt>;
+  /** One period of a Published model's monitoring through `PredictiveStudio.RunModelMonitoring` (its `MJ: ML Monitoring Results` row). */
+  RunMonitoring(modelId: string, periodStart: Date): Promise<MonitoringAttempt>;
   ScoreViaRecordProcess(modelId: string, dataset: LoadedDataset, extraFilter: string): Promise<RecordProcessScoring>;
   CountNonNull(dataset: LoadedDataset, column: 'TruthScore'): Promise<number>;
   ResetColumn(dataset: LoadedDataset, column: 'TruthScore'): Promise<void>;
+  /** Fill the `pstruth` copy table `copyTable` with the dataset's rows, the columns of `renames` renamed (G5.1). */
+  FillRenamedCopy(dataset: LoadedDataset, copyTable: string, renames: Readonly<Record<string, string>>): Promise<RenamedCopy>;
   /** The Model Development Agent's user-facing report for one model (live AI model; G0.6's stories); null if none. */
   GenerateStory(modelId: string): Promise<string | null>;
   Judge<TOut>(module: string, args: string[]): Promise<TOut>;       // python -m truthsuite.judges.<module> … → JSON
   WriteArtifact(name: string, data: object): Promise<string>;      // $TRUTH_RESULTS_DIR/artifacts/<name>.json
+  /** The planted truth of a loaded W1–W8 seed, keyed by MembershipYearID (case-insensitive). */
+  ReadWorldTruth(dataset: LoadedDataset): Promise<UUIDMap<WorldTruthRow>>;
+  /** A seeded sample of n primary keys of the dataset's row table. */
+  SampleRowIds(dataset: LoadedDataset, n: number, seed: number): Promise<string[]>;
+  /** Whether one assembled value names its scored row and resolves to its source, source version and computed-at. */
+  ResolveProvenance(check: ProvenanceCheck): Promise<boolean>;
+  /** Route this process's in-process engine calls to the suite sidecar; returns its URL. */
+  UseSuiteSidecar(): string;
 }

@@ -212,6 +212,13 @@ describe("ExecuteAgentAction — inside an agent run, the nested run keeps the c
         expect(WithAgentRunDataTrustApplied(nestedParams()).Params.PrimaryScopeRecordID).toBe(TENANT);
     });
 
+    it("passes the calling run's host-assigned search scopes to the nested run", async () => {
+        await run(new ExecuteAgentAction(), callWith({
+            RunScope: { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null, SearchScopeIDs: [TENANT] },
+        }));
+        expect(nestedParams().SearchScopeIDs).toEqual([TENANT]);
+    });
+
     it('leaves the nested run unscoped for an unscoped run (nulls) and outside a run', async () => {
         await run(new ExecuteAgentAction(), callWith({ RunScope: { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null } }));
         await run(new ExecuteAgentAction(), callWith({}));

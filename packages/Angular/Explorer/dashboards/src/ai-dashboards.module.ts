@@ -14,6 +14,7 @@ import { SharedPipesModule } from './shared/shared-pipes.module';
 import { SearchModule } from '@memberjunction/ng-search';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { MJButtonDirective, MJClickableDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule, MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
+import { ConversationsModule } from '@memberjunction/ng-conversations';
 
 // AI Components
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
@@ -69,10 +70,10 @@ import { AnalyticsRealtimeTranscriptsComponent, LoadAnalyticsRealtimeTranscripts
 
 // AI Overview Hub
 import { AIOverviewHubComponent, LoadAIOverviewHub } from './AI/components/overview/ai-overview-hub.component';
-import {
-  ChiefOfStaffDashboardComponent,
-  LoadChiefOfStaffDashboard
-} from './ChiefOfStaff/chief-of-staff-dashboard.component';
+import { ChiefOfStaffOverviewComponent, LoadChiefOfStaffOverview } from './ChiefOfStaff/chief-of-staff-overview.component';
+import { ChiefOfStaffApprovalsComponent, LoadChiefOfStaffApprovals } from './ChiefOfStaff/chief-of-staff-approvals.component';
+import { ChiefOfStaffGovernanceComponent, LoadChiefOfStaffGovernance } from './ChiefOfStaff/chief-of-staff-governance.component';
+import { ChiefOfStaffAgentChannelsComponent, LoadChiefOfStaffAgentChannels } from './ChiefOfStaff/chief-of-staff-agent-channels.component';
 
 // Knowledge Hub components
 import {
@@ -89,6 +90,10 @@ import {
   LoadVisualizeResource
 } from './KnowledgeHub/components/visualize/visualize-resource.component';
 import { TagCloudComponent } from './KnowledgeHub/components/visualize/tag-cloud/tag-cloud.component';
+import {
+  SemanticGraphExplorerComponent,
+  LoadSemanticGraphExplorerComponent
+} from './KnowledgeHub/components/visualize/semantic-graph/semantic-graph-explorer.component';
 import { RecordDrilldownComponent } from './KnowledgeHub/components/visualize/record-drilldown/record-drilldown.component';
 import {
   SchedulingResourceComponent,
@@ -106,6 +111,7 @@ import { ClusteringModule } from '@memberjunction/ng-clustering';
 import { SchedulingModule } from '@memberjunction/ng-scheduling';
 import { RecordProcessEditorComponent } from '@memberjunction/ng-record-process-studio';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
+import { GraphViewComponent } from '@memberjunction/ng-graph-view';
 
 /**
  * AIDashboardsModule — AI feature area: models, prompts, agents,
@@ -151,6 +157,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ClusterVisualizationResourceComponent,
     VisualizeResourceComponent,
     TagCloudComponent,
+    SemanticGraphExplorerComponent,
     RecordDrilldownComponent,
     SchedulingResourceComponent,
     AnalyticsResourceComponent,
@@ -170,9 +177,13 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     RealtimeManagementComponent,
     AnalyticsRealtimeTranscriptsComponent,
     AIOverviewHubComponent,
-    ChiefOfStaffDashboardComponent
+    ChiefOfStaffOverviewComponent,
+    ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffAgentChannelsComponent,
+    ChiefOfStaffGovernanceComponent
   ],
   imports: [
+    ConversationsModule,
     CompareValueComponent,
     CommonModule,
     FormsModule,
@@ -219,6 +230,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ClusteringModule,
     SchedulingModule,
     MJWordCloudComponent,
+    GraphViewComponent,
     RecordProcessEditorComponent
   ],
   providers: [
@@ -241,6 +253,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     SearchResultDetailComponent,
     ClusterVisualizationResourceComponent,
     VisualizeResourceComponent,
+    SemanticGraphExplorerComponent,
     SchedulingResourceComponent,
     AnalyticsResourceComponent,
     FeaturePipelinesResourceComponent,
@@ -259,7 +272,10 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     RealtimeManagementComponent,
     AnalyticsRealtimeTranscriptsComponent,
     AIOverviewHubComponent,
-    ChiefOfStaffDashboardComponent,
+    ChiefOfStaffOverviewComponent,
+    ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffAgentChannelsComponent,
+    ChiefOfStaffGovernanceComponent,
     SharedDashboardWidgetsModule
   ]
 })
@@ -269,6 +285,7 @@ export class AIDashboardsModule {
         LoadTagsResource();
         LoadClusterVisualizationResource();
         LoadVisualizeResource();
+        LoadSemanticGraphExplorerComponent();
         LoadSchedulingResource();
         LoadAnalyticsResource();
         LoadFeaturePipelinesResource();
@@ -286,6 +303,9 @@ export class AIDashboardsModule {
         LoadRealtimeManagement();
         LoadAnalyticsRealtimeTranscripts();
         LoadAIOverviewHub();
-        LoadChiefOfStaffDashboard();
+        LoadChiefOfStaffOverview();
+        LoadChiefOfStaffApprovals();
+        LoadChiefOfStaffAgentChannels();
+        LoadChiefOfStaffGovernance();
     }
 }

@@ -1,0 +1,66 @@
+:host {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.mjas-trigger {
+  position: relative;
+  padding: 0;
+  border-radius: var(--mj-radius-full, 999px);
+  border: 2px solid var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface-card));
+  color: var(--mj-brand-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.mjas-trigger--rounded {
+  border-radius: var(--mj-radius-md, 12px);
+}
+
+.mjas-trigger:hover:not(:disabled) {
+  transform: scale(1.03);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+}
+
+.mjas-trigger--open {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 28%, transparent);
+}
+
+.mjas-trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+
+.mjas-trigger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mjas-trigger img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mjas-trigger-badge {
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: var(--mj-radius-full, 999px);
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}

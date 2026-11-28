@@ -57,6 +57,12 @@ vi.mock('@memberjunction/core-entities', () => ({
             Config: vi.fn().mockResolvedValue(undefined),
         },
     },
+    UserInfoEngine: {
+        Instance: {
+            Config: vi.fn().mockResolvedValue(undefined),
+            GetSetting: vi.fn().mockReturnValue(undefined),
+        },
+    },
 }));
 
 vi.mock('@memberjunction/ai-agent-client', () => {

@@ -377,7 +377,7 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
           relatedEntityName: rel.RelatedEntity,
           displayName: displayNames[index],
           key: this.relationshipRowKey(rel),
-          count: result.Success ? result.TotalRowCount : 0,
+          count: result.Success ? result.TotalRowCount ?? 0 : 0,
           isExpanded: false,
           records: [],
           isLoadingRecords: false
@@ -462,7 +462,7 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
           organicKey: pair.organicKey,
           relatedEntity: pair.relatedEntity,
           relatedEntityName: pair.relatedEntity.DisplayName || pair.relatedEntity.RelatedEntity,
-          count: result.Success ? result.TotalRowCount : 0,
+          count: result.Success ? result.TotalRowCount ?? 0 : 0,
           isExpanded: false,
           records: [],
           isLoadingRecords: false,

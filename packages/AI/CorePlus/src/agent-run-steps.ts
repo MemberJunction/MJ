@@ -37,8 +37,10 @@ export interface InitAgentRunStepOptions {
     AgentRunID: string;
     /** Sequential step number within the run (1-based). */
     StepNumber: number;
-    /** The kind of step (`Prompt`, `Tool`, `Sub-Agent`, …). */
+    /** The kind of step (`Prompt`, `Tool`, `Sub-Agent`, `Custom`, …). */
     StepType: AgentRunStepType;
+    /** Optional foreign key to `MJ: AI Agent Step Types` (`AIAgentStepType.ID`), populated for custom/registered step types. */
+    StepTypeID?: string | null;
     /** Human-readable name (caller applies any hierarchy breadcrumb before passing it in). */
     StepName: string;
     /** Optional id of the targeted definition (AIPrompt.ID, AIAction.ID, AIAgent.ID, …). Stamped only when a valid UUID. */
@@ -79,6 +81,9 @@ export function InitAgentRunStep(step: MJAIAgentRunStepEntity, opts: InitAgentRu
     step.AgentRunID = opts.AgentRunID;
     step.StepNumber = opts.StepNumber;
     step.StepType = opts.StepType;
+    if (opts.StepTypeID && UUID_REGEX.test(opts.StepTypeID)) {
+        step.StepTypeID = opts.StepTypeID;
+    }
     step.StepName = opts.StepName;
     if (opts.TargetID && UUID_REGEX.test(opts.TargetID)) {
         step.TargetID = opts.TargetID;
@@ -377,6 +382,16 @@ export class AgentRunStepSaveQueue {
      */
     public QueueUpdate(step: MJAIAgentRunStepEntity, applyMutation?: (step: MJAIAgentRunStepEntity) => void): void {
         this.queue.Update(step, applyMutation ? (entity) => applyMutation(entity as MJAIAgentRunStepEntity) : undefined);
+    }
+
+    /**
+     * Resolves once every save queued so far for `step` has settled (its INSERT and any UPDATE behind it),
+     * or at once when none is pending. Never rejects: a failed save is already logged. Await it before writing
+     * a row outside this queue that has a foreign key to the step, such as an `MJ: AI Agent Requests` row's
+     * `OriginatingAgentRunStepID`. {@link Insert}'s prerequisites only order writes within this queue.
+     */
+    public Settled(step: MJAIAgentRunStepEntity): Promise<void> {
+        return this.queue.Settled(step);
     }
 
     /** Awaits every queued save, drains the queue, and returns failure diagnostics. Call at run/goal finalize. */

@@ -6,10 +6,11 @@
  * error classification, and auth retry logic.
  */
 
-import { Injectable } from '@angular/core';
+import { Injectable, NgZone, Optional } from '@angular/core';
 import { LogError, LogStatus, LogStatusEx, Metadata, RunView, IsTransportError as CoreIsTransportError, DescribeTransportError } from '@memberjunction/core';
 import { MJThemeEntity } from '@memberjunction/core-entities';
-import { setupGraphQLClient, GraphQLProviderConfigData, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { GraphQLProviderConfigData, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { SetupAngularGraphQLClient } from '@memberjunction/ng-shared-generic';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ThemeService } from '@memberjunction/ng-shared';
@@ -34,7 +35,8 @@ export class WorkspaceInitializerService {
   constructor(
     private authBase: MJAuthBase,
     private startupValidationService: StartupValidationService,
-    private themeService: ThemeService
+    private themeService: ThemeService,
+    @Optional() private ngZone?: NgZone
   ) { }
 
   /**
@@ -78,7 +80,7 @@ export class WorkspaceInitializerService {
         config.MJAPIURL = environment.MJAPI_URI;
       }
 
-      await setupGraphQLClient(config);
+      await SetupAngularGraphQLClient(config, this.ngZone);
       const end = Date.now();
       LogStatus(`[Workspace] GraphQL client setup complete: ${end - start}ms`);
 
@@ -250,6 +252,7 @@ export class WorkspaceInitializerService {
         EntityName: 'MJ: Themes',
         ExtraFilter: selectedId ? `ID = '${selectedId}' AND Status = 'Active'` : "IsDefault = 1 AND Status = 'Active'",
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'entity_object',
       });
       let theme = result.Success ? result.Results?.[0] : undefined;
@@ -260,6 +263,7 @@ export class WorkspaceInitializerService {
           EntityName: 'MJ: Themes',
           ExtraFilter: "IsDefault = 1 AND Status = 'Active'",
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'entity_object',
         });
         theme = result.Success ? result.Results?.[0] : undefined;

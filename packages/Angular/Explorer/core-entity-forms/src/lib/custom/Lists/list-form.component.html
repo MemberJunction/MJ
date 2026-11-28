@@ -58,6 +58,12 @@
     </div>
   </header>
 
+  <!-- Phone: the rail becomes one button that opens the Sections sheet -->
+  <mj-section-picker class="phone-section-picker"
+                     [Items]="SectionPickerItems"
+                     [ActiveKey]="ActiveSection"
+                     (ActiveKeyChange)="OnSectionPicked($event)"></mj-section-picker>
+
   <!-- Navigation Rail -->
   <nav class="nav-rail">
     @for (nav of navItems; track nav) {
@@ -81,6 +87,32 @@
     <!-- Overview Section -->
     @if (activeSection === 'overview') {
       <section class="section overview-section">
+        @if (ShowSourceReview) {
+          <mj-list-source-review
+            class="overview-source-review"
+            [Provider]="ProviderToUse"
+            [ListID]="record.ID"
+            [IsOwner]="isCurrentUserOwner()"
+            (Approved)="OnSourceApproved()"
+            (KeepPaused)="CloseSourceReview()"
+            (Unlinked)="OnSourceUnlinked()"
+            (OpenSource)="OnOpenListSource($event)">
+          </mj-list-source-review>
+        } @else {
+          <mj-list-source-refresh-panel
+            class="overview-source-refresh"
+            [Provider]="ProviderToUse"
+            [ListID]="record.ID"
+            [IsOwner]="isCurrentUserOwner()"
+            [CanEdit]="UserCanEdit"
+            [ReloadToken]="RefreshReloadToken"
+            (ChangeSource)="ShowLinkSourceDialog = true"
+            (ReviewSourceChange)="OpenSourceReview()"
+            (OpenRoutine)="OnOpenRefreshRoutine($event)"
+            (OpenSource)="OnOpenListSource($event)"
+            (Changed)="OnRefreshStateChanged()">
+          </mj-list-source-refresh-panel>
+        }
         <div class="overview-grid">
           <!-- Description Card -->
           <div class="overview-card description-card">
@@ -333,6 +365,20 @@
       </section>
     }
 
+    <!-- Refresh History Section -->
+    @if (activeSection === 'refresh') {
+      <section class="section refresh-section">
+        <div class="section-header">
+          <h2>Refresh history</h2>
+        </div>
+        <mj-list-refresh-history
+          [Provider]="ProviderToUse"
+          [ListID]="record.ID"
+          [ReloadToken]="RefreshReloadToken">
+        </mj-list-refresh-history>
+      </section>
+    }
+
     <!-- Sharing Section -->
     @if (activeSection === 'sharing') {
       <section class="section sharing-section">
@@ -512,6 +558,15 @@
   </main>
 </div>
 
+<!-- Link Source Dialog -->
+<mj-list-link-source-dialog
+  [Provider]="ProviderToUse"
+  [Visible]="ShowLinkSourceDialog"
+  [ListID]="record?.ID ?? null"
+  (Linked)="OnSourceLinked()"
+  (Cancel)="ShowLinkSourceDialog = false">
+</mj-list-link-source-dialog>
+
 <!-- Add Records Dialog -->
 @if (showAddRecordsDialog) {
   <mj-dialog
@@ -624,15 +679,10 @@
     <div class="dialog-content">
       @if (showAddFromViewLoader && fetchingRecordsToSave) {
         <div class="dialog-loading">
-          <mj-loading text="Loading records from views..." size="small"></mj-loading>
+          <mj-loading text="Adding records from views..." size="small"></mj-loading>
         </div>
       }
-      @if (showAddFromViewLoader && addFromViewTotal > 0 && !fetchingRecordsToSave) {
-        <div class="dialog-loading">
-          <mj-loading [text]="'Adding ' + addFromViewTotal + ' records to list...'" size="small"></mj-loading>
-        </div>
-      }
-      @if (showAddFromViewLoader && !fetchingRecordsToSave && addFromViewTotal === 0) {
+      @if (showAddFromViewLoader && !fetchingRecordsToSave) {
         <div class="dialog-loading">
           <mj-loading text="Loading views..." size="small"></mj-loading>
         </div>

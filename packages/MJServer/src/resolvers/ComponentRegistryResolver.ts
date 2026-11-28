@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Mutation, Resolver } from 'type-graphql';
 import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { UUIDsEqual, MJLruCache } from '@memberjunction/global';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { ResolverBase } from '../generic/ResolverBase.js';
 import { MJComponentRegistryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
@@ -17,6 +17,7 @@ import {
 } from '@memberjunction/component-registry-client-sdk';
 import { AppContext } from '../types.js';
 import { configInfo } from '../config.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 /**
  * GraphQL types for Component Registry operations
@@ -175,10 +176,11 @@ const componentSpecCache = new MJLruCache<string, { specJson: string; hash: stri
 });
 
 @Resolver()
-export class ComponentRegistryExtendedResolver {
+export class ComponentRegistryExtendedResolver extends ResolverBase {
     private componentEngine = ComponentMetadataEngine.Instance;
 
     constructor() {
+        super();
         // No longer pre-initialize clients - create on demand
     }
 
@@ -196,6 +198,11 @@ export class ComponentRegistryExtendedResolver {
      * 1. Client sends hash from a previous fetch → server can return 304 if unchanged
      * 2. Server checks in-memory LRU cache for a cached spec from a recent fetch
      * 3. On miss, fetches from the external registry, caches the result, and returns it
+     *
+     * Deliberately open to scope-limited sessions: rendering an interactive component that depends on
+     * an external-registry component fetches its spec here, including for a guest viewing a shared
+     * artifact. The spec is public component code, not tenant data. The other registry fields refuse
+     * those sessions.
      */
     @Query(() => ComponentSpecWithHashType)
     async GetRegistryComponent(
@@ -208,7 +215,7 @@ export class ComponentRegistryExtendedResolver {
     ): Promise<ComponentSpecWithHashType> {
         try {
             // Get user from cache
-            const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
+            const user = this.GetUserFromPayload(userPayload);
             if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
 
             // Get registry from database by name
@@ -310,6 +317,7 @@ export class ComponentRegistryExtendedResolver {
     /**
      * Search for components in registries
      */
+    @RefuseScopeLimitedPrincipals()
     @Query(() => RegistryComponentSearchResultType)
     async SearchRegistryComponents(
         @Arg('params') params: SearchRegistryComponentsInput,
@@ -317,7 +325,7 @@ export class ComponentRegistryExtendedResolver {
     ): Promise<RegistryComponentSearchResultType> {
         try {
             // Get user from cache
-            const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
+            const user = this.GetUserFromPayload(userPayload);
             if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
             
             // If a specific registry is specified, use only that one
@@ -394,6 +402,7 @@ export class ComponentRegistryExtendedResolver {
     /**
      * Resolve component dependencies
      */
+    @RefuseScopeLimitedPrincipals()
     @Query(() => ComponentDependencyTreeType, { nullable: true })
     async ResolveComponentDependencies(
         @Arg('registryName') registryName: string,
@@ -402,7 +411,7 @@ export class ComponentRegistryExtendedResolver {
     ): Promise<ComponentDependencyTreeType | null> {
         try {
             // Get user from cache
-            const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
+            const user = this.GetUserFromPayload(userPayload);
             if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
             
             // Get registry to find its ID for permission check
@@ -574,6 +583,7 @@ export class ComponentRegistryExtendedResolver {
      * This is a registry-agnostic mutation that allows feedback collection
      * for components from any source registry (Skip, MJ Central, etc.)
      */
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => ComponentFeedbackResponse)
     async SendComponentFeedback(
         @Arg('feedback') feedback: ComponentFeedbackInput,
@@ -581,7 +591,7 @@ export class ComponentRegistryExtendedResolver {
     ): Promise<ComponentFeedbackResponse> {
         try {
             // Get user from cache
-            const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
+            const user = this.GetUserFromPayload(userPayload);
             if (!user) {
                 return {
                     success: false,

@@ -1,7 +1,7 @@
 /**
  * OOP wrapper around {@link CompositeFilterDescriptor}.
  *
- * The descriptor stays the portable JSON (Kendo / User Views). This class is how you
+ * The descriptor stays the portable JSON that User Views persist. This class is how you
  * construct, evaluate, and summarize that JSON. Views still compile to SQL via
  * `GenerateWhereClause`; `Evaluate` is for prices, processes, and anything that is
  * not a single-table WHERE.
@@ -49,6 +49,9 @@ const OPERATOR_LABELS: Record<string, string> = {
     gte: 'is greater than or equal to',
     lt: 'is less than',
     lte: 'is less than or equal to',
+    in: 'is in',
+    notin: 'is not in',
+    between: 'is between',
 };
 
 const HTML_STYLES = {
@@ -104,6 +107,10 @@ export class CompositeFilter {
 
     public get Filters(): (FilterDescriptor | CompositeFilterDescriptor)[] {
         return this.descriptor.filters;
+    }
+
+    public get IsEmpty(): boolean {
+        return this.descriptor.filters.length === 0;
     }
 
     /** Append a rule, a nested descriptor, or another CompositeFilter. */
@@ -187,59 +194,136 @@ export class CompositeFilter {
 
     private static readValue(context: FilterEvalContext, field: string): unknown {
         const { Source, Name } = ParseFilterField(field);
-        const rec = context[Source ?? ''];
+        const sourceKey = Source ?? '';
+        let rec = context[sourceKey];
+        if (rec === undefined && sourceKey !== '') {
+            const lowerSource = sourceKey.trim().toLowerCase();
+            for (const k of Object.keys(context)) {
+                if (k.trim().toLowerCase() === lowerSource) {
+                    rec = context[k];
+                    break;
+                }
+            }
+        }
         if (rec == null) return undefined;
         if (Name.includes('.')) {
             return Name.split('.').reduce<unknown>((acc, part) => {
                 if (acc == null || typeof acc !== 'object') return undefined;
-                return (acc as Record<string, unknown>)[part];
+                return CompositeFilter.readPropertyCaseInsensitive(acc as Record<string, unknown>, part);
             }, rec);
         }
-        return rec[Name];
+        return CompositeFilter.readPropertyCaseInsensitive(rec, Name);
+    }
+
+    private static readPropertyCaseInsensitive(obj: Record<string, unknown>, propName: string): unknown {
+        if (propName in obj) {
+            return obj[propName];
+        }
+        const target = propName.trim().toLowerCase();
+        for (const key of Object.keys(obj)) {
+            if (key.trim().toLowerCase() === target) {
+                return obj[key];
+            }
+        }
+        return undefined;
     }
 
     private static compare(actual: unknown, operator: FilterOperator, expected: unknown): boolean {
         switch (operator) {
             case 'isnull':
+                return actual == null;
             case 'isempty':
                 return actual == null || actual === '';
             case 'isnotnull':
+                return actual != null;
             case 'isnotempty':
                 return actual != null && actual !== '';
             case 'eq':
                 return CompositeFilter.equals(actual, expected);
             case 'neq':
-                return !CompositeFilter.equals(actual, expected);
+                if (expected == null) return actual != null;
+                return actual != null && !CompositeFilter.equals(actual, expected);
             case 'gt':
-                return CompositeFilter.num(actual) > CompositeFilter.num(expected);
+                return CompositeFilter.compareOrdered(actual, expected, (c) => c > 0);
             case 'gte':
-                return CompositeFilter.num(actual) >= CompositeFilter.num(expected);
+                return CompositeFilter.compareOrdered(actual, expected, (c) => c >= 0);
             case 'lt':
-                return CompositeFilter.num(actual) < CompositeFilter.num(expected);
+                return CompositeFilter.compareOrdered(actual, expected, (c) => c < 0);
             case 'lte':
-                return CompositeFilter.num(actual) <= CompositeFilter.num(expected);
+                return CompositeFilter.compareOrdered(actual, expected, (c) => c <= 0);
             case 'contains':
+                if (actual == null || expected == null) return false;
                 return CompositeFilter.str(actual).includes(CompositeFilter.str(expected));
             case 'doesnotcontain':
+                if (actual == null || expected == null) return false;
                 return !CompositeFilter.str(actual).includes(CompositeFilter.str(expected));
             case 'startswith':
+                if (actual == null || expected == null) return false;
                 return CompositeFilter.str(actual).startsWith(CompositeFilter.str(expected));
             case 'endswith':
+                if (actual == null || expected == null) return false;
                 return CompositeFilter.str(actual).endsWith(CompositeFilter.str(expected));
+            case 'in':
+                if (actual == null || !Array.isArray(expected) || expected.length === 0) return false;
+                return expected.some((item) => item != null && CompositeFilter.equals(actual, item));
+            case 'notin':
+                if (actual == null || !Array.isArray(expected)) return false;
+                if (expected.length === 0) return true;
+                if (expected.some((item) => item == null)) return false;
+                return !expected.some((item) => CompositeFilter.equals(actual, item));
+            case 'between':
+                if (actual == null || !Array.isArray(expected) || expected.length !== 2) return false;
+                return (
+                    CompositeFilter.compareOrdered(actual, expected[0], (c) => c >= 0) &&
+                    CompositeFilter.compareOrdered(actual, expected[1], (c) => c <= 0)
+                );
             default:
                 return false;
         }
     }
 
+    private static compareOrdered(actual: unknown, expected: unknown, predicate: (cmp: number) => boolean): boolean {
+        if (actual == null || expected == null) return false;
+        const na = CompositeFilter.num(actual);
+        const nb = CompositeFilter.num(expected);
+        if (!Number.isNaN(na) && !Number.isNaN(nb)) {
+            return predicate(na === nb ? 0 : na < nb ? -1 : 1);
+        }
+        const sa = CompositeFilter.str(actual);
+        const sb = CompositeFilter.str(expected);
+        return predicate(sa === sb ? 0 : sa < sb ? -1 : 1);
+    }
+
     private static equals(a: unknown, b: unknown): boolean {
         if (a == null && b == null) return true;
+        if (a == null || b == null) return false;
         if (typeof a === 'boolean' || typeof b === 'boolean') {
-            return Boolean(a) === Boolean(b === true || b === 'true' || b === 1 || b === '1');
+            const toBool = (v: unknown): boolean => v === true || v === 'true' || v === 1 || v === '1';
+            return toBool(a) === toBool(b);
+        }
+        if (
+            a instanceof Date ||
+            b instanceof Date ||
+            (typeof a === 'string' &&
+                typeof b === 'string' &&
+                CompositeFilter.isISODateCandidate(a) &&
+                CompositeFilter.isISODateCandidate(b))
+        ) {
+            const na = CompositeFilter.num(a);
+            const nb = CompositeFilter.num(b);
+            if (!Number.isNaN(na) && !Number.isNaN(nb)) {
+                return na === nb;
+            }
         }
         if (typeof a === 'number' || typeof b === 'number') {
             return CompositeFilter.num(a) === CompositeFilter.num(b);
         }
         return CompositeFilter.str(a) === CompositeFilter.str(b);
+    }
+
+    private static isISODateCandidate(v: string): boolean {
+        const trimmed = v.trim();
+        return /^\d{4}-\d{2}-\d{2}/.test(trimmed) && Number.isFinite(Date.parse(trimmed));
     }
 
     private static str(v: unknown): string {
@@ -248,9 +332,20 @@ export class CompositeFilter {
     }
 
     private static num(v: unknown): number {
+        if (v == null || v === '' || typeof v === 'boolean') return NaN;
         if (v instanceof Date) return v.getTime();
-        const n = typeof v === 'number' ? v : Number(v);
-        return Number.isFinite(n) ? n : NaN;
+        if (typeof v === 'number') return Number.isFinite(v) ? v : NaN;
+        if (typeof v === 'string') {
+            const trimmed = v.trim();
+            if (trimmed === '') return NaN;
+            const n = Number(trimmed);
+            if (Number.isFinite(n)) return n;
+            if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+                const parsed = Date.parse(trimmed);
+                if (Number.isFinite(parsed)) return parsed;
+            }
+        }
+        return NaN;
     }
 
     private buildText(filter: CompositeFilterDescriptor, options: FilterSummaryOptions): string {
@@ -296,6 +391,9 @@ export class CompositeFilter {
         const label = this.fieldLabel(rule.field, options);
         const op = OPERATOR_LABELS[rule.operator] || rule.operator;
         if (this.isNullOp(rule.operator)) return `${label} ${op}`;
+        if (rule.operator === 'between' && Array.isArray(rule.value) && rule.value.length === 2) {
+            return `${label} ${op} ${this.valueText(rule.value[0])} and ${this.valueText(rule.value[1])}`;
+        }
         return `${label} ${op} ${this.valueText(rule.value)}`;
     }
 
@@ -309,6 +407,9 @@ export class CompositeFilter {
             : `<span style="${HTML_STYLES.fieldName}">${EscapeHtml(fieldLabel)}</span>`;
         const operatorHtml = `<span style="${HTML_STYLES.operator}">${EscapeHtml(OPERATOR_LABELS[rule.operator] || rule.operator)}</span>`;
         if (this.isNullOp(rule.operator)) return `${fieldHtml} ${operatorHtml}`;
+        if (rule.operator === 'between' && Array.isArray(rule.value) && rule.value.length === 2) {
+            return `${fieldHtml} ${operatorHtml} ${this.valueHtml(rule.value[0])} <span style="${HTML_STYLES.operator}">and</span> ${this.valueHtml(rule.value[1])}`;
+        }
         return `${fieldHtml} ${operatorHtml} ${this.valueHtml(rule.value)}`;
     }
 
@@ -334,12 +435,16 @@ export class CompositeFilter {
 
     private valueText(value: unknown): string {
         if (value == null) return '';
+        if (Array.isArray(value)) return `[${value.map((v) => this.valueText(v)).join(', ')}]`;
         if (typeof value === 'boolean') return value ? 'true' : 'false';
         return String(value);
     }
 
     private valueHtml(value: unknown): string {
         if (value == null) return '';
+        if (Array.isArray(value)) {
+            return `(${value.map((v) => this.valueHtml(v)).join(', ')})`;
+        }
         if (typeof value === 'boolean') {
             const style = value ? HTML_STYLES.valueTrue : HTML_STYLES.valueFalse;
             return `<span style="${style}">${value ? 'true' : 'false'}</span>`;

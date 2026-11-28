@@ -50,7 +50,7 @@ Components for action execution, workflow editing, and task management.
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [actions](./actions/README.md) | `@memberjunction/ng-actions` | Reusable components for testing and running actions with no Kendo dependencies |
+| [actions](./actions/README.md) | `@memberjunction/ng-actions` | Reusable components for testing and running actions with no third-party UI dependencies |
 | [action-gallery](./action-gallery/README.md) | `@memberjunction/ng-action-gallery` | Filterable gallery component for browsing and selecting actions |
 | [flow-editor](./flow-editor/README.md) | `@memberjunction/ng-flow-editor` | Generic visual flow editor component powered by Foblex Flow, with an agent-specific Flow Agent Editor |
 | [task-graph-editor](./task-graph-editor/README.md) | `@memberjunction/ng-task-graph-editor` | Canvas for a `TaskGraphSpec` plus the drop-in `<mj-task-graph-debugger>` (frames, VCR, left invocation pane) |
@@ -86,6 +86,7 @@ Components for managing credentials and resource access control.
 |---------|-----|-------------|
 | [credentials](./credentials/README.md) | `@memberjunction/ng-credentials` | Components for credential management -- panels and dialogs for creating and editing credentials |
 | [resource-permissions](./resource-permissions/README.md) | `@memberjunction/ng-resource-permissions` | Generic components for displaying/editing permissions for a resource |
+| [auth-services](./auth-services/README.md) | `@memberjunction/ng-auth-services` | Authentication services with Auth0, MSAL, Okta, Cognito, WorkOS, Magic Link, and Local Dev provider support |
 
 ### UI Utilities
 

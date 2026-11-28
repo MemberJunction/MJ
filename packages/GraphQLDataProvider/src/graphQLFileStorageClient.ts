@@ -655,11 +655,107 @@ export class GraphQLFileStorageClient {
             };
         }
     }
+
+    /**
+     * Mint a short-lived authenticated media access URL for a file in MJ Storage
+     * via the `CreateMediaAccessToken` mutation on `FileResolver`.
+     *
+     * Never throws on transport or empty response — normalizes failures into
+     * `{ Success: false, ErrorMessage }`.
+     *
+     * @param fileId - The ID of the `MJ: Files` record
+     */
+    public async CreateMediaAccessToken(fileId: string): Promise<CreateMediaAccessTokenClientResult> {
+        const trimmedId = (fileId ?? '').trim();
+        if (!trimmedId) {
+            return {
+                Success: false,
+                ErrorMessage: 'fileId is required to create a media access token'
+            };
+        }
+
+        const mutation = gql`
+            mutation CreateMediaAccessToken($fileId: String!) {
+                CreateMediaAccessToken(fileId: $fileId) {
+                    Success
+                    Url
+                    ExpiresAt
+                    MimeType
+                    Peaks
+                    ErrorMessage
+                }
+            }
+        `;
+
+        try {
+            const result = await this._dataProvider.ExecuteGQL(mutation, { fileId: trimmedId });
+            const payload = result?.CreateMediaAccessToken as {
+                Success?: boolean;
+                Url?: string | null;
+                ExpiresAt?: string | null;
+                MimeType?: string | null;
+                Peaks?: number[] | null;
+                ErrorMessage?: string | null;
+            } | undefined;
+
+            if (!payload) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Invalid response from server'
+                };
+            }
+
+            if (!payload.Success) {
+                return {
+                    Success: false,
+                    ErrorMessage: payload.ErrorMessage ?? 'Failed to create media access token'
+                };
+            }
+
+            const tokenResult: CreateMediaAccessTokenClientResult = {
+                Success: true,
+                Url: payload.Url ?? undefined,
+                MimeType: payload.MimeType ?? undefined
+            };
+            if (payload.ExpiresAt != null) {
+                tokenResult.ExpiresAt = payload.ExpiresAt;
+            }
+            if (Array.isArray(payload.Peaks)) {
+                tokenResult.Peaks = payload.Peaks;
+            }
+            return tokenResult;
+        } catch (e) {
+            const errorMsg = (e as Error).message ?? String(e);
+            LogError(`Error creating media access token: ${errorMsg}`);
+            return {
+                Success: false,
+                ErrorMessage: errorMsg
+            };
+        }
+    }
 }
 
 // =========================================================================
 // Type Definitions
 // =========================================================================
+
+/**
+ * Result from minting a short-lived authenticated media access token/URL for an MJ: Files record.
+ */
+export interface CreateMediaAccessTokenClientResult {
+    /** Whether the media access token was minted successfully */
+    Success: boolean;
+    /** Authenticated streaming/download URL for the file (`/media/<fileId>?token=...`) */
+    Url?: string;
+    /** ISO-8601 expiration timestamp for the signed media access token */
+    ExpiresAt?: string;
+    /** Resolved MIME content type of the file */
+    MimeType?: string;
+    /** Optional precomputed waveform peaks (normalized `0..1`, one per bar) */
+    Peaks?: number[];
+    /** Error message when `Success` is false */
+    ErrorMessage?: string;
+}
 
 /**
  * Metadata for a storage object

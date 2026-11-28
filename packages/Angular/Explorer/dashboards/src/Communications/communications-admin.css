@@ -1,0 +1,206 @@
+.comms-admin-shell {
+  display: flex;
+  gap: 1.25rem;
+  min-height: 0;
+  height: 100%;
+}
+
+.comms-admin-rail {
+  width: 230px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 10px;
+  padding: 0.75rem;
+}
+
+.comms-admin-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--mj-text-secondary);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.comms-admin-nav-btn:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.comms-admin-nav-btn.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-border-default));
+  color: var(--mj-brand-primary);
+  font-weight: 600;
+}
+
+.comms-admin-content {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+}
+
+.comms-card {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.comms-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.comms-card-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.comms-card-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--mj-text-muted);
+}
+
+.comms-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.comms-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-bottom: 0.75rem;
+}
+
+.comms-field label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+}
+
+.comms-input,
+.comms-select,
+.comms-textarea {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.comms-textarea {
+  font-family: monospace;
+  min-height: 96px;
+}
+
+.comms-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-card);
+}
+
+.comms-pill--allowed,
+.comms-pill--active,
+.comms-pill--verified {
+  color: var(--mj-status-success-text);
+  background: var(--mj-status-success-bg);
+  border-color: var(--mj-status-success-border);
+}
+
+.comms-pill--deferred,
+.comms-pill--pending {
+  color: var(--mj-status-warning-text);
+  background: var(--mj-status-warning-bg);
+  border-color: var(--mj-status-warning-border);
+}
+
+.comms-pill--blocked,
+.comms-pill--failed,
+.comms-pill--disabled {
+  color: var(--mj-status-error-text);
+  background: var(--mj-status-error-bg);
+  border-color: var(--mj-status-error-border);
+}
+
+.comms-json {
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  padding: 0.875rem;
+  font-family: monospace;
+  font-size: 0.8125rem;
+  color: var(--mj-text-primary);
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.comms-tree-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.comms-tree-row:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.comms-tree-row.selected {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+}
+
+.comms-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.comms-status-msg {
+  font-size: 0.8125rem;
+  color: var(--mj-status-success-text);
+  margin-top: 0.5rem;
+}
+
+.comms-error-msg {
+  font-size: 0.8125rem;
+  color: var(--mj-status-error-text);
+  margin-top: 0.5rem;
+}

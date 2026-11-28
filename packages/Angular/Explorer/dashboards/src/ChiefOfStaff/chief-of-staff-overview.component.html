@@ -1,0 +1,538 @@
+<mj-page-layout>
+    <mj-page-header
+        Title="Overview"
+        Subtitle="Unified approvals, wake briefings, and coordination across your personal and shared agents"
+        Icon="fa-solid fa-compass">
+
+        <div meta>
+            @if (Metrics.PendingApprovalCount > 0) {
+                <mj-stat-badge
+                    Icon="fa-solid fa-bell-concierge"
+                    [Count]="Metrics.PendingApprovalCount"
+                    Label="pending approvals"
+                    Variant="warning">
+                </mj-stat-badge>
+            } @else {
+                <mj-stat-badge
+                    Icon="fa-solid fa-circle-check"
+                    [Count]="0"
+                    Label="pending approvals"
+                    Variant="success">
+                </mj-stat-badge>
+            }
+            <mj-stat-badge
+                Icon="fa-solid fa-clock-rotate-left"
+                [Count]="Metrics.ActiveWakeRoutineCount"
+                Label="active wakes"
+                Variant="info">
+            </mj-stat-badge>
+            @if (PausedChannelCount > 0) {
+                <mj-stat-badge
+                    Icon="fa-solid fa-comments"
+                    [Count]="PausedChannelCount"
+                    Label="paused channels"
+                    Variant="warning">
+                </mj-stat-badge>
+            }
+        </div>
+
+        <div actions>
+            <mj-refresh-button
+                [Loading]="IsLoading"
+                [ShowLabel]="true"
+                (Clicked)="LoadChiefOfStaffData()">
+            </mj-refresh-button>
+            <button
+                mjButton
+                variant="outline"
+                size="sm"
+                type="button"
+                (click)="OpenManageAgents()">
+                <i class="fa-solid fa-robot"></i> Manage Agents
+            </button>
+            <button
+                mjButton
+                variant="primary"
+                size="sm"
+                type="button"
+                (click)="OpenCreateInstanceModal()">
+                <i class="fa-solid fa-plus"></i> New Agent Instance
+            </button>
+        </div>
+    </mj-page-header>
+
+    <mj-page-body>
+        @if (IsLoading) {
+            <div class="cos-loading">
+                <mj-loading text="Loading your agents, approvals, and wakes..."></mj-loading>
+            </div>
+        } @else {
+            <!-- Top Strip: Interactive "My Agents" Cards -->
+            @if (MyOwnedAgents.length === 0) {
+                <div class="cos-setup-callout">
+                    <div class="cos-setup-callout__text">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <div>
+                            <strong>Create your first personal AI agent</strong>
+                            <p>Spin up a personalized Chief of Staff, Research Scout, or specialist agent with its own name, voice, instructions, and governance guardrails.</p>
+                        </div>
+                    </div>
+                    <button mjButton variant="primary" size="sm" type="button" (click)="OpenCreateInstanceModal()">
+                        <i class="fa-solid fa-plus"></i> New Agent Instance
+                    </button>
+                </div>
+            } @else {
+                <section class="cos-strip-section" aria-label="My personal agent instances">
+                    <div class="cos-strip-section__header">
+                        <div class="cos-strip-section__title-group">
+                            <h2 class="cos-strip-section__title">My Agents</h2>
+                            @if (SelectedScopeAgentID) {
+                                <span class="cos-pill cos-pill--info">
+                                    Filtered: {{ SelectedScopeAgentName }}
+                                </span>
+                                <button mjButton variant="flat" size="sm" type="button" (click)="ClearScopeFilter()">
+                                    Show All Agents
+                                </button>
+                            } @else {
+                                <span class="cos-strip-section__hint">Click an agent card to filter approvals and wakes, or personalize directly</span>
+                            }
+                        </div>
+                        <div class="cos-layout-density-toggle" role="group" aria-label="My Agents layout density">
+                            <button
+                                type="button"
+                                class="cos-density-btn"
+                                [class.cos-density-btn--active]="StripDensity === 'cards'"
+                                [attr.aria-pressed]="StripDensity === 'cards'"
+                                title="Cards layout"
+                                (click)="SetStripDensity('cards')">
+                                <i class="fa-solid fa-grip" aria-hidden="true"></i>
+                                <span>Cards</span>
+                            </button>
+                            <button
+                                type="button"
+                                class="cos-density-btn"
+                                [class.cos-density-btn--active]="StripDensity === 'compact'"
+                                [attr.aria-pressed]="StripDensity === 'compact'"
+                                title="Compact strip layout"
+                                (click)="SetStripDensity('compact')">
+                                <i class="fa-solid fa-bars" aria-hidden="true"></i>
+                                <span>Compact</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="cos-agent-strip" [class.cos-agent-strip--compact]="StripDensity === 'compact'">
+                        @for (agent of MyOwnedAgents; track agent.ID) {
+                            @let approvalCount = PendingApprovalCountForAgent(agent.ID);
+                            @let wakeCount = ActiveWakeCountForAgent(agent.ID);
+                            @let avatarUrl = GetAgentAvatarUrlById(agent.ID);
+                            <div
+                                class="cos-agent-card"
+                                [class.cos-agent-card--selected]="IsScopeAgentSelected(agent.ID)"
+                                role="button"
+                                tabindex="0"
+                                [attr.aria-pressed]="IsScopeAgentSelected(agent.ID)"
+                                (click)="ToggleScopeAgent(agent.ID)"
+                                (keydown.enter)="ToggleScopeAgent(agent.ID)"
+                                (keydown.space)="ToggleScopeAgent(agent.ID); $event.preventDefault()">
+                                <div class="cos-agent-card__top">
+                                    <div class="cos-agent-card__identity">
+                                        <span class="cos-agent-avatar" aria-hidden="true">
+                                            @if (avatarUrl) {
+                                                <img [src]="avatarUrl" [alt]="agent.Name" (error)="OnAgentAvatarError(agent.ID)" />
+                                            } @else {
+                                                <i [class]="GetAgentIconClassById(agent.ID)"></i>
+                                            }
+                                        </span>
+                                        <div class="cos-agent-card__titles">
+                                            <div class="cos-agent-card__name">
+                                                <span>{{ agent.Name }}</span>
+                                                @if (agent.IsPrimaryInstance) {
+                                                    <span class="cos-primary-star" title="Primary instance for this template" aria-label="Primary instance">
+                                                        <i class="fa-solid fa-star"></i>
+                                                    </span>
+                                                }
+                                            </div>
+                                            <div class="cos-agent-card__lineage">
+                                                {{ agent.BaseAgentName || 'Personal Agent' }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        mjButton
+                                        variant="flat"
+                                        size="sm"
+                                        type="button"
+                                        title="Configure {{ agent.Name }}"
+                                        (click)="OpenAgentInWorkspace(agent.Name, $event)">
+                                        <i class="fa-solid fa-sliders"></i> Configure
+                                    </button>
+                                </div>
+
+                                <div class="cos-agent-card__badges">
+                                    @if (IsDefaultChatAgent(agent.ID)) {
+                                        <span class="cos-pill cos-pill--ok">
+                                            <i class="fa-solid fa-message"></i> Default Chat
+                                        </span>
+                                    }
+                                    <span class="cos-pill" [class.cos-pill--warn]="approvalCount > 0">
+                                        {{ approvalCount }} {{ approvalCount === 1 ? 'approval' : 'approvals' }}
+                                    </span>
+                                    <span class="cos-pill" [class.cos-pill--info]="wakeCount > 0">
+                                        {{ wakeCount }} {{ wakeCount === 1 ? 'wake' : 'wakes' }}
+                                    </span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+
+            <!-- 2-Column Executive Bento Grid -->
+            <div class="cos-bento-grid">
+                <!-- Left Column: Pending Approvals Across All Agents -->
+                <div class="cos-stack">
+                    <section class="cos-panel">
+                        <div class="cos-panel__header">
+                            <div>
+                                <h3 class="cos-panel__title">
+                                    <i class="fa-solid fa-bell-concierge"></i>
+                                    @if (SelectedScopeAgentName) {
+                                        Pending Approvals — {{ SelectedScopeAgentName }} ({{ ScopedPendingRequests.length }})
+                                    } @else {
+                                        Pending Approvals Across All Agents ({{ ScopedPendingRequests.length }})
+                                    }
+                                </h3>
+                                <p class="cos-panel__subtitle">
+                                    Every escalation across your personal and shared agents with full attribution
+                                </p>
+                            </div>
+                            @if (SelectedScopeAgentID) {
+                                <button mjButton variant="outline" size="sm" type="button" (click)="ClearScopeFilter()">
+                                    All Agents ({{ PendingRequests.length }})
+                                </button>
+                            }
+                            <button
+                                type="button"
+                                class="cos-panel__collapse-btn"
+                                [attr.aria-expanded]="!IsOverviewPanelCollapsed('approvals')"
+                                [title]="IsOverviewPanelCollapsed('approvals') ? 'Expand Pending Approvals' : 'Collapse Pending Approvals'"
+                                (click)="ToggleOverviewPanel('approvals')">
+                                <i class="fa-solid" [class.fa-chevron-up]="!IsOverviewPanelCollapsed('approvals')" [class.fa-chevron-down]="IsOverviewPanelCollapsed('approvals')" aria-hidden="true"></i>
+                            </button>
+                        </div>
+
+                        @if (!IsOverviewPanelCollapsed('approvals')) {
+                            @if (ScopedPendingRequests.length === 0) {
+                            <mj-empty-state
+                                Size="compact"
+                                Variant="success"
+                                Icon="fa-solid fa-circle-check"
+                                [Message]="SelectedScopeAgentName ? ('No pending approvals for ' + SelectedScopeAgentName + '.') : 'No pending requests awaiting approval across your agents.'" />
+                        } @else {
+                            <div class="cos-stack">
+                                @for (req of ScopedPendingRequests; track req.ID) {
+                                    @let reqAgentName = GetAgentDisplayNameById(req.AgentID, req.Agent || 'Agent');
+                                    @let reqLineage = GetAgentBaseLineageById(req.AgentID);
+                                    @let reqAvatar = GetAgentAvatarUrlById(req.AgentID);
+                                    <div class="cos-request-card" (click)="OpenRequestDetail(req)">
+                                        <div class="cos-request-card__top">
+                                            <div class="cos-request-card__badges">
+                                                <button
+                                                    type="button"
+                                                    class="cos-agent-chip"
+                                                    title="Open {{ reqAgentName }} in Agents"
+                                                    (click)="OpenAgentInWorkspace(reqAgentName, $event)">
+                                                    <span class="cos-agent-chip__avatar" aria-hidden="true">
+                                                        @if (reqAvatar) {
+                                                            <img [src]="reqAvatar" [alt]="reqAgentName" (error)="OnAgentAvatarError(req.AgentID)" />
+                                                        } @else {
+                                                            <i [class]="GetAgentIconClassById(req.AgentID)"></i>
+                                                        }
+                                                    </span>
+                                                    <span class="cos-agent-chip__name">{{ reqAgentName }}</span>
+                                                    @if (IsAgentPrimaryById(req.AgentID)) {
+                                                        <i class="fa-solid fa-star cos-primary-star" aria-hidden="true"></i>
+                                                    }
+                                                    @if (reqLineage) {
+                                                        <span class="cos-agent-chip__lineage">· {{ reqLineage }}</span>
+                                                    }
+                                                </button>
+                                                <span class="cos-priority-tag {{ GetPriorityTierClass(req.Priority) }}">
+                                                    {{ GetPriorityTierLabel(req.Priority) }} ({{ req.Priority }})
+                                                </span>
+                                                @if (req.RequestType) {
+                                                    <span class="cos-meta-badge">{{ req.RequestType }}</span>
+                                                }
+                                            </div>
+                                            <span class="cos-timestamp">
+                                                {{ req.RequestedAt | date:'short' }}
+                                            </span>
+                                        </div>
+                                        <p class="cos-request-card__text">{{ req.Request }}</p>
+                                        <div class="cos-request-card__actions">
+                                            <button mjButton variant="primary" size="sm" type="button"
+                                                    [disabled]="BusyRequestID === req.ID"
+                                                    (click)="QuickRespondToRequest(req, 'Approved', $event)">
+                                                <i class="fa-solid fa-check"></i> Approve
+                                            </button>
+                                            <button mjButton variant="danger" size="sm" type="button"
+                                                    [disabled]="BusyRequestID === req.ID"
+                                                    (click)="QuickRespondToRequest(req, 'Rejected', $event)">
+                                                <i class="fa-solid fa-xmark"></i> Reject
+                                            </button>
+                                            <button mjButton variant="outline" size="sm" type="button"
+                                                    (click)="OpenRequestDetail(req); $event.stopPropagation()">
+                                                Inspect
+                                            </button>
+                                        </div>
+                                        @let openDraft = EmailDraftFor(req);
+                                        @if (openDraft) {
+                                            <div class="cos-email-draft" (click)="$event.stopPropagation()">
+                                                <mj-accordion-panel [Bare]="true" Size="sm">
+                                                    <ng-template mjAccordionTitle><i class="fa-solid fa-envelope"></i> Email draft to {{ openDraft.To }}</ng-template>
+                                                    <ng-template mjAccordionActions>
+                                                        <button mjButton variant="outline" size="sm" type="button"
+                                                                title="Copy To, Subject and body as plain text for your mail client"
+                                                                (click)="CopyEmailDraft(req, $event)">
+                                                            <i class="fa-regular fa-copy"></i> Copy
+                                                        </button>
+                                                    </ng-template>
+                                                    <ng-template mjAccordionBody>
+                                                        <div class="cos-email-draft__meta">
+                                                            <div><strong>To:</strong> {{ openDraft.To }}</div>
+                                                            @if (openDraft.CC.length > 0) {
+                                                                <div><strong>CC:</strong> {{ openDraft.CC.join(', ') }}</div>
+                                                            }
+                                                            @if (openDraft.From) {
+                                                                <div><strong>From:</strong> {{ openDraft.From }}</div>
+                                                            }
+                                                            <div><strong>Subject:</strong> {{ openDraft.Subject }}</div>
+                                                        </div>
+                                                        <pre class="cos-email-draft__body">{{ openDraft.Body }}</pre>
+                                                    </ng-template>
+                                                </mj-accordion-panel>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                        }
+                    </section>
+                </div>
+
+                <!-- Right Column: Upcoming Wakes & Briefings + Active Agent Channels -->
+                <div class="cos-stack">
+                    <section class="cos-panel">
+                        <div class="cos-panel__header">
+                            <div>
+                                <h3 class="cos-panel__title">
+                                    <i class="fa-solid fa-clock-rotate-left"></i>
+                                    Upcoming Wakes &amp; Briefings ({{ ScopedUpcomingRoutines.length }})
+                                </h3>
+                                <p class="cos-panel__subtitle">
+                                    @if (SelectedScopeAgentName) {
+                                        Scheduled wakes for {{ SelectedScopeAgentName }}
+                                    } @else {
+                                        Scheduled wakes and briefings across all of your agents
+                                    }
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                class="cos-panel__collapse-btn"
+                                [attr.aria-expanded]="!IsOverviewPanelCollapsed('wakes')"
+                                [title]="IsOverviewPanelCollapsed('wakes') ? 'Expand Upcoming Wakes' : 'Collapse Upcoming Wakes'"
+                                (click)="ToggleOverviewPanel('wakes')">
+                                <i class="fa-solid" [class.fa-chevron-up]="!IsOverviewPanelCollapsed('wakes')" [class.fa-chevron-down]="IsOverviewPanelCollapsed('wakes')" aria-hidden="true"></i>
+                            </button>
+                        </div>
+
+                        @if (!IsOverviewPanelCollapsed('wakes')) {
+                            @if (ScopedUpcomingRoutines.length === 0) {
+                            <mj-empty-state Size="compact" Icon="fa-regular fa-clock" Message="No upcoming wake routines configured yet." />
+                        } @else {
+                            <div class="cos-stack">
+                                @for (routine of ScopedUpcomingRoutines.slice(0, 6); track routine.ID) {
+                                    @let routineAgentName = GetAgentDisplayNameById(routine.TargetID, 'Agent');
+                                    @let routineAvatar = GetAgentAvatarUrlById(routine.TargetID);
+                                    <div class="cos-routine-mini cos-routine-mini--stacked">
+                                        <div class="cos-routine-mini__top">
+                                            @if (routine.TargetID) {
+                                                <button
+                                                    type="button"
+                                                    class="cos-agent-chip"
+                                                    title="Open {{ routineAgentName }} in Agents"
+                                                    (click)="OpenAgentInWorkspace(routineAgentName, $event)">
+                                                    <span class="cos-agent-chip__avatar" aria-hidden="true">
+                                                        @if (routineAvatar) {
+                                                            <img [src]="routineAvatar" [alt]="routineAgentName" (error)="OnAgentAvatarError(routine.TargetID)" />
+                                                        } @else {
+                                                            <i [class]="GetAgentIconClassById(routine.TargetID)"></i>
+                                                        }
+                                                    </span>
+                                                    <span class="cos-agent-chip__name">{{ routineAgentName }}</span>
+                                                    @if (IsAgentPrimaryById(routine.TargetID)) {
+                                                        <i class="fa-solid fa-star cos-primary-star" aria-hidden="true"></i>
+                                                    }
+                                                </button>
+                                            }
+                                            <span class="cos-status-chip cos-status-chip--{{ RoutineStatusLabel(routine).toLowerCase() }}">
+                                                {{ RoutineStatusLabel(routine) }}
+                                            </span>
+                                        </div>
+                                        <div class="cos-routine-mini__info">
+                                            <div class="cos-routine-mini__title-row">
+                                                <span class="cos-routine-mini__name">{{ routine.Name }}</span>
+                                            </div>
+                                            <div class="cos-routine-mini__meta">
+                                                @if (routine.NextRunAt) {
+                                                    <span>Next wake: {{ routine.NextRunAt | date:'short' }}</span>
+                                                } @else {
+                                                    <span>No next wake scheduled</span>
+                                                }
+                                                @if (routine.CronExpression) {
+                                                    <span>· <code>{{ routine.CronExpression }}</code></span>
+                                                }
+                                            </div>
+                                        </div>
+                                        <div class="cos-routine-mini__actions">
+                                            <button mjButton variant="outline" size="sm" type="button"
+                                                    [disabled]="!CanOpenBriefing(routine)"
+                                                    [title]="CanOpenBriefing(routine) ? 'Read this routine\'s briefings' : 'No briefing yet: the routine has not run'"
+                                                    (click)="OpenBriefingReader(routine, $event)">
+                                                <i class="fa-solid fa-book-open"></i> Read Briefing
+                                            </button>
+                                            <button mjButton variant="outline" size="sm" type="button"
+                                                    [disabled]="BusyRoutineID === routine.ID || IsSpentRoutine(routine)"
+                                                    (click)="ToggleRoutineStatus(routine, $event)">
+                                                <i class="fa-solid" [class.fa-pause]="routine.Status === 'Active'" [class.fa-play]="routine.Status !== 'Active'"></i>
+                                                {{ routine.Status === 'Active' ? 'Pause' : 'Resume' }}
+                                            </button>
+                                            <button mjButton variant="primary" size="sm" type="button"
+                                                    [disabled]="BusyRoutineID === routine.ID"
+                                                    title="Run this wake now without changing its schedule"
+                                                    (click)="TriggerWakeNow(routine, $event)">
+                                                <i class="fa-solid fa-bolt"></i> Wake Now
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        }
+                    </section>
+
+                    <!-- Active Agent Channels Summary Card -->
+                    <section class="cos-panel">
+                        <div class="cos-panel__header">
+                            <div>
+                                <h3 class="cos-panel__title">
+                                    <i class="fa-solid fa-comments"></i> Active Agent Channels
+                                </h3>
+                                <p class="cos-panel__subtitle">
+                                    {{ OpenChannelCount }} open · {{ PausedChannelCount }} paused for human review
+                                </p>
+                            </div>
+                            <div class="cos-panel__header-actions">
+                                <button mjButton variant="outline" size="sm" type="button" (click)="OpenAgentChannels()">
+                                    Open Channels
+                                </button>
+                                <button
+                                    type="button"
+                                    class="cos-panel__collapse-btn"
+                                    [attr.aria-expanded]="!IsOverviewPanelCollapsed('channels')"
+                                    [title]="IsOverviewPanelCollapsed('channels') ? 'Expand Active Agent Channels' : 'Collapse Active Agent Channels'"
+                                    (click)="ToggleOverviewPanel('channels')">
+                                    <i class="fa-solid" [class.fa-chevron-up]="!IsOverviewPanelCollapsed('channels')" [class.fa-chevron-down]="IsOverviewPanelCollapsed('channels')" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        @if (!IsOverviewPanelCollapsed('channels')) {
+                            @if (IsLoadingChannels && Channels.length === 0) {
+                            <mj-loading text="Loading agent channels..." size="small"></mj-loading>
+                        } @else if (RecentChannels.length === 0) {
+                            <mj-empty-state Size="compact" Icon="fa-regular fa-comments" Message="No agent-to-agent coordination threads yet." />
+                        } @else {
+                            <div class="cos-stack">
+                                @for (ch of RecentChannels; track ch.ID) {
+                                    <div class="cos-channel-summary-row" (click)="OpenAgentChannels()">
+                                        <div class="cos-channel-summary-row__top">
+                                            <span class="cos-channel-summary-row__topic">{{ ch.Topic }}</span>
+                                            <span class="cos-pill"
+                                                  [class.cos-pill--warn]="ch.ChannelStatus === 'Paused For Human'"
+                                                  [class.cos-pill--ok]="ch.ChannelStatus === 'Open'">
+                                                {{ ch.ChannelStatus }}
+                                            </span>
+                                        </div>
+                                        <div class="cos-channel-summary-row__meta">
+                                            <span>{{ FormatChannelParticipantsSummary(ch.ID) }}</span>
+                                            <span>{{ ch.ConsecutiveAgentTurns }}/{{ ch.MaxConsecutiveAgentTurns }} turns</span>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        }
+                    </section>
+                </div>
+            </div>
+        }
+    </mj-page-body>
+
+    <!-- Briefing reader: a wake routine's conversation, read without leaving the page. -->
+    <mj-slide-panel
+        Mode="slide"
+        [Title]="BriefingRoutine?.Name ?? 'Briefings'"
+        [Visible]="IsBriefingReaderOpen"
+        [Resizable]="true"
+        [WidthPx]="760"
+        (Closed)="CloseBriefingReader()">
+        @if (IsBriefingReaderOpen) {
+            <div class="cos-briefing-reader">
+                <mj-conversation-chat-area
+                    [Provider]="Provider"
+                    [EnvironmentId]="BriefingEnvironmentId"
+                    [CurrentUser]="ProviderToUse.CurrentUser"
+                    [Conversation]="BriefingConversation"
+                    [ConversationId]="BriefingConversationId"
+                    [IsNewConversation]="false"
+                    [SuppressNewConversationEmptyState]="true"
+                    [AllowMentions]="false"
+                    [OverlayMode]="false"
+                    [ShowExportButton]="false"
+                    [ShowShareButton]="false"
+                    [ShowArtifactIndicator]="false"
+                    [ShowAgentPicker]="false"
+                    [ShowAgentModePicker]="false"
+                    [ReadOnly]="true"
+                    ReadOnlyMessage="Briefings are written by the wake routine. To change what it checks or when, ask your agent in chat or use the Routines app."
+                    ApplicationScope="Application"
+                    [ApplicationId]="BriefingApplicationId">
+                </mj-conversation-chat-area>
+            </div>
+        }
+    </mj-slide-panel>
+</mj-page-layout>
+
+@if (ShowRequestDialog && SelectedRequest) {
+    <mj-agent-request-dialog
+        [Visible]="ShowRequestDialog"
+        [Request]="SelectedRequest"
+        (Close)="OnRequestDialogClose($event)">
+    </mj-agent-request-dialog>
+}
+
+<mj-agent-instance-editor-modal
+    [Provider]="Provider"
+    [(Visible)]="ShowInstanceEditor"
+    [CurrentUser]="ProviderToUse.CurrentUser"
+    [Mode]="InstanceEditorMode"
+    [EditingAgent]="EditingInstanceAgent"
+    [InitialBaseAgentId]="InitialInstanceBaseAgentId"
+    (Saved)="OnInstanceSaved($event)"
+    (Archived)="OnInstanceArchived()"
+    (ChatToOnboard)="OnInstanceChatToOnboard($event)">
+</mj-agent-instance-editor-modal>

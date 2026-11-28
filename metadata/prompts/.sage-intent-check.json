@@ -58,7 +58,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-6 Luna",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -66,8 +66,8 @@
             "ID": "62B4A73E-C327-433D-9849-E8C454C423FA"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:49:20.717Z",
-            "checksum": "0fbff8e055836faf4ae3e96e5e5a26f1a2665442185baa35f76e4675c832ada6"
+            "lastModified": "2026-11-24T20:27:41.727Z",
+            "checksum": "678044bc528794ef1fbe0c708b488d8a5f0583e4ea828d9e33f0c7a66cd1757a"
           }
         }
       ]
@@ -76,8 +76,8 @@
       "ID": "278E47C4-7D0C-46A7-B178-7C68D1DD9756"
     },
     "sync": {
-      "lastModified": "2026-04-20T23:56:03.857Z",
-      "checksum": "b1218acb99bcd6bcec0f93e9cd68dd8e5b8f829994bf5d85a0e05a837d758616"
+      "lastModified": "2026-11-24T20:27:41.713Z",
+      "checksum": "07d3c64983a9afc55ea5fdd1be97a7e0376701ac17ee430f25d7702c747141b4"
     }
   }
 ]

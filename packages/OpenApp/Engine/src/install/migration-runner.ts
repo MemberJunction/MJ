@@ -30,6 +30,8 @@ interface SkywayConfig {
         Database: string;
         User: string;
         Password: string;
+        /** Skyway calls this for each new connection; `Password` is then not used. */
+        PasswordProvider?: () => Promise<string>;
         Options?: { Encrypt?: boolean; TrustServerCertificate?: boolean; RequestTimeout?: number };
     };
     Migrations: {
@@ -124,6 +126,19 @@ export interface SkywayDatabaseConfig {
     TrustServerCertificate?: boolean;
     /** Request timeout in milliseconds */
     RequestTimeout?: number;
+    /**
+     * PostgreSQL only: the TLS options for every connection the install opens (the migration run
+     * and the metadata refresh after it), in node-postgres' `ssl` shape. Build it with
+     * `BuildPgSslConfig` from `@memberjunction/postgresql-dataprovider` so it follows the shared
+     * `PG_SSL_*` settings. Omit it for plain TCP. SQL Server uses `Encrypt` instead.
+     */
+    SSL?: Record<string, unknown>;
+    /**
+     * PostgreSQL token logins only: gives the password for a new connection. When set, every
+     * connection the migration run and the metadata refresh open asks it for a password, and
+     * `Password` is not used. Build it with `BuildPgPasswordSource` from `@memberjunction/postgresql-dataprovider`.
+     */
+    PasswordSource?: () => Promise<string>;
 }
 
 /**
@@ -182,6 +197,7 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
         // packages are not installed — and a genuinely-missing package gets the actionable
         // optionalDependencies guidance instead of a raw resolver error.
         const Skyway = await ImportSkywayClass('@memberjunction/skyway-core', 'Skyway', 'the Skyway migration engine');
+        AssertPasswordSourceTransport(DatabaseConfig);
         const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders, platform, TransactionMode);
         // Skyway 0.6.x requires an explicit provider, selected by platform.
         config.Provider = await CreateSkywayProvider(platform, config.Database);
@@ -248,6 +264,20 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
             await skyway.Close().catch(() => { /* ignore close errors */ });
         }
     }
+}
+
+/**
+ * Throws when a config has a password source (a token login) but its TLS options do not verify the
+ * server certificate. A token must not go over plain TCP or unverified TLS.
+ */
+export function AssertPasswordSourceTransport(database: { PasswordSource?: () => Promise<string>; SSL?: Record<string, unknown> }): void {
+    if (!database.PasswordSource || (database.SSL && database.SSL.rejectUnauthorized !== false)) {
+        return;
+    }
+    throw new Error(
+        'A PostgreSQL password source (token login) was given, but the TLS options do not verify the server. ' +
+            'Refusing to send the token. Set PG_SSL_MODE to verify-ca or verify-full.',
+    );
 }
 
 /**
@@ -325,6 +355,11 @@ function IsModuleResolutionFailure(error: unknown): boolean {
  *
  * Exported for unit testing of the baseline semantics (B19).
  */
+/** True when a SQL Server host name is an Azure SQL server (ends with `.database.windows.net`). */
+export function IsAzureSqlHost(host: string): boolean {
+    return host.trim().toLowerCase().endsWith('.database.windows.net');
+}
+
 export function BuildSkywayConfig(
     migrationsDir: string,
     schemaName: string,
@@ -346,7 +381,7 @@ export function BuildSkywayConfig(
     // Azure SQL auto-detection is SQL-Server-specific (host ends with
     // .database.windows.net → encryption required). For PostgreSQL the encrypt/
     // trust flags are honored as provided and never Azure-inferred.
-    const isAzureSql = platform === 'sqlserver' && dbConfig.Host.includes('.database.windows.net');
+    const isAzureSql = platform === 'sqlserver' && IsAzureSqlHost(dbConfig.Host);
     const encrypt = dbConfig.Encrypt ?? isAzureSql;
     const trustCert = dbConfig.TrustServerCertificate ?? !isAzureSql;
 
@@ -357,10 +392,14 @@ export function BuildSkywayConfig(
             Database: dbConfig.Database,
             User: dbConfig.User,
             Password: dbConfig.Password,
+            // A token login: Skyway asks the source for each new connection, so a long run never
+            // presents a token that expired after the first connection opened.
+            ...(dbConfig.PasswordSource ? { PasswordProvider: dbConfig.PasswordSource } : {}),
             Options: {
                 Encrypt: encrypt,
                 TrustServerCertificate: trustCert,
                 ...(dbConfig.RequestTimeout ? { RequestTimeout: dbConfig.RequestTimeout } : {}),
+                ...(platform === 'postgresql' && dbConfig.SSL ? { SSL: dbConfig.SSL } : {}),
             },
         },
         Migrations: {

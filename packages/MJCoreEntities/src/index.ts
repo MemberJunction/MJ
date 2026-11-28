@@ -1,6 +1,7 @@
 
 export * from './generated/entity_subclasses.js'
 export * from './generated/remote_operations.js'
+export * from './generated/queries/index.js'
 
 export * from "./custom/MJUserViewEntityExtended";
 export * from "./custom/ReadOnlyExternalBaseEntity";
@@ -13,8 +14,21 @@ export * from './custom/MJComponentEntityExtended';
 export * from './custom/MJEnvironmentEntityExtended';
 export * from './custom/MJTemplateEntityExtended';
 export * from './custom/MJConversationDetailEntityExtended';
+export * from './custom/MJProjectEntityExtended';
 export * from './custom/ConversationWriteAccess';
 export * from './custom/ConversationForkAccess';
+export * from './custom/AnchoredConversationSecurity';
+export * from './custom/ArtifactPermissionDelegate';
+// MJ Docs Unification Phase 0 — Slice 3 exports (PromoteNoteToArtifact)
+export * from './custom/PromoteNoteToArtifact';
+// MJ Docs Unification Phase 0 — Slice 4 exports (batch delegate helpers exported from ArtifactPermissionDelegate)
+export * from './custom/DocumentDesignPresets';
+export * from './custom/DocumentLiveBlockEngine';
+export * from './custom/ArtifactLockValidation';
+export * from './custom/SlideDeckEngine';
+export * from './custom/SpreadsheetEngine';
+export * from './custom/ArtifactPreviewSnapshot';
+export * from './custom/ArtifactSynthesisEngine';
 export * from './custom/MJConversationBranchEntityExtended';
 export * from './custom/MJQueryEntityExtended';
 export * from './custom/QueryDiagnostics';
@@ -42,6 +56,7 @@ export * from './engines/UserViewEngine';
 export * from './engines/FileStorageEngine';
 export * from './engines/MCPEngine';
 export * from './engines/QueryEngine';
+export * from './custom/typedQuery';
 export * from './engines/conversations';
 export * from './engines/knowledgeHubMetadata';
 export * from './engines/InstanceConfigEngine';
@@ -51,6 +66,10 @@ export * from './engines/PermissionEngine';
 export * from './engines/AuditLogTypeEngine';
 export * from './engines/ResourceTypeEngine';
 export * from './engines/IdentityClaimEngine';
+export * from './engines/BrandKitEngine';
+export * from './engines/VideoStudioEngine';
+export * from './engines/CanonGraphEngine';
+export * from './graph';
 
 export * from './custom/PermissionProviders';
 export * from './custom/Permissions';
@@ -60,6 +79,10 @@ export * from './custom/FormScope/FormContributionClaims';
 export * from './custom/FormScope/FormContributionLifecycle';
 export * from './custom/FormScope/FormPanelHides';
 export * from './custom/operations/EvaluateAuthorizationChecks';
+export * from './custom/operations/SynthesizeArtifactFromSourcesOperation';
+export * from './custom/operations/ArtifactEvaluateAiFormulaOperation';
+export * from './custom/operations/ArtifactGuestShareOperations';
+export * from './custom/operations/ArtifactComplianceAuditOperation';
 export { AuthorizationCheckServerOperation, LoadAuthorizationCheckOperation } from './custom/operations/AuthorizationCheckOperation';
 
 export * from './artifact-extraction/artifact-extract-rules';
@@ -68,6 +91,14 @@ export * from './artifact-extraction/artifact-extractor';
 import { LoadPermissionProviders } from './custom/PermissionProviders';
 import { LoadPermissionEntityExtensions } from './custom/Permissions';
 import { LoadAuthorizationCheckOperation } from './custom/operations/AuthorizationCheckOperation';
+import { LoadArtifactPermissionDelegates } from './custom/ArtifactPermissionDelegate';
+import { LoadDocumentLiveBlocks } from './custom/DocumentLiveBlockEngine';
+import { LoadSpreadsheetEngine } from './custom/SpreadsheetEngine';
+import { LoadGraphEdgeProviders } from './graph';
 LoadPermissionProviders();
 LoadPermissionEntityExtensions();
 LoadAuthorizationCheckOperation();
+LoadArtifactPermissionDelegates();
+LoadDocumentLiveBlocks();
+LoadSpreadsheetEngine();
+LoadGraphEdgeProviders();

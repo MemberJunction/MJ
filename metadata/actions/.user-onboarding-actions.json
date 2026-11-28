@@ -138,7 +138,10 @@
       "ForceCodeGeneration": false,
       "Status": "Active",
       "DriverClass": "AssignUserRolesAction",
-      "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55"
+      "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -351,8 +354,8 @@
       "ID": "873F5441-D1A9-497B-AE32-F9D1A23843C6"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:13.938Z",
-      "checksum": "e5f1f7e3db21b1e6667a675dbc14eaf24ed686e3208b3187a655985565a14931"
+      "lastModified": "2026-11-10T23:41:38.088Z",
+      "checksum": "3b2b1f0575d5bbae4b9c6084cfcac1b64a8f5b49055436c806efbe2152f0d5c5"
     }
   },
   {
@@ -366,7 +369,10 @@
       "ForceCodeGeneration": false,
       "Status": "Active",
       "DriverClass": "CreateUserAction",
-      "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55"
+      "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -602,8 +608,8 @@
       "ID": "4A57DE26-16DB-47A4-82AB-DFC74B3152FA"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:13.940Z",
-      "checksum": "880a8b1b363b7eca3dcf963ddc65148c1119eb5ccaf48928ae56874f5e065244"
+      "lastModified": "2026-11-10T23:41:38.099Z",
+      "checksum": "d7df41eff657ab0be6ca52f3bb93d7eeacc1611e4eb7e765de4b980e07862e12"
     }
   },
   {
@@ -617,7 +623,10 @@
       "ForceCodeGeneration": false,
       "Status": "Active",
       "DriverClass": "CreateEmployeeAction",
-      "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55"
+      "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -852,8 +861,8 @@
       "ID": "CC9C1E62-8AB9-4A46-886D-66F6B4295982"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:13.941Z",
-      "checksum": "f290051fb765ae9cb4c65f143da0c4a3f4655b86e51c555c9e871f5b5e64d284"
+      "lastModified": "2026-11-10T23:41:38.111Z",
+      "checksum": "eb45b5ab1e1fe94983bdbf13ddb8d6f475b2fa8919635ce432756bf60d240d93"
     }
   }
 ]

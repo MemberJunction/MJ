@@ -1,0 +1,110 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio: Pipelines With More Than One Published Model",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Which training pipelines hold more than one Published model?",
+      "Description": "The backstop of the publish lock (N8) and of the filtered unique index UX_MLModel_OnePublishedPerPipeline: every pipeline with more than one Published MJ: ML Models row, with the count. While the index exists no such pipeline can be written, so a row here means the index was dropped or disabled outside the migrations. The Predictive Studio registry check remediates each through the lifecycle gate: the model with the newest publish record stays, the others are archived.",
+      "SQL": "@file:SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql",
+      "TechnicalDescription": "The contract's SQL (RegistryInvariantCheck, D-035) with the schema bracketed: SELECT PipelineID, COUNT(*) AS Published FROM [__mj].MLModel WHERE Status = 'Published' GROUP BY PipelineID HAVING COUNT(*) > 1. Unreachable while UX_MLModel_OnePublishedPerPipeline exists; kept as the check that the index is still in force. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": false,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "7963B927-90DF-4D09-84C0-5CB5A66BB2F3"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:49.102Z",
+      "checksum": "db4d08d43791c30e14cd6a1b677b1d4bfc347941daa31ba8c6e6e142ffe127f3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio: Published Models Without A Publish Record",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Which Published models have no publish record, so they were published outside the lifecycle gate?",
+      "Description": "Every Published MJ: ML Models row with a Delivery and no applied publish, rollback or adopt record in MJ: ML Model Publish Records (D4-204). The Predictive Studio registry check archives each through the lifecycle gate (status-written-outside-gate) and rolls the pipeline back when it is left with no Published model.",
+      "SQL": "@file:SQL/predictive-studio-published-models-without-a-publish-record.sql",
+      "TechnicalDescription": "MLModel m WHERE Status = 'Published' AND Delivery IS NOT NULL AND NOT EXISTS an MLModelPublishRecord of the model with Kind = 'publish' and Purpose publish, rollback or adopt (D4-204). Pre-change models (Delivery IS NULL) are the pre-change migration's. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": false,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "1E49AD2D-D4E7-4AFB-8928-FBF3929705AD"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:49.219Z",
+      "checksum": "804cb1b679c5189c93b59f6ceacb0e1c9c5933c3c3700ed763cd6314b87097f4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio: Publish Records Without A Status Change",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Which publish records no longer match their model's status?",
+      "Description": "The newest applied publish, rollback or adopt record (D4-204) of each model whose model is gone or is neither Published nor Archived: a model moved off Published outside the gate (Validated or KeepBaseline, which the registry check restores through the lifecycle gate) or a record that matches no status change (recorded only).",
+      "SQL": "@file:SQL/predictive-studio-publish-records-without-a-status-change.sql",
+      "TechnicalDescription": "MLModelPublishRecord r LEFT JOIN MLModel m: Kind = 'publish', Purpose publish, rollback or adopt (D4-204), the model's newest such record (or the model deleted), and the model missing or its Status not Published or Archived. Returns PublishRecordID, ModelID, TrainingRunID, Purpose, ModelStatus, PipelineID. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": false,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "D478EF50-CCBE-4DE2-A82E-5424E519F5FC"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:49.373Z",
+      "checksum": "6a3258f730d29832c16f6a5db313a7de7255a8601cba45f5fa77a903dc7e44d6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio: Stale Running Scoring Runs",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Which scoring runs have been running since before the threshold?",
+      "Description": "Every MJ: ML Scoring Runs row still running that started before StartedBefore; the Predictive Studio registry check fails each with the reason (default threshold 6 hours).",
+      "SQL": "@file:SQL/predictive-studio-stale-running-scoring-runs.sql",
+      "TechnicalDescription": "SELECT ID, StartedAt FROM MLScoringRun WHERE Status = 'running' AND StartedAt < StartedBefore. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "AD3CF964-E893-4D41-B9E4-9FE0057B8000"
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "StartedBefore",
+            "Type": "date",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "2026-01-01T00:00:00.000Z",
+            "Description": "The instant before which a running scoring run counts as stale (ISO).",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "96F7E45A-E4E3-44B5-868B-DF8056665E47"
+          }
+        }
+      ]
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:49.490Z",
+      "checksum": "ac4eb406386b415501337f006185b4ae58088c74f8e80725452f695374aa2a71"
+    }
+  }
+]

@@ -1,5 +1,89 @@
 # @memberjunction/cli-core
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [d635ec5]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/dynamic-packages@6.3.0-edge.2
+
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [2d938cf]
+- Updated dependencies [2b4969f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [ce32cbf]
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/dynamic-packages@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 16ac431: Fix dynamic imports that break under pnpm (#3741). SearchEngine declares `@elastic/elasticsearch` and `@huggingface/transformers` as optional dependencies and its load errors no longer tell users to add them to their own project. MJServer now logs which resolver module failed to load. Plugin, check-module, AI driver and realtime-bridge native addon names that come from configuration load through `ImportFromHost`, so a package installed by the host application resolves; AIEngine skips the import when the driver class is already registered. A new `check:dynamic-imports` guard fails on a dynamic import of a package the importing package does not declare.
+- Updated dependencies [03bb8b6]
+- Updated dependencies [31cc053]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [c889b72]
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/dynamic-packages@6.3.0-edge.0
+
+## 6.2.0
+
+### Patch Changes
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [709de1a]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [29b16ee]
+- Updated dependencies [81aea34]
+- Updated dependencies [59e32e0]
+- Updated dependencies [4283a82]
+- Updated dependencies [914e6ff]
+- Updated dependencies [2274f42]
+- Updated dependencies [80905a1]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [25f7b82]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [4d647e6]
+- Updated dependencies [17a4137]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/global@6.2.0
+
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- Updated dependencies [59e32e0]
+  - @memberjunction/global@6.2.0-edge.8
+
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [29b16ee]
+- Updated dependencies [4283a82]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+  - @memberjunction/global@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

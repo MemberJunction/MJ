@@ -1,6 +1,18 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  EventEmitter,
+  Input,
+  OnChanges,
+  Output,
+  SimpleChanges,
+  inject,
+} from '@angular/core';
 
+import { CompositeKey, LogError } from '@memberjunction/core';
 import type { ListDelta } from '@memberjunction/lists-base';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
  * Confirmation dialog for any list operation that produced a `ListDelta`
@@ -17,6 +29,10 @@ import type { ListDelta } from '@memberjunction/lists-base';
  *   acknowledgement box. The server still rejects with `DROP_NOT_CONFIRMED`
  *   if `ConfirmDrops` is false — this UI gate is a convenience, not the
  *   source of truth.
+ *
+ * The preview rows show each record's name (the entity's name field), looked up for the
+ * previewed records only. A row shows its ID until the name arrives, and keeps the ID when the
+ * record has no name or the lookup fails.
  */
 @Component({
   standalone: false,
@@ -25,7 +41,15 @@ import type { ListDelta } from '@memberjunction/lists-base';
   styleUrls: ['./list-delta-confirm.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ListDeltaConfirmComponent {
+export class ListDeltaConfirmComponent extends BaseAngularComponent implements OnChanges {
+  private readonly cdr = inject(ChangeDetectorRef);
+
+  /** Names of the previewed records, keyed by record ID. */
+  private recordNames = new Map<string, string>();
+
+  /** Bumped on each lookup so a slow, older lookup can't overwrite a newer one. */
+  private nameLookup = 0;
+
   /**
    * Whether the dialog is rendered. Bound via the same getter/setter
    * pattern used by the sibling share dialog so consumers can drive
@@ -140,6 +164,44 @@ export class ListDeltaConfirmComponent {
   /** @deprecated Use {@link TargetDisplayName}. */
   public get targetDisplayName(): string {
     return this.TargetDisplayName;
+  }
+
+  /** The record's name, or null while it's loading or when it has none. */
+  public RecordName(id: string): string | null {
+    return this.recordNames.get(id) ?? null;
+  }
+
+  public ngOnChanges(changes: SimpleChanges): void {
+    if (changes['Delta'] || changes['PreviewLimit'] || changes['Provider']) {
+      void this.loadRecordNamesAsync();
+    }
+  }
+
+  /** Looks up names for the previewed records. Never throws; on failure the rows keep their IDs. */
+  private async loadRecordNamesAsync(): Promise<void> {
+    const lookup = ++this.nameLookup;
+    this.recordNames = new Map();
+    const delta = this.Delta;
+    const ids = [...new Set([...this.PreviewAdds, ...this.PreviewRemoves])];
+    if (!delta || ids.length === 0) return;
+    try {
+      const provider = this.ProviderToUse;
+      const entity = provider?.EntityByName(delta.EntityName);
+      if (!entity) return;
+      const results = await provider.GetEntityRecordNames(
+        ids.map((id) => ({ EntityName: delta.EntityName, CompositeKey: CompositeKey.FromURLSegment(entity, id) })),
+      );
+      if (lookup !== this.nameLookup) return;
+      const names = new Map<string, string>();
+      (results ?? []).forEach((result, i) => {
+        const name = result?.Success ? result.RecordName?.trim() : undefined;
+        if (name) names.set(ids[i], name);
+      });
+      this.recordNames = names;
+      this.cdr.markForCheck();
+    } catch (e) {
+      LogError(`ListDeltaConfirm: couldn't look up record names for ${delta.EntityName}: ${e}`);
+    }
   }
 
   public OnConfirm(): void {

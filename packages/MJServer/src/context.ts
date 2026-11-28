@@ -7,25 +7,42 @@ import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
 import { GetSigningKeys, GetSystemUser, GetValidationOptions, VerifyUserRecord, ExtractUserInfoFromPayload } from './auth/index.js';
 import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
+import {
+  EvaluateTargetImpersonationEligibility,
+  ParseImpersonationKeyLabel,
+  RunWithImpersonationSession,
+  StampImpersonationSession,
+} from './auth/impersonationGuard.js';
 import { EmailsMatch, ResolveUserLookupEmail, type LoginEmailResolution } from './auth/loginEmailResolution.js';
 import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
+import {
+  EvaluateExternalEmailVerification,
+  IsInviteOnlyMode,
+} from './auth/inviteOnlyPolicy.js';
+import {
+  InviteOnlyAuthenticationError,
+  IsInviteOnlyAuthenticationError,
+} from './auth/inviteOnlyAuthError.js';
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
-import { AuthCache } from './cache.js';
+import { AuthCache, HashAuthToken } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema, configInfo } from './config.js';
 import { BuildPostgreSQLConnectionConfig, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials } from './postgresqlPoolSettings.js';
 import { BuildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
 import { StartupLogger } from './logging/StartupLogger.js';
-import { DataSourceInfo, UserPayload } from './types.js';
+import { DataSourceInfo, ProviderInfo, UserPayload } from './types.js';
+import type { MagicLinkScopeEntry } from './auth/magicLink/types.js';
 import { ReadRequestOrigin } from './requestOrigin.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
+import { RunWithRequestSessionId, StampProviderOriginSessionId } from './requestSessionContext.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
-import { DatabaseProviderBase, UserInfo, type IMetadataProvider, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo, GetDiagnosticContext, type IMetadataProvider, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { PostgreSQLDataProvider, PostgreSQLProviderConfigData } from '@memberjunction/postgresql-dataprovider';
 import { Metadata, IsValidTimeZone, TIME_ZONE_HEADER } from '@memberjunction/core';
 import { IdentityClaimEngineServer } from '@memberjunction/core-entities-server';
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
@@ -48,7 +65,7 @@ function isDebugLogLevel(): boolean {
   if (isDebugLevelCache === undefined) {
     isDebugLevelCache = StartupLogger.resolveLevelFromConfig() === 'debug';
   }
-  return isDebugLevelCache;
+  return isDebugLevelCache || GetDiagnosticContext()?.sessionId != null;
 }
 
 const SESSION_AUDIT_TYPE = 'Session Established';
@@ -370,13 +387,6 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
     jwt.verify(token, GetSigningKeys(issuer), verifyOptions, (err, jwt) => {
       if (jwt && typeof jwt !== 'string' && !err) {
         const payload = jwt.payload ?? jwt;
-
-        // Per-request token confirmation — debug-only (one of the worst
-        // "constantly on" offenders on an authenticated server).
-        if (isDebugLogLevel()) {
-          const userInfo = ExtractUserInfoFromPayload(payload);
-          console.log(`Valid token: ${userInfo.fullName || 'Unknown'} (${userInfo.email || userInfo.preferredUsername || 'Unknown'})`);
-        }
         resolve(payload);
       } else {
         console.warn('Invalid token');
@@ -437,11 +447,9 @@ export const GetUserPayload = async (
       );
 
       if (validationResult.IsValid && validationResult.User && validationResult.APIKeyId) {
-        // Get the user from UserCache to ensure UserRoles is properly populated
+        // Get the user from UserCache in O(1) to ensure UserRoles is properly populated
         // The validationResult.User from APIKeyEngine doesn't include UserRoles
-        const cachedUser = UserCache.Instance.Users.find(
-          u => UUIDsEqual(u.ID, validationResult.User.ID)
-        );
+        const cachedUser = UserCache.Instance.UserByID(validationResult.User.ID);
 
         // Use cached user if available, otherwise fall back to the validation result
         const resolvedUser = cachedUser || validationResult.User;
@@ -452,6 +460,77 @@ export const GetUserPayload = async (
         // concurrent session of the same user (same pattern as
         // BuildMagicLinkSessionUser — see sessionUserClone.ts).
         const userRecord = CloneUserForSessionContext(resolvedUser);
+
+        // Inspect the validated MJ: API Keys record directly from ValidateAPIKey (single lookup),
+        // falling back to ValidateKeyByHash ONLY when a mock/older engine omits APIKey — and
+        // strictly FAIL CLOSED when the key record cannot be read so an impersonation key can
+        // NEVER fall through as an unguarded regular API key on a revoke race or failed RunView.
+        let keyEntity = validationResult.APIKey;
+        if (!keyEntity) {
+          if (!validationResult.APIKeyHash) {
+            throw new AuthenticationError('Invalid API key');
+          }
+          const keyLookup = await apiKeyEngine.ValidateKeyByHash(validationResult.APIKeyHash, systemUser);
+          if (!keyLookup?.Valid || !keyLookup.APIKey) {
+            throw new AuthenticationError('Invalid API key');
+          }
+          keyEntity = keyLookup.APIKey;
+        }
+        const rawKeyExpiryMs = keyEntity.ExpiresAt ? new Date(keyEntity.ExpiresAt).getTime() : NaN;
+        const apiKeyExpiresAtMs = Number.isFinite(rawKeyExpiryMs) ? rawKeyExpiryMs : undefined;
+
+        const parsedImpersonation = ParseImpersonationKeyLabel(keyEntity.Label);
+        let impersonationSession: UserPayload['impersonationSession'] | undefined;
+        if (parsedImpersonation) {
+          if (
+            parsedImpersonation.format === 'v1' &&
+            parsedImpersonation.targetUserId &&
+            !UUIDsEqual(parsedImpersonation.targetUserId, userRecord.ID)
+          ) {
+            throw new AuthenticationError('Invalid API key');
+          }
+
+          // Mid-session TOCTOU protection: re-verify on every request that the target user has NOT
+          // been promoted to Owner, Administrator, Developer, Integration, or User Impersonation.
+          const md = Metadata.Provider; // global-provider-ok: pre-context auth path
+          const targetRoleNames = (userRecord.UserRoles ?? [])
+            .map((ur) => (ur.Role ?? '').trim())
+            .filter(Boolean);
+          const targetRoleIds = new Set(
+            (userRecord.UserRoles ?? [])
+              .map((ur) => (ur.RoleID ? NormalizeUUID(ur.RoleID) : ''))
+              .filter(Boolean)
+          );
+          const eligibility = EvaluateTargetImpersonationEligibility(
+            {
+              ID: userRecord.ID,
+              Name: userRecord.Name,
+              Email: userRecord.Email,
+              Type: userRecord.Type,
+              IsActive: userRecord.IsActive,
+              RoleNames: targetRoleNames,
+              RoleIDs: targetRoleIds,
+            },
+            {
+              actorUserId: parsedImpersonation.actorUserId,
+              systemUserId: systemUser?.ID ?? null,
+              authorizations: md?.Authorizations ?? [],
+              authorizationRoles: md?.AuthorizationRoles ?? [],
+            }
+          );
+          if (!eligibility.Eligible) {
+            throw new AuthenticationError('Impersonated target user is no longer eligible for impersonation');
+          }
+
+          impersonationSession = StampImpersonationSession(userRecord, {
+            apiKeyId: validationResult.APIKeyId,
+            mode: parsedImpersonation.mode,
+            readOnly: parsedImpersonation.readOnly,
+            actorUserId: parsedImpersonation.actorUserId,
+            targetUserId: userRecord.ID,
+            expiresAtMs: apiKeyExpiresAtMs,
+          });
+        }
 
         // Row-filter bindings for this key, rebuilt PER REQUEST from the
         // APIKeysEngineBase cache (staleness envelope = scopeCacheTTLMs, same
@@ -477,6 +556,8 @@ export const GetUserPayload = async (
           sessionId,
           apiKeyId: validationResult.APIKeyId,
           apiKeyHash: validationResult.APIKeyHash,
+          ...(apiKeyExpiresAtMs !== undefined ? { apiKeyExpiresAtMs } : {}),
+          ...(impersonationSession ? { impersonationSession } : {}),
         };
       }
 
@@ -516,7 +597,8 @@ export const GetUserPayload = async (
       throw new AuthenticationError('Missing token');
     }
 
-    const cachedAuth = AuthCache.get(token);
+    const authCacheKey = HashAuthToken(token);
+    const cachedAuth = AuthCache.get(authCacheKey);
     const payload =
       cachedAuth && typeof cachedAuth === 'object'
         ? cachedAuth
@@ -547,7 +629,20 @@ export const GetUserPayload = async (
       }
 
       await verifyAsync(issuer, token);
-      AuthCache.set(token, payload);
+      AuthCache.set(authCacheKey, payload);
+    }
+
+    // Enforce invite-only / verified-email gate before user lookup/provisioning.
+    const issuer = typeof payload.iss === 'string' ? payload.iss : undefined;
+    const matchedProvider = issuer ? AuthProviderFactory.Instance.getByIssuer(issuer) : undefined;
+    const emailVerification = EvaluateExternalEmailVerification({
+      Payload: payload,
+      UserHandling: configInfo.userHandling,
+      ProviderName: matchedProvider?.name,
+      Issuer: issuer,
+    });
+    if (emailVerification.Allowed === false && 'Reason' in emailVerification) {
+      throw new InviteOnlyAuthenticationError(emailVerification.Reason);
     }
 
     // Use provider to extract user information
@@ -564,9 +659,15 @@ export const GetUserPayload = async (
     );
 
     if (!userRecord) {
+      if (IsInviteOnlyMode(configInfo.userHandling)) {
+        throw new InviteOnlyAuthenticationError('Invite-only sign-in refused: no invited user account exists for this email.');
+      }
       console.error(`User ${email} not found`);
       throw new AuthorizationError();
     } else if (!userRecord.IsActive) {
+      if (IsInviteOnlyMode(configInfo.userHandling)) {
+        throw new InviteOnlyAuthenticationError('Invite-only sign-in refused: the invited user account is inactive.');
+      }
       console.error(`User ${email} found but inactive`);
       throw new AuthorizationError();
     }
@@ -576,6 +677,11 @@ export const GetUserPayload = async (
     // the session enforces exactly the link's granted scope (no DB accretion). No-op
     // for everything else.
     const sessionUser = BuildMagicLinkSessionUser(userRecord, payload);
+
+    // Debug-only confirmation of a freshly verified token. It names the user by ID only.
+    if (!cachedAuth && isDebugLogLevel()) {
+      console.log(`Valid token: user ${sessionUser.ID}`);
+    }
 
     // Session-established audit — once per issued token (deduped), fire-and-forget so
     // it never adds latency to the request. The dedup mark is set synchronously here.
@@ -624,7 +730,21 @@ export const GetUserPayload = async (
       }
     }
 
-    return { userRecord: sessionUser, email: sessionUser.Email, sessionId, emailVerified };
+    const tokenExpiresAtMs =
+      typeof payload.exp === 'number' && Number.isFinite(payload.exp) ? payload.exp * 1000 : undefined;
+    const magicLinkScopes =
+      payload['mj_magic_link'] === true && Array.isArray(payload['mj_scopes'])
+        ? (payload['mj_scopes'] as MagicLinkScopeEntry[])
+        : undefined;
+
+    return {
+      userRecord: sessionUser,
+      email: sessionUser.Email,
+      sessionId,
+      emailVerified,
+      ...(tokenExpiresAtMs !== undefined ? { tokenExpiresAtMs } : {}),
+      ...(magicLinkScopes ? { magicLinkScopes } : {}),
+    };
   } catch (error) {
     // An anonymous request presenting no credentials at all (a health check, a CORS
     // preflight-adjacent probe, a client mid-handshake) is routine, same as an expired
@@ -641,8 +761,8 @@ export const GetUserPayload = async (
     }
     // Best-effort failure audit (token scanning / brute-force signal). Never blocks auth.
     void auditLoginFailure(bearerToken, error, requestContext, requestDomain);
-    if (isMissingToken) {
-      throw error; // preserve the original message — see comment above
+    if (isMissingToken || IsInviteOnlyAuthenticationError(error)) {
+      throw error; // preserve explicit missing-token and invite-only refusal messages
     }
     throw new AuthenticationError('Unable to authenticate user');
   }
@@ -680,6 +800,21 @@ function readTimeZoneHeader(req: IncomingMessage): string | undefined {
   return typeof value === 'string' && IsValidTimeZone(value) ? value : undefined;
 }
 
+function readSingleAuthHeader(req: IncomingMessage, headerName: string): string {
+  const raw = req.headers[headerName];
+  if (raw === undefined) {
+    return '';
+  }
+  if (Array.isArray(raw)) {
+    const distinct = Array.from(new Set(raw.map((v) => v.trim()).filter(Boolean)));
+    if (distinct.length > 1) {
+      throw new AuthenticationError(`Conflicting duplicate '${headerName}' headers`);
+    }
+    return distinct[0] ?? '';
+  }
+  return raw.trim();
+}
+
 function extractAuthInputs(req: IncomingMessage): {
   bearerToken: string;
   sessionId: string;
@@ -692,9 +827,14 @@ function extractAuthInputs(req: IncomingMessage): {
   const sessionIdRaw = req.headers['x-session-id'];
   const requestDomain = parseRequestHostname(req.headers.origin);
   const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
-  const bearerToken = req.headers.authorization ?? '';
-  const systemApiKey = String(req.headers['x-mj-api-key']);
-  const userApiKey = String(req.headers['x-api-key']);
+  const bearerToken = readSingleAuthHeader(req, 'authorization');
+  const systemApiKey = readSingleAuthHeader(req, 'x-mj-api-key');
+  const primaryUserApiKey = readSingleAuthHeader(req, 'x-api-key');
+  const altUserApiKey = readSingleAuthHeader(req, 'x-mj-user-api-key');
+  if (primaryUserApiKey && altUserApiKey && primaryUserApiKey !== altUserApiKey) {
+    throw new AuthenticationError('Conflicting user API key headers');
+  }
+  const userApiKey = primaryUserApiKey || altUserApiKey;
   const expressReq = req as e.Request;
 
   const requestContext: RequestContext = {
@@ -702,7 +842,7 @@ function extractAuthInputs(req: IncomingMessage): {
     method: expressReq.method || 'POST',
     operationName: undefined,
     ipAddress: expressReq.ip || expressReq.socket?.remoteAddress || undefined,
-    userAgent: req.headers['user-agent'] as string | undefined,
+    userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined,
   };
 
   return {
@@ -765,7 +905,14 @@ export function CreateUnifiedAuthMiddleware(
       (req as unknown as Record<string, unknown>)['user'] = userPayload;
       (req as unknown as Record<string, unknown>)['mjUser'] = userPayload.userRecord;
 
-      next();
+      const proceed = (): void => {
+        if (typeof RunWithRequestSessionId === 'function') {
+          RunWithRequestSessionId(userPayload.sessionId, () => next());
+        } else {
+          next();
+        }
+      };
+      RunWithImpersonationSession(userPayload.impersonationSession, proceed);
     } catch (error) {
       if (error instanceof TokenExpiredError) {
         res.status(401).json({
@@ -785,6 +932,10 @@ export function CreateUnifiedAuthMiddleware(
       // copy across module/bundler boundaries, where `instanceof` silently never matches.
       if (error instanceof Error && error.message === 'Missing token') {
         res.status(401).json({ error: 'Authentication required' });
+        return;
+      }
+      if (IsInviteOnlyAuthenticationError(error)) {
+        res.status(401).json({ error: error.message });
         return;
       }
       console.error('Auth error:', error);
@@ -807,43 +958,299 @@ export function createUnifiedAuthMiddleware(
  * This function reads the payload and creates per-request database providers.
  */
 export const ContextFunction =
-  ({ setupComplete$, dataSource, dataSources }: { setupComplete$: Subject<unknown>; dataSource: sql.ConnectionPool, dataSources: DataSourceInfo[] }) =>
-  async ({ req }: { req: IncomingMessage }) => {
-    await firstValueFrom(setupComplete$); // wait for setup to complete before processing the request
-
-    // Log the GraphQL operation for debugging (skip introspection noise)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const reqAny = req as any;
-    const operationName: string | undefined = reqAny.body?.operationName;
-    // Per-request GraphQL boundary line — debug-only. Kept (not deleted) so the
-    // data is available when an operator opts into debug, but off by default.
-    if (operationName !== 'IntrospectionQuery' && isDebugLogLevel()) {
-      console.dir(BuildBoundaryLogPayload(operationName), { depth: null, breakLength: 200 });
+  ({ setupComplete$, dataSource, dataSources }: { setupComplete$: Subject<unknown>; dataSource: sql.ConnectionPool, dataSources: DataSourceInfo[] }) => {
+    let isSetupComplete = false;
+    let setupSub: { unsubscribe(): void } | undefined;
+    setupSub = setupComplete$.subscribe({
+      next: () => {
+        isSetupComplete = true;
+        setupSub?.unsubscribe();
+      },
+    });
+    if (isSetupComplete) {
+      setupSub.unsubscribe();
     }
 
-    // Auth already happened in the unified auth middleware — just read the result
-    const expressReq = req as e.Request;
-    const userPayload = expressReq.userPayload;
-    if (!userPayload) {
-      throw new AuthenticationError('No user payload — auth middleware may not have run');
-    }
+    return async ({ req }: { req: IncomingMessage }) => {
+      if (!isSetupComplete) {
+        await firstValueFrom(setupComplete$); // wait for setup to complete before processing the request
+        isSetupComplete = true;
+      }
 
-    if (Metadata.Provider.Entities.length === 0 ) { // global-provider-ok: diagnostic warning about global provider state
-      console.warn('WARNING: No entities found in global/shared metadata, this can often be due to the use of **global** Metadata/RunView/DB Providers in a multi-user environment. Check your code to make sure you are using the providers passed to you in AppContext by MJServer and not calling new Metadata() new RunView() new RunQuery() and similar patterns as those are unstable at times in multi-user server environments!!!'); // global-provider-ok: diagnostic warning text mentions the anti-pattern by name
-    }
+      // Log the GraphQL operation for debugging (skip introspection noise)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const reqAny = req as any;
+      const operationName: string | undefined = reqAny.body?.operationName;
+      // Per-request GraphQL boundary line — debug-only. Kept (not deleted) so the
+      // data is available when an operator opts into debug, but off by default.
+      if (operationName !== 'IntrospectionQuery' && isDebugLogLevel()) {
+        console.dir(BuildBoundaryLogPayload(operationName), { depth: null, breakLength: 200 });
+      }
 
-    // Create per-request provider instance based on database type
-    const providers = await createPerRequestProviders(dataSource, dataSources);
+      // Auth already happened in the unified auth middleware — just read the result
+      const expressReq = req as e.Request;
+      const userPayload = expressReq.userPayload;
+      if (!userPayload) {
+        throw new AuthenticationError('No user payload — auth middleware may not have run');
+      }
 
-    return {
-      dataSource,
-      dataSources,
-      userPayload,
-      providers,
-      ClientIp: expressReq.ip,
-      RequestOrigin: ReadRequestOrigin(req.headers.origin),
+      if (Metadata.Provider.Entities.length === 0 ) { // global-provider-ok: diagnostic warning about global provider state
+        console.warn('WARNING: No entities found in global/shared metadata, this can often be due to the use of **global** Metadata/RunView/DB Providers in a multi-user environment. Check your code to make sure you are using the providers passed to you in AppContext by MJServer and not calling new Metadata() new RunView() new RunQuery() and similar patterns as those are unstable at times in multi-user server environments!!!'); // global-provider-ok: diagnostic warning text mentions the anti-pattern by name
+      }
+
+      const materializedProviders: DatabaseProviderBase[] = [];
+      const providers = await createLazyOrEagerPerRequestProviders(
+        dataSource,
+        dataSources,
+        userPayload.sessionId,
+        materializedProviders,
+      );
+
+      const responseEmitter = expressReq.res as { once?: (event: string, listener: () => void) => void } | undefined;
+      responseEmitter?.once?.('close', () => {
+        for (const provider of materializedProviders) {
+          provider.DetachInvalidationListeners();
+        }
+        materializedProviders.length = 0;
+      });
+
+      const hasRawApiKeyHeader = Boolean(
+        (typeof req.headers['x-api-key'] === 'string' && req.headers['x-api-key'].trim()) ||
+        (Array.isArray(req.headers['x-api-key']) && req.headers['x-api-key'].length > 0) ||
+        (typeof req.headers['x-mj-user-api-key'] === 'string' && req.headers['x-mj-user-api-key'].trim()) ||
+        (Array.isArray(req.headers['x-mj-user-api-key']) && req.headers['x-mj-user-api-key'].length > 0)
+      );
+
+      return {
+        dataSource,
+        dataSources,
+        userPayload,
+        providers,
+        ClientIp: expressReq.ip,
+        RequestOrigin: ReadRequestOrigin(req.headers.origin),
+        UserAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined,
+        HasRawApiKeyHeader: hasRawApiKeyHeader,
+      };
     };
   };
+
+function stampAndTrackMaterializedProvider(
+  provider: DatabaseProviderBase,
+  sessionId: string | undefined,
+  materializedProviders: DatabaseProviderBase[],
+): DatabaseProviderBase {
+  if (typeof StampProviderOriginSessionId === 'function') {
+    StampProviderOriginSessionId(provider, sessionId);
+  }
+  materializedProviders.push(provider);
+  return provider;
+}
+
+/**
+ * Builds lazy per-request `ProviderInfo[]` descriptors for PostgreSQL when global metadata,
+ * `LocalCacheManager`, and the shared PG pool(s) are warm in memory, deferring provider
+ * instantiation until a resolver actually accesses a given provider type.
+ */
+export function TryBuildLazyPostgresProviders(
+  sessionId: string | undefined,
+  materializedProviders: DatabaseProviderBase[],
+): ProviderInfo[] | null {
+  const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool }; // global-provider-ok: bootstrap (per-connection PG pool sharing)
+  const primaryPool = primaryProvider?.DatabaseConnection;
+  if (
+    typeof PostgreSQLDataProvider.CanConfigureFromGlobalSync !== 'function' ||
+    !PostgreSQLDataProvider.CanConfigureFromGlobalSync(primaryPool)
+  ) {
+    return null;
+  }
+
+  const readOnlyPool = PostgreSQLReadOnlyPool.Instance.Pool;
+  const adhocReadOnlyPool = PostgreSQLReadOnlyPool.Instance.AdhocPool;
+  const credentials = ResolvePostgreSQLReadOnlyCredentials(configInfo);
+  if (readOnlyPool && credentials && !PostgreSQLDataProvider.CanConfigureFromGlobalSync(readOnlyPool)) {
+    return null;
+  }
+  if (adhocReadOnlyPool && credentials && !PostgreSQLDataProvider.CanConfigureFromGlobalSync(adhocReadOnlyPool)) {
+    return null;
+  }
+
+  const endpoint = ResolvePostgreSQLEndpoint();
+
+  const buildRwSync = (): DatabaseProviderBase => {
+    const pgConfig = new PostgreSQLProviderConfigData(
+      BuildPostgreSQLConnectionConfig(endpoint, configInfo.databaseSettings, 'api'),
+      mj_core_schema,
+      0,
+      undefined,
+      undefined,
+      false,
+    );
+    pgConfig.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
+    pgConfig.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    pgConfig.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
+    const pgProvider = new PostgreSQLDataProvider();
+    if (!pgProvider.ConfigureFromGlobalSync(pgConfig, primaryPool!)) {
+      throw new Error('PostgreSQLDataProvider.ConfigureFromGlobalSync failed after readiness check');
+    }
+    return stampAndTrackMaterializedProvider(pgProvider, sessionId, materializedProviders);
+  };
+
+  const buildRoSync = (pool: import('pg').Pool, purpose: 'read-only' | 'adhoc-read-only'): DatabaseProviderBase => {
+    const roConfig = new PostgreSQLProviderConfigData(
+      BuildPostgreSQLConnectionConfig({ ...endpoint, ...credentials! }, configInfo.databaseSettings, purpose),
+      mj_core_schema,
+      0,
+      undefined,
+      undefined,
+      false,
+    );
+    const roProvider = new PostgreSQLDataProvider();
+    if (!roProvider.ConfigureFromGlobalSync(roConfig, pool)) {
+      throw new Error(`PostgreSQLDataProvider.ConfigureFromGlobalSync (${purpose}) failed after readiness check`);
+    }
+    return stampAndTrackMaterializedProvider(roProvider, sessionId, materializedProviders);
+  };
+
+  let rwInstance: DatabaseProviderBase | null = null;
+  let roInstance: DatabaseProviderBase | null = null;
+  let adhocRoInstance: DatabaseProviderBase | null = null;
+
+  const lazyProviders: ProviderInfo[] = [
+    {
+      type: 'Read-Write',
+      get provider(): DatabaseProviderBase {
+        if (!rwInstance) {
+          rwInstance = buildRwSync();
+        }
+        return rwInstance;
+      },
+    },
+  ];
+
+  if (readOnlyPool && credentials) {
+    lazyProviders.push({
+      type: 'Read-Only',
+      get provider(): DatabaseProviderBase {
+        if (!roInstance) {
+          roInstance = buildRoSync(readOnlyPool, 'read-only');
+        }
+        return roInstance;
+      },
+    });
+  }
+
+  if (adhocReadOnlyPool && credentials) {
+    lazyProviders.push({
+      type: 'Adhoc-Read-Only',
+      get provider(): DatabaseProviderBase {
+        if (!adhocRoInstance) {
+          adhocRoInstance = buildRoSync(adhocReadOnlyPool, 'adhoc-read-only');
+        }
+        return adhocRoInstance;
+      },
+    });
+  }
+
+  return lazyProviders;
+}
+
+function tryBuildLazySqlServerProviders(
+  dataSource: sql.ConnectionPool,
+  dataSources: DataSourceInfo[],
+  sessionId: string | undefined,
+  materializedProviders: DatabaseProviderBase[],
+): ProviderInfo[] | null {
+  if (resolveDbPlatformFromEnv() === 'postgresql') {
+    return TryBuildLazyPostgresProviders(sessionId, materializedProviders);
+  }
+
+  const buildRwSync = (): DatabaseProviderBase | null => {
+    const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
+    config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
+    config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    config.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
+    const sqlProvider = new SQLServerDataProvider();
+    if (!sqlProvider.ConfigureFromGlobalSync(config)) {
+      return null;
+    }
+    return stampAndTrackMaterializedProvider(sqlProvider, sessionId, materializedProviders);
+  };
+
+  let readOnlyPool: sql.ConnectionPool | null = null;
+  try {
+    readOnlyPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: false });
+  } catch {
+    readOnlyPool = null;
+  }
+
+  if (
+    typeof SQLServerDataProvider.CanConfigureFromGlobalSync !== 'function' ||
+    !SQLServerDataProvider.CanConfigureFromGlobalSync(dataSource)
+  ) {
+    return null;
+  }
+  if (readOnlyPool && !SQLServerDataProvider.CanConfigureFromGlobalSync(readOnlyPool)) {
+    return null;
+  }
+
+  const buildRoSync = (): DatabaseProviderBase | null => {
+    if (!readOnlyPool) {
+      return null;
+    }
+    const rConfig = new SQLServerProviderConfigData(readOnlyPool, mj_core_schema, 0, undefined, undefined, false);
+    const roProvider = new SQLServerDataProvider();
+    if (!roProvider.ConfigureFromGlobalSync(rConfig)) {
+      return null;
+    }
+    return stampAndTrackMaterializedProvider(roProvider, sessionId, materializedProviders);
+  };
+
+  let rwInstance: DatabaseProviderBase | null = null;
+  let roInstance: DatabaseProviderBase | null = null;
+
+  const lazyProviders: ProviderInfo[] = [
+    {
+      type: 'Read-Write',
+      get provider(): DatabaseProviderBase {
+        if (!rwInstance) {
+          rwInstance = buildRwSync() as DatabaseProviderBase;
+        }
+        return rwInstance;
+      },
+    },
+  ];
+
+  if (readOnlyPool) {
+    lazyProviders.push({
+      type: 'Read-Only',
+      get provider(): DatabaseProviderBase {
+        if (!roInstance) {
+          roInstance = buildRoSync() as DatabaseProviderBase;
+        }
+        return roInstance;
+      },
+    });
+  }
+
+  return lazyProviders;
+}
+
+async function createLazyOrEagerPerRequestProviders(
+  dataSource: sql.ConnectionPool,
+  dataSources: DataSourceInfo[],
+  sessionId: string | undefined,
+  materializedProviders: DatabaseProviderBase[],
+): Promise<ProviderInfo[]> {
+  const lazy = tryBuildLazySqlServerProviders(dataSource, dataSources, sessionId, materializedProviders);
+  if (lazy) {
+    return lazy;
+  }
+  const eager = await createPerRequestProviders(dataSource, dataSources);
+  for (const entry of eager) {
+    stampAndTrackMaterializedProvider(entry.provider, sessionId, materializedProviders);
+  }
+  return eager;
+}
 
 /** @deprecated Use {@link ContextFunction}. */
 export const contextFunction = ContextFunction;
@@ -855,7 +1262,7 @@ export const contextFunction = ContextFunction;
 async function createPerRequestProviders(
   dataSource: sql.ConnectionPool,
   dataSources: DataSourceInfo[]
-): Promise<Array<{ provider: DatabaseProviderBase; type: 'Read-Write' | 'Read-Only' }>> {
+): Promise<Array<{ provider: DatabaseProviderBase; type: 'Read-Write' | 'Read-Only' | 'Adhoc-Read-Only' }>> {
   const isPostgres = resolveDbPlatformFromEnv() === 'postgresql';
 
   let p: DatabaseProviderBase;
@@ -863,18 +1270,28 @@ async function createPerRequestProviders(
     p = await createPostgresProvider();
   } else {
     const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
+    config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
+    config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    config.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const sqlProvider = new SQLServerDataProvider();
     await sqlProvider.Config(config);
     p = sqlProvider as unknown as DatabaseProviderBase;
   }
 
-  const providers: Array<{ provider: DatabaseProviderBase; type: 'Read-Write' | 'Read-Only' }> = [
+  const providers: Array<{ provider: DatabaseProviderBase; type: 'Read-Write' | 'Read-Only' | 'Adhoc-Read-Only' }> = [
     { provider: p, type: 'Read-Write' }
   ];
 
   const rp = await CreateReadOnlyProvider(dataSources);
   if (rp) {
     providers.push({ provider: rp, type: 'Read-Only' });
+  }
+
+  if (isPostgres) {
+    const adhocRo = await tryCreatePostgresReadOnlyProvider(PostgreSQLReadOnlyPool.Instance.AdhocPool, 'adhoc-read-only');
+    if (adhocRo) {
+      providers.push({ provider: adhocRo, type: 'Adhoc-Read-Only' });
+    }
   }
 
   return providers;
@@ -887,7 +1304,7 @@ async function createPerRequestProviders(
  */
 export async function CreateReadOnlyProvider(dataSources: DataSourceInfo[]): Promise<DatabaseProviderBase | null> {
   return resolveDbPlatformFromEnv() === 'postgresql'
-    ? tryCreateReadOnlyPostgresProvider()
+    ? tryCreatePostgresReadOnlyProvider(PostgreSQLReadOnlyPool.Instance.Pool, 'read-only')
     : tryCreateReadOnlyProvider(dataSources);
 }
 
@@ -896,8 +1313,6 @@ export async function CreateReadOnlyProvider(dataSources: DataSourceInfo[]): Pro
  * from the primary provider to avoid pool exhaustion.
  */
 async function createPostgresProvider(): Promise<DatabaseProviderBase> {
-  const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
-
   const pgProvider = new PostgreSQLDataProvider();
   const pgConfig = new PostgreSQLProviderConfigData(
     BuildPostgreSQLConnectionConfig(ResolvePostgreSQLEndpoint(), configInfo.databaseSettings, 'api'),
@@ -907,6 +1322,9 @@ async function createPostgresProvider(): Promise<DatabaseProviderBase> {
     undefined,
     false, // use existing metadata from global provider
   );
+  pgConfig.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
+  pgConfig.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+  pgConfig.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
 
   // Share the connection pool from the primary provider to avoid pool exhaustion
   const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool }; // global-provider-ok: bootstrap (per-connection PG pool sharing)
@@ -920,23 +1338,23 @@ async function createPostgresProvider(): Promise<DatabaseProviderBase> {
 }
 
 /**
- * Creates a read-only PostgreSQL per-request provider on the read-only pool MJAPI opened at
- * startup with the read-only login. Returns null when no read-only login is configured, so the
- * caller never falls back to the read-write pool.
+ * Creates a read-only PostgreSQL per-request provider on one of the read-only pools MJAPI opened
+ * at startup with the read-only login. Returns null when no read-only pool/login is configured, so
+ * the caller never falls back to the read-write pool.
  */
-async function tryCreateReadOnlyPostgresProvider(): Promise<DatabaseProviderBase | null> {
-  const readOnlyPool = PostgreSQLReadOnlyPool.Instance.Pool;
+async function tryCreatePostgresReadOnlyProvider(
+  readOnlyPool: import('pg').Pool | null,
+  purpose: 'read-only' | 'adhoc-read-only',
+): Promise<DatabaseProviderBase | null> {
   const credentials = ResolvePostgreSQLReadOnlyCredentials(configInfo);
   if (!readOnlyPool || !credentials) {
     return null;
   }
 
   try {
-    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
-
     const roProvider = new PostgreSQLDataProvider();
     const roConfig = new PostgreSQLProviderConfigData(
-      BuildPostgreSQLConnectionConfig({ ...ResolvePostgreSQLEndpoint(), ...credentials }, configInfo.databaseSettings, 'read-only'),
+      BuildPostgreSQLConnectionConfig({ ...ResolvePostgreSQLEndpoint(), ...credentials }, configInfo.databaseSettings, purpose),
       mj_core_schema,
       0,
       undefined,

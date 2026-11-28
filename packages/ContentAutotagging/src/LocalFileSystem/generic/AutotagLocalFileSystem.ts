@@ -210,6 +210,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
                 }).ToWhereClause(),
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             },
             contextUser,

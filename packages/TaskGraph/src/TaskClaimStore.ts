@@ -81,6 +81,9 @@ export function ContainingPaths(path: string): string[] {
  * Named because SQL Server binds by name, and carrying the name alongside the value keeps a call
  * site from silently shifting every argument by one when a parameter is inserted.
  */
+/** What a waiting-step completion did. */
+export type WaitingStepWriteOutcome = 'Completed' | 'Buffered' | 'Refused';
+
 type GuardedProcParam = { Name: string; Value: unknown };
 
 /** Fields the claim protocol needs from a candidate task. */
@@ -295,6 +298,33 @@ export class TaskClaimStore {
             // flag, not the value, decides whether the column is written.
             { Name: 'Configuration', Value: outcome.Configuration ?? null },
             { Name: 'SetConfiguration', Value: outcome.Configuration !== undefined },
+        ], contextUser);
+    }
+
+    /**
+     * Records this instance's failed run of a task as a scheduled retry: back to `Pending`, the
+     * attempt counted, and not claimable until `delayMilliseconds` from now on the database clock.
+     *
+     * Guarded like {@link CompleteClaimed} (still `In Progress` and claimed by this instance), and on
+     * the attempt cap too, so a stale count can never schedule one retry more than the policy allows.
+     * A refusal means the caller must record the failure as final instead.
+     *
+     * @returns true when the retry was scheduled
+     */
+    public async TryScheduleRetry(
+        provider: IMetadataProvider,
+        taskID: string,
+        maxAttempts: number,
+        delayMilliseconds: number,
+        errorMessage: string | null,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.guardedWrite(provider, 'spTaskGraphScheduleRetry', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'ClaimedBy', Value: this.instanceID },
+            { Name: 'MaxAttempts', Value: maxAttempts },
+            { Name: 'DelayMilliseconds', Value: Math.max(0, Math.min(Math.round(delayMilliseconds), 2_147_483_647)) },
+            { Name: 'ErrorMessage', Value: errorMessage },
         ], contextUser);
     }
 
@@ -871,6 +901,106 @@ export class TaskClaimStore {
             { Name: 'TaskTypeID', Value: workflowTaskTypeID },
             { Name: 'OutputPayload', Value: outputPayload },
         ], contextUser);
+    }
+
+    /**
+     * Marks a reached External, Wait or provider-Human step as waiting, exactly once.
+     *
+     * The marker, the deadline, the correlation key and the payload the step was reached with land
+     * in one statement, so no reader can see a step that is waiting without its deadline or key.
+     * Guarded on the marker being unset, so the rowcount says which instance did it.
+     */
+    public async TryMarkWaiting(
+        provider: IMetadataProvider,
+        taskID: string,
+        marker: string,
+        dueAt: Date | null,
+        correlationKey: string | null,
+        payloadAtStart: string | null,
+        inputTainted: boolean,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.guardedWrite(provider, 'spTaskGraphMarkWaiting', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'Marker', Value: marker },
+            { Name: 'DueAt', Value: dueAt },
+            { Name: 'CorrelationKey', Value: correlationKey },
+            { Name: 'PayloadAtStart', Value: payloadAtStart },
+            { Name: 'InputTainted', Value: inputTainted },
+        ], contextUser);
+    }
+
+    /**
+     * Completes a reached waiting step, or holds the signal on it when it has not been reached.
+     *
+     * The choice is made inside the procedure, under the row lock, because deciding it here would
+     * leave a window in which the dispatcher marks the step between the read and the write.
+     *
+     * @returns `'Completed'`, `'Buffered'`, `'Refused'` (already settled, a Wait step, or a signal is
+     *          already held), or `null` when the statement did not run at all
+     */
+    public async TryCompleteWaitingStep(
+        provider: IMetadataProvider,
+        taskID: string,
+        marker: string,
+        status: 'Complete' | 'Failed',
+        outputPayload: string | null,
+        errorMessage: string | null,
+        signalJSON: string,
+        outputTainted: boolean,
+        contextUser: UserInfo,
+    ): Promise<WaitingStepWriteOutcome | null> {
+        const rows = await this.callProc<{ AffectedRows: number; Outcome: string }>(provider, 'spTaskGraphCompleteWaitingStep', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'Marker', Value: marker },
+            { Name: 'Status', Value: status },
+            { Name: 'OutputPayload', Value: outputPayload },
+            { Name: 'ErrorMessage', Value: errorMessage },
+            { Name: 'SignalJSON', Value: signalJSON },
+            { Name: 'OutputTainted', Value: outputTainted },
+        ], contextUser);
+        if (rows === null) return null;
+        const outcome = String(rows[0]?.Outcome ?? 'Refused');
+        return outcome === 'Completed' || outcome === 'Buffered' ? outcome : 'Refused';
+    }
+
+    /**
+     * Completes one Wait step if its moment has come, judged on the database clock.
+     *
+     * @returns true when this call completed it
+     */
+    public async TryCompleteDueWait(
+        provider: IMetadataProvider,
+        taskID: string,
+        marker: string,
+        outputPayload: string,
+        outputTainted: boolean,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.guardedWrite(provider, 'spTaskGraphCompleteDueWait', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'Marker', Value: marker },
+            { Name: 'OutputPayload', Value: outputPayload },
+            { Name: 'OutputTainted', Value: outputTainted },
+        ], contextUser);
+    }
+
+    /**
+     * Fails every waiting External or provider-Human step of one graph whose deadline has passed.
+     *
+     * @returns the IDs it failed (empty when none, or when the statement did not run)
+     */
+    public async ExpireWaitingSteps(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        marker: string,
+        contextUser: UserInfo,
+    ): Promise<string[]> {
+        const rows = await this.callProc<{ ID: string }>(provider, 'spTaskGraphExpireWaitingSteps', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'Marker', Value: marker },
+        ], contextUser);
+        return (rows ?? []).map((r) => String(r.ID));
     }
 
     /**

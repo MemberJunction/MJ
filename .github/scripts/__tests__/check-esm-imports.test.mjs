@@ -3,7 +3,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import {
     resolveEntryPoint,
     checkPackage,
@@ -309,6 +309,54 @@ describe('checkPackage', () => {
         }
         expect(result.status).toBe('OTHER_ERR');
     });
+
+    it('imports a star export\'s entries in parallel, so a package with many entries does not run them one by one', async () => {
+        // integration-test-suite's ./checks/* expands to ~280 files at ~4 s each; one by one they
+        // outlast the CI job cap. Eight entries that each take 1 s finish in well under 8 s.
+        const dir = join(FIXTURES, 'star-parallel-pkg');
+        let result;
+        let elapsed;
+        try {
+            mkdirSync(join(dir, 'built', 'checks'), { recursive: true });
+            writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'star-parallel-pkg', type: 'module', exports: { './checks/*': './built/checks/*.js' } }));
+            for (let i = 0; i < 8; i++) {
+                writeFileSync(join(dir, 'built', 'checks', `c${i}.js`), 'await new Promise((r) => setTimeout(r, 1000));\nexport const ok = 1;\n');
+            }
+            const started = Date.now();
+            result = await checkPackage(dir);
+            elapsed = Date.now() - started;
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+        expect(result.status).toBe('OK');
+        expect(elapsed).toBeLessThan(5000);
+    }, 30_000);
+
+    it('imports all the entries of a package in one child process', async () => {
+        // Each entry records the id of the process that imports it.
+        const dir = join(FIXTURES, 'star-one-child-pkg');
+        const log = join(dir, 'pids.log');
+        let result;
+        let pids;
+        try {
+            mkdirSync(join(dir, 'built', 'checks'), { recursive: true });
+            writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'star-one-child-pkg', type: 'module', exports: { './checks/*': './built/checks/*.js' } }));
+            writeFileSync(log, '');
+            for (let i = 0; i < 20; i++) {
+                writeFileSync(
+                    join(dir, 'built', 'checks', `c${i}.js`),
+                    `import { appendFileSync } from 'node:fs';\nappendFileSync(${JSON.stringify(log)}, process.pid + '\\n');\n`
+                );
+            }
+            result = await checkPackage(dir);
+            pids = readFileSync(log, 'utf8').trim().split('\n');
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+        expect(result.status).toBe('OK');
+        expect(pids).toHaveLength(20);
+        expect(new Set(pids).size).toBe(1);
+    }, 60_000);
 
     it('bounds a hanging import via the timeout and classifies it OTHER_ERR (CI-hang protection)', async () => {
         // Entry keeps the event loop alive (setInterval) AND blocks import() forever, so

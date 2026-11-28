@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { By } from '@angular/platform-browser';
 import { renderComponentFixture, query, text, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { EntityInfo, type IMetadataProvider, type RecordMergeRequest } from '@memberjunction/core';
 import { RecordComparisonService } from '@memberjunction/ng-record-merge';
@@ -21,7 +22,7 @@ class GridStub {
   @Input() AutoLoadEntityActions = false; @Input() ShowToolbar = false; @Input() ShowSearch = false;
   @Input() ToolbarConfig: unknown; @Input() SelectionMode = 'single'; @Input() ShowAddToListButton = false;
   @Input() ShowPager = false; @Input() PageSize = 100; @Input() TotalRowCount = 0; @Input() PagerPageNumber = 1;
-  @Input() ShowMergeButton = false;
+  @Input() ShowMergeButton = false; @Input() SavedViewID: string | null = null;
   @Output() MergeRecordsRequested = new EventEmitter<unknown>();
 }
 
@@ -390,5 +391,15 @@ describe('GridViewRendererComponent merge wiring', () => {
 
     expect(reloads).toHaveLength(0);
     expect(text(f, '.mj-ev-merge-notice')).toContain('Dependencies could not be repointed');
+  });
+
+  it('forwards SavedViewID to the hosted grid so Open in Excel works inside entity-viewer', () => {
+    const f = render(partyEntity(), provider());
+    const gridStub = f.debugElement.query(By.directive(GridStub)).componentInstance as GridStub;
+    expect(gridStub.SavedViewID).toBeNull();
+
+    f.componentRef.setInput('SavedViewID', '9CB0CCEC-6A37-EF11-86D4-000D3A4E707E');
+    f.detectChanges();
+    expect(gridStub.SavedViewID).toBe('9CB0CCEC-6A37-EF11-86D4-000D3A4E707E');
   });
 });

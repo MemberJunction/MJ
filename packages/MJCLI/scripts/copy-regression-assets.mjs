@@ -20,7 +20,7 @@
  *     `path.join(__dirname, '../../../init-templates')` from
  *     dist/commands/test/regression/init.js.
  */
-import { mkdirSync, copyFileSync, existsSync, cpSync } from 'node:fs';
+import { mkdirSync, copyFileSync, existsSync, cpSync, chmodSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -73,9 +73,19 @@ const repoRoot = path.resolve(pkgRoot, '..', '..');               // monorepo ro
   const srcDir = path.join(repoRoot, 'citizen-builder');
   const destDir = path.join(pkgRoot, 'dist', 'init-templates', 'citizen-builder');
   const srcInitDir = path.join(pkgRoot, 'src', 'init-templates', 'citizen-builder');
+  const chmodShellScripts = (scriptsDir) => {
+    if (!existsSync(scriptsDir)) return;
+    for (const entry of readdirSync(scriptsDir, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith('.sh')) {
+        chmodSync(path.join(scriptsDir, entry.name), 0o755);
+      }
+    }
+  };
   if (existsSync(srcDir)) {
     cpSync(srcDir, destDir, { recursive: true });
     cpSync(srcDir, srcInitDir, { recursive: true });
+    chmodShellScripts(path.join(destDir, 'scripts'));
+    chmodShellScripts(path.join(srcInitDir, 'scripts'));
     console.log(`[copy-regression-assets] bundled citizen-builder → ${path.relative(pkgRoot, destDir)}/`);
   } else {
     console.warn(`  [copy-regression-assets] citizen-builder source not found, skipped: ${srcDir}`);

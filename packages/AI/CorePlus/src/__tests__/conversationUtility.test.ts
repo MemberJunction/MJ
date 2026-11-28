@@ -615,6 +615,145 @@ describe('ConversationUtility', () => {
             expect(ConversationUtility.GetContentBlockType('Document')).toBe('file_url');
         });
     });
+
+    describe('ResolveRecordLinkLabel', () => {
+        it('returns trimmed explicit name when provided', () => {
+            expect(
+                ConversationUtility.ResolveRecordLinkLabel({
+                    _mode: 'mention',
+                    type: 'record',
+                    entityName: 'Accounts',
+                    name: '  Northwind  ',
+                })
+            ).toBe('Northwind');
+        });
+
+        it('falls back to entityName when name is missing or blank', () => {
+            expect(
+                ConversationUtility.ResolveRecordLinkLabel({
+                    _mode: 'mention',
+                    type: 'record',
+                    entityName: 'Accounts',
+                    name: '   ',
+                })
+            ).toBe('Accounts');
+        });
+
+        it('falls back to "record" when both name and entityName are missing', () => {
+            expect(
+                ConversationUtility.ResolveRecordLinkLabel({
+                    _mode: 'mention',
+                    type: 'record',
+                })
+            ).toBe('record');
+        });
+    });
+
+    describe('CleanMentions', () => {
+        it('returns empty string for empty input', () => {
+            expect(ConversationUtility.CleanMentions('')).toBe('');
+        });
+
+        it('deduplicates record mention immediately following the same record title', () => {
+            const input = 'Northwind @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"1"}';
+            expect(ConversationUtility.CleanMentions(input)).toBe('Northwind');
+        });
+
+        it('deduplicates record mention after bold markdown title and preserves trailing punctuation', () => {
+            const input = 'Updated **Northwind** @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"1"}.';
+            expect(ConversationUtility.CleanMentions(input)).toBe('Updated **Northwind**.');
+        });
+
+        it('does not falsely deduplicate partial suffix matches like SuperNorthwind', () => {
+            const input = 'SuperNorthwind @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"1"}';
+            expect(ConversationUtility.CleanMentions(input)).toBe('SuperNorthwind Northwind');
+        });
+
+        it('supports icon-only record mentions using entityName fallback', () => {
+            const input = 'Checked Accounts @{"_mode":"mention","type":"record","entityName":"Accounts","ID":"1"} for renewal';
+            expect(ConversationUtility.CleanMentions(input)).toBe('Checked Accounts for renewal');
+        });
+
+        it('supports custom recordLinkLabel callback and agent/user lookups', () => {
+            const input =
+                'Northwind (Accounts) @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"1"} with @{"_mode":"mention","type":"user","id":"u1","name":"OldName"}';
+            const result = ConversationUtility.CleanMentions(input, {
+                users: [{ ID: 'u1', Name: 'Elena Vance' }],
+                recordLinkLabel: (content) =>
+                    content.entityName
+                        ? `${ConversationUtility.ResolveRecordLinkLabel(content)} (${content.entityName})`
+                        : ConversationUtility.ResolveRecordLinkLabel(content),
+            });
+            expect(result).toBe('Northwind (Accounts) with @Elena Vance');
+        });
+
+        it('converts agent, user, entity, and query mentions to readable plain text', () => {
+            const input =
+                'Asked @{"_mode":"mention","type":"agent","id":"a1","name":"Planner"} and @{"_mode":"mention","type":"user","id":"u1","name":"Elena"} about @{"_mode":"mention","type":"entity","id":"e1","name":"Accounts"}';
+            expect(ConversationUtility.CleanMentions(input)).toBe('Asked @Planner and @Elena about #Accounts');
+        });
+    });
+
+    describe('CleanHtmlMentions', () => {
+        it('returns empty string for empty input and passes through HTML without mention tokens unchanged', () => {
+            expect(ConversationUtility.CleanHtmlMentions('')).toBe('');
+            const html = '<p>Hello <strong>Northwind &amp; Co</strong>!</p>';
+            expect(ConversationUtility.CleanHtmlMentions(html)).toBe(html);
+        });
+
+        it('cleans raw and HTML-entity-escaped mention tokens inside HTML bodies', () => {
+            const html =
+                '<p>Reviewed Northwind @{&quot;_mode&quot;:&quot;mention&quot;,&quot;type&quot;:&quot;record&quot;,&quot;entityName&quot;:&quot;Accounts&quot;,&quot;name&quot;:&quot;Northwind&quot;,&quot;ID&quot;:&quot;acc-1&quot;} with @{"_mode":"mention","type":"user","id":"u1","name":"Elena Vance"} and @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Contoso","ID":"acc-2"}.</p>';
+            expect(ConversationUtility.CleanHtmlMentions(html)).toBe(
+                '<p>Reviewed Northwind with @Elena Vance and Contoso.</p>'
+            );
+        });
+
+        it('deduplicates record pills across inline formatting tags while resetting across block boundaries', () => {
+            const html =
+                '<p>Updated <strong>Northwind</strong> @{&quot;_mode&quot;:&quot;mention&quot;,&quot;type&quot;:&quot;record&quot;,&quot;entityName&quot;:&quot;Accounts&quot;,&quot;name&quot;:&quot;Northwind&quot;,&quot;ID&quot;:&quot;acc-1&quot;}.</p>' +
+                '<p>@{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"acc-1"} still open.</p>';
+            expect(ConversationUtility.CleanHtmlMentions(html)).toBe(
+                '<p>Updated <strong>Northwind</strong>.</p><p>Northwind still open.</p>'
+            );
+        });
+
+        it('HTML-escapes rendered mention replacements to prevent XSS injection', () => {
+            const escapedTokenHtml =
+                '<p>Assigned to @{&quot;_mode&quot;:&quot;mention&quot;,&quot;type&quot;:&quot;user&quot;,&quot;id&quot;:&quot;u1&quot;,&quot;name&quot;:&quot;&lt;script&gt;alert(1)&lt;/script&gt; &amp; Co&quot;}</p>';
+            expect(ConversationUtility.CleanHtmlMentions(escapedTokenHtml)).toBe(
+                '<p>Assigned to @&lt;script&gt;alert(1)&lt;/script&gt; &amp; Co</p>'
+            );
+
+            const lookupHtml =
+                '<p>Assigned to @{"_mode":"mention","type":"user","id":"u1","name":"SafeFallback"}</p>';
+            expect(
+                ConversationUtility.CleanHtmlMentions(lookupHtml, {
+                    users: [{ ID: 'u1', Name: '<script>alert(1)</script> & Co' }],
+                })
+            ).toBe('<p>Assigned to @&lt;script&gt;alert(1)&lt;/script&gt; &amp; Co</p>');
+        });
+
+        it('preserves mention-like tokens inside code, pre, script, and style blocks verbatim', () => {
+            const token = '@{"_mode":"mention","type":"user","id":"u1","name":"KeepRaw"}';
+            const html = `<p>Live ${token}</p><pre><code>${token}</code></pre>`;
+            expect(ConversationUtility.CleanHtmlMentions(html)).toBe(
+                `<p>Live @KeepRaw</p><pre><code>${token}</code></pre>`
+            );
+        });
+
+        it('preserves spacing before opening inline tags when deduplicating an adjacent record pill', () => {
+            const html =
+                '<p>Checked Northwind @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"1"}<em>today</em></p>';
+            expect(ConversationUtility.CleanHtmlMentions(html)).toBe('<p>Checked Northwind <em>today</em></p>');
+        });
+
+        it('matches HTML-entity-encoded record titles like Northwind &amp; Co', () => {
+            const html =
+                '<p>Checked Northwind &amp; Co @{&quot;_mode&quot;:&quot;mention&quot;,&quot;type&quot;:&quot;record&quot;,&quot;entityName&quot;:&quot;Accounts&quot;,&quot;name&quot;:&quot;Northwind &amp; Co&quot;,&quot;ID&quot;:&quot;1&quot;}.</p>';
+            expect(ConversationUtility.CleanHtmlMentions(html)).toBe('<p>Checked Northwind &amp; Co.</p>');
+        });
+    });
 });
 
 describe('DEFAULT_ATTACHMENT_LIMITS', () => {

@@ -31,8 +31,11 @@ import {
 } from '@memberjunction/ai-engine-base';
 import {
     AgentExecutionProgressCallback,
+    EDGE_PRE_DISCOVERY_DATA_KEY,
+    type EdgePreDiscoveryHint,
     ExecuteAgentResult,
     MJAIAgentEntityExtended,
+    SanitizeEdgePreDiscoveryHint,
     coerceFailedExecuteAgentResult,
 } from '@memberjunction/ai-core-plus';
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
@@ -109,6 +112,11 @@ export interface ProcessMessageInput {
      * Null or omitted uses `message.BranchID`.
      */
     ReplyBranchID?: string | null;
+    /**
+     * Optional untrusted advisory pre-discovery hint from client-side local ONNX/WASM inference.
+     * Pre-filtered client-side against `availableAgents`, and always re-verified server-side.
+     */
+    EdgePreDiscoveryHint?: EdgePreDiscoveryHint | null;
 }
 
 /**
@@ -220,6 +228,9 @@ export class ConversationAgentRunner {
                 ? await this.filterAgentsByPermissions(candidateAgents, currentUser)
                 : candidateAgents;
             const availableAgents = NarrowToAllowedAgents(permittedAgents, input.AllowedAgentIDs);
+            const sanitizedEdgeHint = input.EdgePreDiscoveryHint
+                ? SanitizeEdgePreDiscoveryHint(input.EdgePreDiscoveryHint, availableAgents)
+                : null;
 
             LogStatusEx({
                 message: `[ConversationAgentRunner] Available agents for routing: ${availableAgents.length} (filtered from ${candidateAgents.length} candidates)`,
@@ -237,6 +248,7 @@ export class ConversationAgentRunner {
                         Name: a.Name,
                         Description: a.Description,
                     })),
+                    ...(sanitizedEdgeHint ? { [EDGE_PRE_DISCOVERY_DATA_KEY]: sanitizedEdgeHint } : {}),
                     conversationId: input.conversationId,
                     latestMessageId: input.message.ID,
                     ...(input.appContext ? { appContext: input.appContext } : {}),
@@ -303,20 +315,42 @@ export class ConversationAgentRunner {
         return this.ProcessMessage(input);
     }
 
+    /** Tracks unavailable user-default IDs already surfaced to the user once per session. */
+    private readonly _notifiedUnavailableDefaultIds = new Set<string>();
+
     /**
-     * Resolve the agent that should handle this turn — explicit ID wins, then the
-     * Application Settings chain, then the Sage code-const fallback. Surfaces a
-     * notification on failure rather than throwing, so the caller (UI thread)
-     * sees a friendly message.
+     * Resolve the agent that should handle this turn — explicit ID wins, then the user's
+     * default / primary instance, then Application Settings, then the code-const fallback.
+     * Surfaces a one-time non-blocking warning if the user's saved default is unavailable,
+     * and notifies on total resolution failure rather than throwing.
      */
     private async resolveAgent(input: ProcessMessageInput): Promise<MJAIAgentEntityExtended | null> {
         try {
-            return await this.resolver.resolve({
+            const resolveOpts = {
                 explicitAgentId: input.explicitAgentId,
                 applicationId: input.applicationId,
                 contextUser: this.Provider.CurrentUser ?? undefined,
                 provider: this.Provider,
-            });
+            };
+            const result =
+                typeof this.resolver.ResolveWithDetails === 'function'
+                    ? await this.resolver.ResolveWithDetails(resolveOpts)
+                    : { agent: await this.resolver.resolve(resolveOpts), source: 'code-fallback' as const };
+            if (result.userDefaultUnavailable && result.unavailableUserDefaultAgentId) {
+                const key = result.unavailableUserDefaultAgentId.toLowerCase();
+                if (!this._notifiedUnavailableDefaultIds.has(key)) {
+                    this._notifiedUnavailableDefaultIds.add(key);
+                    const detail = result.userDefaultUnavailableReason
+                        ? ` (${result.userDefaultUnavailableReason})`
+                        : '';
+                    this.context.Notification.Notify(
+                        'warning',
+                        `Your default agent is currently unavailable${detail}. Using ${result.agent.Name} instead.`,
+                        6_000
+                    );
+                }
+            }
+            return result.agent;
         } catch (error) {
             const errorMsg =
                 'Could not resolve a default conversation manager agent: ' +

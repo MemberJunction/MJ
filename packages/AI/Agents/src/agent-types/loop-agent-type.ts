@@ -23,12 +23,13 @@ import type { ChatToolCall } from '@memberjunction/ai';
 import { GetToolCallingDecision } from '@memberjunction/ai-prompts';
 
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction, AgentClientToolInvocation, AgentPayloadChangeRequest,
-         FormatValidationErrors, ValidateTaskGraphSpec, type TaskGraphSpec,
-    ConfigOf, AgentResponseForm, AgentFinishIf } from '@memberjunction/ai-core-plus';
-import { LogError, LogStatusEx } from '@memberjunction/core';
+         FormatValidationErrors, GetMaxTasksPerAgentGraph, ValidateTaskGraphSpec, type TaskGraphSpec,
+    ConfigOf, AgentResponseForm, AgentFinishIf, type AgentHandoffRequest, type ArtifactDirective, type ArtifactJsonValue } from '@memberjunction/ai-core-plus';
+import { LimitsConfigResolver, LogError, LogStatusEx } from '@memberjunction/core';
 import { MJAIPromptEntityExtended, type AgentToolCallRequest } from '@memberjunction/ai-core-plus';
 import { LoopAgentResponse, LOOP_NEXT_STEP_TYPES } from './loop-agent-response-type';
 import { IsValidFinishIf } from '../finish-if-state';
+import { AgentStepTypeRegistry } from '../helpers/steps/AgentStepTypeRegistry';
 import { ConversationMessageResolver } from '../utils/ConversationMessageResolver'; 
 /** A native tool call paired with the binding it resolved to. */
 interface ResolvedNativeCall<B extends NativeToolBinding = NativeToolBinding> {
@@ -81,15 +82,6 @@ interface GroupedNativeCalls {
  * }
  * ```
  */
-/**
- * Maximum consecutive turns the inline-read-tool pre-emption may force before the
- * terminal step is honored anyway. The pre-emption retries are deliberately
- * "productive" (exempt from the unproductive-retry limit) because each one injects
- * fresh tool results — but a model that insists on terminal-plus-read-tools every
- * turn must not be able to extend the run indefinitely on that exemption.
- */
-const MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS = 3;
-
 @RegisterClass(BaseAgentType, "LoopAgentType")
 export class LoopAgentType extends BaseAgentType {
     /** The Loop type reads tool calls back as Actions steps (§8.1), so its Actions may be declared as tools. */
@@ -130,9 +122,10 @@ export class LoopAgentType extends BaseAgentType {
             this.consecutiveReadToolPreemptions = 0;
             return null;
         }
-        if (this.consecutiveReadToolPreemptions >= MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS) {
+        const maxPreemptions = LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxConsecutiveReadToolPreemptions;
+        if (this.consecutiveReadToolPreemptions >= maxPreemptions) {
             LogStatusEx({
-                message: `⚠️ Loop Agent: terminal step + inline read tools recurred ${MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS} consecutive turns — honoring the terminal step instead of forcing another turn`
+                message: `⚠️ Loop Agent: terminal step + inline read tools recurred ${maxPreemptions} consecutive turns — honoring the terminal step instead of forcing another turn`
             });
             return null;
         }
@@ -161,10 +154,13 @@ export class LoopAgentType extends BaseAgentType {
     /**
      * Resolves whether this agent may emit durable task graphs.
      *
-     * Read from the merged three-level params bag (schema defaults → agent config → runtime
-     * override), so a per-run override behaves like every other Loop parameter. Absent means NO:
-     * this is the one Loop flag whose default is off, because the capability creates durable rows
-     * that outlive the run rather than merely adding prompt text (D3).
+     * Read from `params.data.__agentTypePromptParams`, which `BaseAgent.determineNextStep`
+     * populates on a shallow copy of `params` from `this._agentTypePromptParams` (the merged
+     * three-level params bag: schema defaults → agent config → runtime override, with
+     * `withoutTaskGraphs` applied when the run withholds them), or which a direct unit caller
+     * supplies in `params.data`. Absent means NO: this is the one Loop flag whose default is
+     * off, because the capability creates durable rows that outlive the run rather than merely
+     * adding prompt text (D3).
      */
     private taskGraphsEnabled(params: ExecuteAgentParams<any, any>): boolean {
         const promptParams = params?.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
@@ -213,8 +209,9 @@ export class LoopAgentType extends BaseAgentType {
 
         // The same validator the server runs at submission (D16), so a graph that passes here
         // cannot fail a different check later. Every failure is reported at once — a model fixing a
-        // malformed graph should not discover the problems one round-trip at a time.
-        const validation = ValidateTaskGraphSpec(spec);
+        // malformed graph should not discover the problems one round-trip at a time. The model-output
+        // cap applies here, and only here: it bounds what a model may emit, not what a workflow may be.
+        const validation = ValidateTaskGraphSpec(spec, { MaxTasks: GetMaxTasksPerAgentGraph() });
         if (!validation.Valid) {
             retVal.step = 'Retry';
             retVal.message =
@@ -224,7 +221,7 @@ export class LoopAgentType extends BaseAgentType {
             return;
         }
 
-        retVal.step = 'Tasks' as BaseAgentNextStep['step'];
+        retVal.step = 'Tasks';
         retVal.taskGraph = { spec, folded: false };
 
         // Single-node constant folding (D9) — the compiler-flattening analogy: don't spin up loop
@@ -236,11 +233,16 @@ export class LoopAgentType extends BaseAgentType {
             // describeFold() has already established this is an Agent node — folding is only offered
             // for one. The `?? ''` is unreachable and exists so this cannot become a silent `undefined`
             // if that precondition is ever loosened.
+            const agentCfg = ConfigOf(node, 'Agent');
+            const presetName = typeof agentCfg?.presetName === 'string' && agentCfg.presetName.trim().length > 0
+                ? agentCfg.presetName.trim()
+                : undefined;
             retVal.step = 'Sub-Agent';
             retVal.subAgent = {
-                name: ConfigOf(node, 'Agent')?.agentName ?? '',
+                name: agentCfg?.agentName ?? '',
                 message: node.description,
                 terminateAfter: false,
+                ...(presetName ? { presetName } : {}),
                 templateParameters: {},
             };
             // Recorded, never silent: the TaskGraph run step is written for folded graphs too, so
@@ -284,6 +286,12 @@ export class LoopAgentType extends BaseAgentType {
      * The reason is carried onto the run step rather than discarded: a user who edits a two-node
      * graph down to one changes its durability and observability, and should be able to read that
      * off the run record instead of inferring it.
+     *
+     * Note: `LoopAgentType` only checks structural eligibility here because it has no view of the
+     * run's effective sub-agent set (`ParentID` children, active relationships, and runtime skill /
+     * `subAgentChanges` grants). If the folded target is not resolvable via
+     * `BaseAgent.resolveSubAgentByName`, `BaseAgent.validateNextStep` unfolds the step back to
+     * `'Tasks'` (`folded: false`) so it submits durably instead of failing sub-agent validation.
      */
     private describeFold(spec: TaskGraphSpec): { folded: boolean; reason: string } {
         if (spec.tasks.length !== 1) return { folded: false, reason: `graph has ${spec.tasks.length} nodes` };
@@ -298,6 +306,65 @@ export class LoopAgentType extends BaseAgentType {
             return { folded: false, reason: `continuation is '${spec.continuation}', not foldable in-run` };
         }
         return { folded: true, reason: 'single agent node, no dependencies, foldable continuation' };
+    }
+
+    /**
+     * Resolves whether this agent may emit a conversation handoff (`nextStep.type === 'Handoff'`).
+     *
+     * Read from `params.data.__agentTypePromptParams`, which `BaseAgent.determineNextStep`
+     * populates on a shallow copy of `params` from `this._agentTypePromptParams` (with
+     * `withoutHandoff` applied when the run withholds handoff), or which a direct unit caller
+     * supplies in `params.data`. Absent means NO (D14).
+     */
+    private handoffEnabled(params: ExecuteAgentParams<any, any>): boolean {
+        const promptParams = params?.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+        return promptParams?.enableHandoff === true;
+    }
+
+    /**
+     * Applies a `'Handoff'` emission to the next step: capability gate and shape validation.
+     * Never folds into a Sub-Agent step — a handoff transfers ownership of the conversation turn.
+     */
+    private applyHandoffStep<P>(
+        retVal: Partial<BaseAgentNextStep<P>>,
+        handoff: AgentHandoffRequest | undefined,
+        topLevelMessage: string | undefined,
+        params: ExecuteAgentParams<any, P>,
+    ): void {
+        retVal.terminate = false;
+        if (!this.handoffEnabled(params)) {
+            retVal.step = 'Retry';
+            retVal.message =
+                'Handoff is not available here, so nextStep.type must never be "Handoff". ' +
+                'Answer directly, or use nextStep.type "Sub-Agent" or "Actions" instead.';
+            retVal.errorMessage = 'Handoff is not enabled for this agent';
+            return;
+        }
+
+        const agentName = typeof handoff?.agentName === 'string' ? handoff.agentName.trim() : '';
+        const brief = typeof handoff?.brief === 'string' ? handoff.brief.trim() : '';
+        if (!handoff || agentName.length === 0 || brief.length === 0) {
+            retVal.step = 'Retry';
+            retVal.message =
+                'When nextStep.type == "Handoff", nextStep.handoff must specify non-empty "agentName" and "brief" strings';
+            retVal.errorMessage = !handoff
+                ? 'Handoff details not specified for Handoff type'
+                : agentName.length === 0
+                    ? 'Handoff agentName not specified for Handoff type'
+                    : 'Handoff brief not specified for Handoff type';
+            return;
+        }
+
+        const reason = typeof handoff.reason === 'string' ? handoff.reason.trim() : '';
+        retVal.step = 'Handoff';
+        retVal.handoff = {
+            agentName,
+            brief,
+            reason,
+        };
+        if (topLevelMessage !== undefined) {
+            retVal.message = topLevelMessage;
+        }
     }
 
 
@@ -618,12 +685,46 @@ export class LoopAgentType extends BaseAgentType {
             return this.createRetryStep('complete_task.payloadChangeRequest must be an object (newElements / updateElements / replaceElements / removeElements), or be omitted.'
                 + ` Problem: ${decoded.error}`);
         }
+        const directiveDecoded = this.decodeArtifactDirectiveArgument(
+            complete.call.arguments?.artifactDirective as ArtifactJsonValue | ArtifactDirective | undefined
+        );
+        if ('error' in directiveDecoded) {
+            return this.createRetryStep('complete_task.artifactDirective must be an object ({ behavior, targetArtifactId?, name?, description? }), or be omitted.'
+                + ` Problem: ${directiveDecoded.error}`);
+        }
         const payloadChangeRequest = decoded.payloadChangeRequest;
         return this.createSuccessStep({
             ...(message ? { message } : {}),
             payloadChangeRequest,
+            ...(directiveDecoded.artifactDirective ? { artifactDirective: directiveDecoded.artifactDirective } : {}),
             payloadToolCallId: complete.call.id
         });
+    }
+
+    /**
+     * Reads `complete_task.artifactDirective`: undefined when absent, or validated `ArtifactDirective`.
+     */
+    private decodeArtifactDirectiveArgument(
+        value: ArtifactJsonValue | ArtifactDirective | undefined
+    ): { artifactDirective?: ArtifactDirective } | { error: string } {
+        if (value === undefined || value === null) {
+            return {};
+        }
+        if (typeof value === 'string' && (value.trim() === '' || value.trim() === 'null')) {
+            return {};
+        }
+        let candidate: ArtifactJsonValue | ArtifactDirective | undefined = value;
+        if (typeof value === 'string') {
+            const decoded = DecodeJSONArgument(value);
+            if ('Error' in decoded) {
+                return { error: decoded.Error };
+            }
+            candidate = decoded.Value as ArtifactJsonValue;
+        }
+        if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) {
+            return { error: 'the value is not a JSON object' };
+        }
+        return { artifactDirective: candidate as ArtifactDirective };
     }
 
     /**
@@ -671,12 +772,24 @@ export class LoopAgentType extends BaseAgentType {
         payloadChangeRequest: AgentPayloadChangeRequest | undefined,
         payloadToolCallId?: string
     ): BaseAgentNextStep {
-        const requests = subAgents.map(({ call, binding }) => ({
-            name: binding.agent.Name,
-            message: typeof call.arguments?.message === 'string' ? call.arguments.message : '',
-            terminateAfter: call.arguments?.terminateAfter === true,
-            toolCallId: call.id
-        }));
+        const requests = subAgents.map(({ call, binding }) => {
+            const rawResumeRunId = call.arguments?.resumeRunId;
+            const resumeRunId = typeof rawResumeRunId === 'string' && rawResumeRunId.trim().length > 0
+                ? rawResumeRunId.trim()
+                : undefined;
+            const rawPresetName = call.arguments?.presetName;
+            const presetName = typeof rawPresetName === 'string' && rawPresetName.trim().length > 0
+                ? rawPresetName.trim()
+                : undefined;
+            return {
+                name: binding.agent.Name,
+                message: typeof call.arguments?.message === 'string' ? call.arguments.message : '',
+                terminateAfter: call.arguments?.terminateAfter === true,
+                ...(resumeRunId ? { resumeRunId } : {}),
+                ...(presetName ? { presetName } : {}),
+                toolCallId: call.id
+            };
+        });
         return this.createNextStep('Sub-Agent', {
             terminate: false,
             ...(requests.length === 1 ? { subAgent: requests[0] } : { subAgents: requests }),
@@ -914,7 +1027,7 @@ export class LoopAgentType extends BaseAgentType {
             // Similarly, if a valid finishIf completion gate is attached to an Actions or
             // Sub-Agent step, let the step execute and evaluate the gate instead of
             // short-circuiting to immediate success.
-            if (response.taskComplete && !hasClientTools && !hasFinishIfStep) {
+            if (response.taskComplete && !hasClientTools && !hasFinishIfStep && response.nextStep?.type !== 'Handoff') {
                 LogStatusEx({
                     message: '✅ Loop Agent: Task completed successfully. Message: ' + response.message,
                     verboseOnly: true
@@ -965,17 +1078,37 @@ export class LoopAgentType extends BaseAgentType {
                     else {
                         retVal.step = 'Sub-Agent';
                         if (response.nextStep.subAgents && response.nextStep.subAgents.length > 0) {
-                            retVal.subAgents = response.nextStep.subAgents.map(sa => ({
-                                name: sa.name,
-                                message: sa.message,
-                                terminateAfter: sa.terminateAfter,
-                                templateParameters: sa.templateParameters || {}
-                            }));
+                            retVal.subAgents = response.nextStep.subAgents.map(sa => {
+                                const resumeRunId = typeof sa.resumeRunId === 'string' && sa.resumeRunId.trim().length > 0
+                                    ? sa.resumeRunId.trim()
+                                    : undefined;
+                                const presetName = typeof sa.presetName === 'string' && sa.presetName.trim().length > 0
+                                    ? sa.presetName.trim()
+                                    : undefined;
+                                return {
+                                    name: sa.name,
+                                    message: sa.message,
+                                    terminateAfter: sa.terminateAfter,
+                                    ...(resumeRunId ? { resumeRunId } : {}),
+                                    ...(presetName ? { presetName } : {}),
+                                    templateParameters: sa.templateParameters || {}
+                                };
+                            });
                         } else if (response.nextStep.subAgent) {
+                            const rawResumeRunId = response.nextStep.subAgent.resumeRunId;
+                            const resumeRunId = typeof rawResumeRunId === 'string' && rawResumeRunId.trim().length > 0
+                                ? rawResumeRunId.trim()
+                                : undefined;
+                            const rawPresetName = response.nextStep.subAgent.presetName;
+                            const presetName = typeof rawPresetName === 'string' && rawPresetName.trim().length > 0
+                                ? rawPresetName.trim()
+                                : undefined;
                             retVal.subAgent = {
                                 name: response.nextStep.subAgent.name,
                                 message: response.nextStep.subAgent.message,
                                 terminateAfter: response.nextStep.subAgent.terminateAfter,
+                                ...(resumeRunId ? { resumeRunId } : {}),
+                                ...(presetName ? { presetName } : {}),
                                 templateParameters: response.nextStep.subAgent.templateParameters || {}
                             };
                         }
@@ -1004,7 +1137,7 @@ export class LoopAgentType extends BaseAgentType {
                         retVal.errorMessage = 'Client tools not specified for ClientTools type';
                     }
                     else {
-                        retVal.step = 'ClientTools' as BaseAgentNextStep['step'];
+                        retVal.step = 'ClientTools';
                         retVal.clientTools = response.nextStep.clientTools.map(tool => ({
                             Name: tool.name ?? tool.Name,
                             Params: tool.params ?? tool.Params ?? {},
@@ -1020,7 +1153,7 @@ export class LoopAgentType extends BaseAgentType {
                         retVal.errorMessage = 'Skills not specified for Skill type';
                     }
                     else {
-                        retVal.step = 'Skill' as BaseAgentNextStep['step'];
+                        retVal.step = 'Skill';
                         retVal.skillActivations = response.nextStep.skills.map(skill => ({
                             name: skill.name,
                             ...(skill.reason ? { reason: skill.reason } : {})
@@ -1034,7 +1167,7 @@ export class LoopAgentType extends BaseAgentType {
                         retVal.errorMessage = 'Plan text not specified for Plan type';
                     }
                     else {
-                        retVal.step = 'Plan' as BaseAgentNextStep['step'];
+                        retVal.step = 'Plan';
                         retVal.planDetails = { plan: response.nextStep.plan };
                     }
                     break;
@@ -1076,10 +1209,46 @@ export class LoopAgentType extends BaseAgentType {
                 case 'Tasks':
                     this.applyTasksStep(retVal, response.nextStep.tasks, params);
                     break;
-                default:
-                    retVal.step = 'Retry';
-                    retVal.errorMessage = `Unknown next step type: ${response.nextStep.type}`;
+                case 'Handoff':
+                    this.applyHandoffStep(retVal, response.nextStep.handoff, response.message, params);
                     break;
+                default: {
+                    const customPolicy = AgentStepTypeRegistry.Instance.ResolveEffectivePolicy(response.nextStep.type);
+                    if (
+                        customPolicy &&
+                        !customPolicy.IsBuiltIn &&
+                        customPolicy.DefaultEnabledInPrompt &&
+                        (customPolicy.AppliesTo === 'Loop' || customPolicy.AppliesTo === 'Both' || customPolicy.AppliesTo === 'All')
+                    ) {
+                        retVal.step = customPolicy.StepKey;
+                        if (customPolicy.StepTypeID) {
+                            retVal.stepTypeID = customPolicy.StepTypeID;
+                        }
+                        const rawNextStep = response.nextStep as unknown as Record<string, unknown>;
+                        const explicitData = rawNextStep['customStepData'];
+                        const sanitizeCustomData = (obj: Record<string, unknown>): Record<string, unknown> => {
+                            const safe: Record<string, unknown> = {};
+                            for (const [k, v] of Object.entries(obj)) {
+                                if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+                                safe[k] = v;
+                            }
+                            return safe;
+                        };
+                        if (explicitData && typeof explicitData === 'object' && !Array.isArray(explicitData)) {
+                            retVal.customStepData = sanitizeCustomData(explicitData as Record<string, unknown>);
+                        } else {
+                            const { type: _ignoredType, ...restFields } = rawNextStep;
+                            const sanitized = sanitizeCustomData(restFields);
+                            if (Object.keys(sanitized).length > 0) {
+                                retVal.customStepData = sanitized;
+                            }
+                        }
+                    } else {
+                        retVal.step = 'Retry';
+                        retVal.errorMessage = `Unknown next step type: ${response.nextStep.type}`;
+                    }
+                    break;
+                }
             }
             return retVal as BaseAgentNextStep<P>;
         } catch (error) {
@@ -1224,12 +1393,26 @@ export class LoopAgentType extends BaseAgentType {
             } else if (!lcaseType && response.nextStep.tasks) {
                 response.nextStep.type = 'Tasks'; // update the data structure to have the correct type
                 lcaseType = 'tasks';
+            } else if (!lcaseType && response.nextStep.handoff) {
+                response.nextStep.type = 'Handoff'; // update the data structure to have the correct type
+                lcaseType = 'handoff';
             }
 
             if (!validStepTypes.includes(lcaseType)) {
-                const message = `LoopAgentResponse has invalid nextStep.type: ${response.nextStep.type}`;
-                LogError(message);
-                return {success: false, message};
+                const customPolicy = lcaseType
+                    ? AgentStepTypeRegistry.Instance.ResolveEffectivePolicy(response.nextStep.type)
+                    : null;
+                const isRegisteredCustomLoopStep = Boolean(
+                    customPolicy &&
+                    !customPolicy.IsBuiltIn &&
+                    customPolicy.DefaultEnabledInPrompt &&
+                    (customPolicy.AppliesTo === 'Loop' || customPolicy.AppliesTo === 'Both' || customPolicy.AppliesTo === 'All')
+                );
+                if (!isRegisteredCustomLoopStep) {
+                    const message = `LoopAgentResponse has invalid nextStep.type: ${response.nextStep.type}`;
+                    LogError(message);
+                    return {success: false, message};
+                }
             }
 
             // Validate specific fields based on type

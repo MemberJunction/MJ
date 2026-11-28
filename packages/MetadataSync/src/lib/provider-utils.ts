@@ -9,7 +9,7 @@
 
 import sql from 'mssql';
 import { SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { UserCache, GetServerPrincipal } from '@memberjunction/generic-database-provider';
 import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -113,16 +113,26 @@ async function initializeSqlServerProvider(config: MJConfig): Promise<DatabasePr
 async function initializePostgresProvider(config: MJConfig): Promise<DatabaseProviderBase> {
   // Dynamic imports so SQL-Server-only environments never resolve pg/PG provider
   const pg = (await import('pg')).default;
-  const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes } =
+  const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes, BuildPgSslConfig, BuildPgPasswordSource, ResolvePgAuthMode } =
     await import('@memberjunction/postgresql-dataprovider');
 
   const coreSchema = config.mjCoreSchema || '__mj';
+  const port = config.dbPort ? Number(config.dbPort) : 5432;
+  // The shared PG_SSL_* / PG_AUTH_MODE rules every MJ PostgreSQL client follows.
+  const ssl = BuildPgSslConfig(config.dbHost);
+  const passwordSource = BuildPgPasswordSource(ResolvePgAuthMode(), {
+    Host: config.dbHost,
+    Port: port,
+    User: config.dbUsername,
+    Database: config.dbDatabase,
+  }, ssl);
   const pgPool = new pg.Pool({
     host: config.dbHost,
-    port: config.dbPort ? Number(config.dbPort) : 5432,
+    port,
     user: config.dbUsername,
-    password: config.dbPassword,
+    password: passwordSource ?? config.dbPassword,
     database: config.dbDatabase,
+    ssl,
     max: 10,
     min: 1,
     // NUMERIC/BIGINT → JS numbers, same parsers the provider's own pool uses
@@ -144,20 +154,21 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
       Database: config.dbDatabase,
       User: config.dbUsername,
       Password: config.dbPassword,
+      ...(passwordSource ? { PasswordSource: passwordSource } : {}),
+      SSL: ssl,
       MaxConnections: 10,
       MinConnections: 1,
-      // The provider's OWN pool (PGConnectionManager creates a separate pg.Pool from this config) is
-      // what `provider.ExecuteSQL` — including the schema DROP on `mj app remove` — runs on. Carry the
-      // configured per-request timeout as a libpq `statement_timeout` startup option so it reaches THAT
-      // pool, not just the local connectivity-check pool above. (Otherwise the "PG parity" is inert.)
-      ...(config.dbRequestTimeout ? { Options: `-c statement_timeout=${Number(config.dbRequestTimeout)}` } : {}),
     },
     coreSchema,
     1, // must be > 0 to trigger initial metadata load (AllowRefresh gate in PostgreSQLDataProvider)
   );
 
+  // The provider runs on the pool above (which already carries the statement timeout), rather than
+  // opening a second pool of its own.
   const provider = new PostgreSQLDataProvider();
-  await provider.Config(pgConfigData);
+  if (!(await provider.ConfigWithSharedPool(pgConfigData, pgPool))) {
+    throw new Error('PostgreSQL provider configuration failed; see the error logged above.');
+  }
   SetProvider(provider);
   globalProvider = provider;
 
@@ -168,9 +179,8 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
   // Startup() entirely — adding it initializes LocalCacheManager and makes an
   // MJ_STARTUP_MODE=full opt-up actually pre-warm engines on PG too.
   const startupMode = ResolveStartupMode({ configValue: config.startup?.mode, defaultMode: 'task' });
-  const sysUser = UserCache.Instance.GetSystemUser();
-  const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
-  await StartupManager.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: startupMode.mode });
+  const startupUser = GetServerPrincipal() ?? undefined;
+  await StartupManager.Instance.Startup(false, startupUser, provider, { mode: startupMode.mode });
 
   return provider;
 }

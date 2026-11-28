@@ -87,15 +87,14 @@ describe('ViewOperationsHandler.runView', () => {
         expect(mockRunViewFn).not.toHaveBeenCalled();
     });
 
-    it('KNOWN GAP: entity lookup is case-sensitive (Entities.find ===), unlike EntityByName', async () => {
-        // The data-access convention is md.EntityByName (case-insensitive, trimmed).
-        // This handler scans Entities with strict equality, so a client sending
-        // 'customers' gets "not found" even though the entity exists. Pinned so a
-        // migration to EntityByName consciously flips this test.
-        const outcome = await ViewOperationsHandler.runView({ EntityName: 'customers' }, makeUser());
+    it('resolves entity names case-insensitively and normalizes params.EntityName', async () => {
+        const user = makeUser();
+        const params: RunViewParams = { EntityName: 'customers' };
+        const outcome = await ViewOperationsHandler.runView(params, user);
 
-        expect(outcome.success).toBe(false);
-        expect(outcome.error).toBe(`Entity 'customers' not found`);
+        expect(outcome.success).toBe(true);
+        expect(params.EntityName).toBe('Customers');
+        expect(mockRunViewFn).toHaveBeenCalledWith(params, user);
     });
 
     it('denies before executing when the user lacks read permission', async () => {
@@ -267,16 +266,13 @@ describe('ViewOperationsHandler.getEntityViews', () => {
         expect(outcome.error).toBe('timeout talking to DB');
     });
 
-    it('KNOWN GAP: the entity name is interpolated into ExtraFilter without escaping', async () => {
-        // Reachable only for names registered in metadata, so a hostile value requires a
-        // hostile entity name — but an entity legitimately named with an apostrophe
-        // (e.g. "O'Brien Records") already produces a broken/injectable filter today.
+    it('escapes single quotes in the entity name when building ExtraFilter', async () => {
         registerEntity("O'Brien Records", true);
         mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
 
         await ViewOperationsHandler.getEntityViews("O'Brien Records", makeUser());
 
         const executed = mockRunViewFn.mock.calls[0][0] as RunViewParams;
-        expect(executed.ExtraFilter).toBe(`Entity = 'O'Brien Records'`); // quote NOT doubled
+        expect(executed.ExtraFilter).toBe(`Entity = 'O''Brien Records'`);
     });
 });

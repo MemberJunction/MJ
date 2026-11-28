@@ -1,9 +1,10 @@
 /**
  * Transitive dependency graph construction for MJ Open Apps.
  *
- * Builds the COMPLETE dependency graph for an app by recursively fetching each
- * dependency's manifest from its repository, then runs cycle detection and a
- * topological sort over the full graph. This is the up-front pass that lets the
+ * Builds the COMPLETE dependency graph for an app by recursively reading what each
+ * dependency itself depends on (an installed app's recorded dependencies, otherwise the
+ * manifest in its repository), then runs cycle detection and a topological sort over
+ * the full graph. This is the up-front pass that lets the
  * installer detect cross-repo cycles (e.g. A -> B -> A) *before* doing any work,
  * rather than discovering them via runaway recursion partway through an install.
  *
@@ -33,7 +34,8 @@ export interface FetchedManifest {
 
 /**
  * Fetches and parses an app manifest from a repository URL, at `version` when
- * given (otherwise the default branch).
+ * given (otherwise the default branch). `appName` is given for an installed app, to find
+ * its version tag in a repository that tags by package name.
  *
  * Injected into the graph builder so it can be unit-tested without network
  * access. Returns the manifest on success, or an error message when it can't be
@@ -42,7 +44,8 @@ export interface FetchedManifest {
 export type ManifestFetcher = (
     repoUrl: string,
     subpath?: string,
-    version?: string
+    version?: string,
+    appName?: string
 ) => Promise<{ Success: boolean; Manifest?: FetchedManifest; ErrorMessage?: string }>;
 
 /**
@@ -53,7 +56,9 @@ export type ManifestFetcher = (
  */
 export type DependencyVersionResolver = (
     repoUrl: string,
-    versionRange: string
+    versionRange: string,
+    subpath?: string,
+    appName?: string
 ) => Promise<{ Version?: string; ErrorMessage?: string }>;
 
 /**
@@ -78,6 +83,8 @@ export interface GraphResolutionResult {
     InstallOrder?: ResolvedDependency[];
     /** Error message if a cycle, version conflict, or unresolvable manifest was found */
     ErrorMessage?: string;
+    /** Installed apps whose own dependencies could not be read, and so were not checked */
+    Warnings?: string[];
 }
 
 /**
@@ -86,7 +93,7 @@ export interface GraphResolutionResult {
 interface GraphNode {
     AppName: string;
     Repository: string;
-    /** The node's own dependency edges (empty when its manifest couldn't be fetched) */
+    /** The node's own dependency edges (empty when they couldn't be read) */
     Dependencies: Record<string, DependencyValue>;
     AlreadyInstalled: boolean;
     InstalledVersion?: string;
@@ -127,13 +134,12 @@ function ParseDependencyValue(value: DependencyValue): { versionRange: string; r
 /**
  * Resolves the complete transitive dependency graph for an app.
  *
- * Fetches every reachable dependency's manifest (via the injected fetcher),
- * validates version compatibility for already-installed dependencies, resolves
- * each not-yet-installed dependency to a concrete version (via the injected
- * resolver) and fetches its manifest at that version, fails when two parents
- * require ranges the resolved version can't both satisfy, detects
- * circular dependency chains across the full graph, and returns the leaf-first
- * install order.
+ * Validates version compatibility for already-installed dependencies and follows
+ * the dependencies of the version that is installed, resolves each not-yet-installed
+ * dependency to a concrete version (via the injected resolver) and fetches its
+ * manifest at that version, fails when two parents require ranges the resolved
+ * version can't both satisfy, detects circular dependency chains across the full
+ * graph, and returns the leaf-first install order.
  *
  * @param root - The app being installed and its direct dependency declarations
  * @param installedApps - Map of apps already installed in the MJ instance
@@ -149,17 +155,17 @@ export async function ResolveDependencyGraph(
     fetchManifest: ManifestFetcher,
     resolveVersion?: DependencyVersionResolver
 ): Promise<GraphResolutionResult> {
-    const { graph, errors } = await BuildGraph(root, installedApps, fetchManifest, resolveVersion);
+    const { graph, errors, warnings } = await BuildGraph(root, installedApps, fetchManifest, resolveVersion);
 
     // Cycle detection is structural — report it first so a genuine cycle isn't
     // masked by version-conflict noise it may have produced along the way.
     const sorted = TopologicalSort(graph);
     if (sorted.CycleError) {
-        return { Success: false, ErrorMessage: sorted.CycleError };
+        return { Success: false, ErrorMessage: sorted.CycleError, Warnings: warnings };
     }
 
     if (errors.length > 0) {
-        return { Success: false, ErrorMessage: errors.join('; ') };
+        return { Success: false, ErrorMessage: errors.join('; '), Warnings: warnings };
     }
 
     const installOrder: ResolvedDependency[] = sorted.Order!
@@ -177,22 +183,23 @@ export async function ResolveDependencyGraph(
             };
         });
 
-    return { Success: true, InstallOrder: installOrder };
+    return { Success: true, InstallOrder: installOrder, Warnings: warnings };
 }
 
 /**
- * Breadth-first traversal that fetches each reachable dependency's manifest and
+ * Breadth-first traversal that reads what each reachable dependency depends on and
  * assembles the complete graph. Version compatibility is validated per-edge so
- * conflicts from any requiring parent are caught. Returns the graph plus any non-structural errors encountered.
+ * conflicts from any requiring parent are caught. Returns the graph plus any non-structural errors and warnings.
  */
 async function BuildGraph(
     root: RootApp,
     installedApps: InstalledAppMap,
     fetchManifest: ManifestFetcher,
     resolveVersion: DependencyVersionResolver | undefined
-): Promise<{ graph: Map<string, GraphNode>; errors: string[] }> {
+): Promise<{ graph: Map<string, GraphNode>; errors: string[]; warnings: string[] }> {
     const graph = new Map<string, GraphNode>();
     const errors: string[] = [];
+    const warnings: string[] = [];
 
     graph.set(root.AppName, {
         AppName: root.AppName,
@@ -209,18 +216,18 @@ async function BuildGraph(
 
     while (queue.length > 0) {
         const edge = queue.shift()!;
-        await ProcessEdge(edge, graph, installedApps, fetchManifest, resolveVersion, errors, queue);
+        await ProcessEdge(edge, graph, installedApps, fetchManifest, resolveVersion, errors, warnings, queue);
     }
 
-    return { graph, errors };
+    return { graph, errors, warnings };
 }
 
 /**
  * Processes a single dependency edge: validates version compatibility for
  * installed dependencies and against the version already chosen for a node seen
  * on an earlier edge, and — the first time a node is seen — resolves its version
- * (when uninstalled), creates it and fetches its manifest at that version to
- * enqueue its own transitive edges.
+ * (when uninstalled), creates it and reads that version's dependencies to enqueue
+ * its own transitive edges.
  */
 async function ProcessEdge(
     edge: QueuedEdge,
@@ -229,6 +236,7 @@ async function ProcessEdge(
     fetchManifest: ManifestFetcher,
     resolveVersion: DependencyVersionResolver | undefined,
     errors: string[],
+    warnings: string[],
     queue: QueuedEdge[]
 ): Promise<void> {
     const depName = edge.name;
@@ -265,9 +273,18 @@ async function ProcessEdge(
         InstalledVersion: installed?.Version,
         RequiredVersionRange: versionRange,
         RequiredBy: edge.parent,
-        Subpath: subpath,
+        Subpath: installed?.Subpath ?? subpath,
     };
     graph.set(depName, node);
+
+    // The installed version's own record. A repository cannot answer this reliably: its default
+    // branch moves ahead of the release, and the installed version may have no tag (#6877). Only
+    // a developer who runs the app from its default branch wants that branch instead.
+    const fromHead = installed?.FromHead === true && resolvedRepo !== '';
+    if (installed?.Dependencies && !fromHead) {
+        SetNodeDependencies(node, installed.Dependencies, queue);
+        return;
+    }
 
     if (!resolvedRepo) {
         // No repository to fetch from. If the dep isn't installed, the install
@@ -279,7 +296,7 @@ async function ProcessEdge(
     // Resolve an uninstalled dependency's version before fetching, so its own
     // dependencies come from the manifest of the version that will be installed.
     if (!node.AlreadyInstalled && resolveVersion) {
-        const resolved = await resolveVersion(resolvedRepo, versionRange);
+        const resolved = await resolveVersion(resolvedRepo, versionRange, node.Subpath, depName);
         if (resolved.ErrorMessage) {
             errors.push(
                 `Cannot resolve dependency '${depName}' ('${edge.parent}' requires '${versionRange}'): ${resolved.ErrorMessage}`
@@ -289,20 +306,41 @@ async function ProcessEdge(
         node.ResolvedVersion = resolved.Version;
     }
 
-    const fetched = await fetchManifest(resolvedRepo, subpath, node.ResolvedVersion);
+    const fetched = await fetchManifest(
+        resolvedRepo,
+        node.Subpath,
+        fromHead ? undefined : node.ResolvedVersion ?? node.InstalledVersion,
+        installed ? depName : undefined
+    );
     if (fetched.Success && fetched.Manifest) {
         node.EffectiveVersion = node.ResolvedVersion ?? fetched.Manifest.version;
-        node.Dependencies = fetched.Manifest.dependencies ?? {};
-        for (const [name, value] of Object.entries(node.Dependencies)) {
-            queue.push({ name, value, parent: depName });
-        }
-    } else if (!node.AlreadyInstalled) {
+        SetNodeDependencies(node, fetched.Manifest.dependencies ?? {}, queue);
+    } else if (fromHead && installed?.Dependencies) {
+        warnings.push(
+            `The default branch of installed app '${depName}' (v${node.InstalledVersion}) could not be read from ` +
+            `${resolvedRepo} (${fetched.ErrorMessage ?? 'unknown error'}): its recorded dependencies are used`
+        );
+        SetNodeDependencies(node, installed.Dependencies, queue);
+    } else if (node.AlreadyInstalled) {
+        // A leaf: the app is already in place, so this does not stop the operation.
+        warnings.push(
+            `The dependencies of installed app '${depName}' (v${node.InstalledVersion}) are not checked: ` +
+            `its manifest could not be read from ${resolvedRepo} (${fetched.ErrorMessage ?? 'unknown error'})`
+        );
+    } else {
         // Can't resolve an uninstalled dependency's manifest — hard error.
         errors.push(
             `Failed to fetch manifest for dependency '${depName}' from ${resolvedRepo}: ${fetched.ErrorMessage ?? 'unknown error'}`
         );
     }
-    // installed + fetch failed -> treat as leaf; its subtree is already satisfied.
+}
+
+/** Records what a node depends on and enqueues an edge for each of those dependencies. */
+function SetNodeDependencies(node: GraphNode, dependencies: Record<string, DependencyValue>, queue: QueuedEdge[]): void {
+    node.Dependencies = dependencies;
+    for (const [name, value] of Object.entries(dependencies)) {
+        queue.push({ name, value, parent: node.AppName });
+    }
 }
 
 /** True when a declared range puts no constraint on the version. */

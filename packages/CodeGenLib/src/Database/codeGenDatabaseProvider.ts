@@ -2,6 +2,7 @@ import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, EntityAlternateBaseV
 import { MJGlobal } from '@memberjunction/global';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import { TrimTrailingStatementTerminators } from '../Misc/sql_text';
+import type { SQLObjectFailure } from './sqlPassFailures';
 
 /**
  * Topologically orders an entity's alternate base views by `ParentID` so parent
@@ -810,7 +811,7 @@ export abstract class CodeGenDatabaseProvider {
      * metadata and getting the indexes you need were mutually exclusive, and the more correct the
      * metadata became the worse the query plans got.
      *
-     * TWO SOURCES, both of which are MJ's own verified join declarations rather than inferences:
+     * THREE SOURCES, all of which are MJ's own verified join declarations rather than inferences:
      *
      *  - `EntityRelationship.EntityKeyField` on the relationships this entity parents. That column is
      *    exactly what `BuildRelationshipViewParams` puts on the left of the predicate for every
@@ -820,6 +821,11 @@ export abstract class CodeGenDatabaseProvider {
      *
      *  - The match fields of this entity's ACTIVE, `ExactMatch`-normalized organic keys. An organic
      *    key is a human-verified join over columns that carry no constraint at all.
+     *
+     *  - Polymorphic foreign-key column pairs declared via `EntityField.EntityIDFieldName` (such as
+     *    `RecordID` paired with `EntityIDFieldName: 'EntityID'`). Both the record pointer and its
+     *    companion entity type field are indexed so polymorphic join and lookup queries resolve via
+     *    index seeks rather than table scans.
      *
      * ONLY `ExactMatch`, DELIBERATELY. Every other normalization strategy wraps the column in a
      * function — `LOWER(LTRIM(RTRIM(col)))` for the default `LowerCaseTrim` — and a plain B-tree
@@ -845,6 +851,16 @@ export abstract class CodeGenDatabaseProvider {
                 if (trimmed) {
                     out.add(trimmed.toLowerCase());
                 }
+            }
+        }
+        for (const f of entity.Fields ?? []) {
+            const entityIdFieldName = f.EntityIDFieldName?.trim();
+            if (entityIdFieldName) {
+                const fieldName = f.Name?.trim();
+                if (fieldName) {
+                    out.add(fieldName.toLowerCase());
+                }
+                out.add(entityIdFieldName.toLowerCase());
             }
         }
         return out;
@@ -1570,6 +1586,14 @@ export abstract class CodeGenDatabaseProvider {
                 parts.push(`${colRef} = ${dialect.IsNull(paramRef, colRef)}`);
             }
         }
+        if (parts.length > 0) {
+            const updatedAtField = entityFields.find(
+                f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.toLowerCase().trim()
+            );
+            if (updatedAtField) {
+                parts.push(`${dialect.QuoteIdentifier(updatedAtField.Name)} = ${dialect.CurrentTimestampUTC()}`);
+            }
+        }
         return parts.join(',\n        ');
     }
 
@@ -1983,12 +2007,32 @@ export abstract class CodeGenDatabaseProvider {
 
     // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
 
+    /** Object-level failures recorded by {@link executeSQLFileViaShell} since the last {@link ClearSQLObjectFailures}. */
+    protected sqlObjectFailures: SQLObjectFailure[] = [];
+
+    /**
+     * The failed batches {@link executeSQLFileViaShell} recorded since the last
+     * {@link ClearSQLObjectFailures}, each named by the object it acts on. Empty for a provider
+     * that does not record them.
+     */
+    public get SQLObjectFailures(): ReadonlyArray<SQLObjectFailure> {
+        return this.sqlObjectFailures;
+    }
+
+    /** Forgets the recorded object-level failures, so a caller can scope them to one step. */
+    public ClearSQLObjectFailures(): void {
+        this.sqlObjectFailures = [];
+    }
+
     /**
      * Executes a SQL file using the platform's native CLI tool (sqlcmd/psql).
      * The implementation is responsible for reading connection configuration
      * from the environment or config objects.
      *
      * @param filePath Path to the SQL file to execute.
+     * A provider that runs the file batch by batch should also add each failed batch to
+     * {@link SQLObjectFailures}.
+     *
      * @returns True if execution succeeded, false otherwise.
      */
     abstract executeSQLFileViaShell(filePath: string): Promise<boolean>;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
@@ -2079,6 +2123,7 @@ export abstract class CodeGenDatabaseProvider {
         ftsSQL: string;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
+        OnDependentViewUnrestored?: (schema: string, viewName: string) => void;
     }): Promise<PhasedExecutionResult>;
 
     // ─── POST-RUN VALIDATION ─────────────────────────────────────────────

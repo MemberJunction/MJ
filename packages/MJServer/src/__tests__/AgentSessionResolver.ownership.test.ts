@@ -53,7 +53,7 @@ function makeProvider(sessionFound = true, externalId = 'visitor-1'): IMetadataP
     return {
         GetEntityObject: vi.fn(async (entityName: string) =>
             entityName === 'MJ: AI Agent Sessions'
-                ? { UserID: ANON, ConversationID: CONVERSATION, Load: vi.fn(async () => sessionFound) }
+                ? { ID: SESSION, UserID: ANON, ConversationID: CONVERSATION, Load: vi.fn(async () => sessionFound) }
                 : { ExternalID: externalId, Load: vi.fn(async () => true) },
         ),
     } as unknown as IMetadataProvider;
@@ -121,11 +121,31 @@ describe('CloseAgentSession close reason (MJ#6013)', () => {
         expect(closeSessionMock).toHaveBeenCalledWith(SESSION, expect.anything(), provider, 'Error');
     });
 
+    it('closes by the loaded row\'s own ID, not the client\'s spelling of it, so overlapping closes share one close', async () => {
+        const resolver = new AgentSessionResolver();
+        const provider = makeProvider(true, 'visitor-1');
+        await expect(resolver.CloseAgentSession(`  {${SESSION.toLowerCase()}} `, makeCtx(guest('visitor-1'), provider))).resolves.toBe(true);
+        expect(closeSessionMock).toHaveBeenCalledWith(SESSION, expect.anything(), provider, 'Explicit');
+    });
+
     it('defaults to Explicit when the client sends no reason (older clients)', async () => {
         const resolver = new AgentSessionResolver();
         const provider = makeProvider(true, 'visitor-1');
         await expect(resolver.CloseAgentSession(SESSION, makeCtx(guest('visitor-1'), provider))).resolves.toBe(true);
         expect(closeSessionMock).toHaveBeenCalledWith(SESSION, expect.anything(), provider, 'Explicit');
+    });
+
+    it('a client may stamp TimeLimit (CloseSession verifies it); Janitor, Shutdown and Idle are still refused', async () => {
+        const resolver = new AgentSessionResolver();
+        const provider = makeProvider(true, 'visitor-1');
+        const ctx = makeCtx(guest('visitor-1'), provider);
+        await expect(resolver.CloseAgentSession(SESSION, ctx, 'TimeLimit')).resolves.toBe(true);
+        expect(closeSessionMock).toHaveBeenCalledWith(SESSION, expect.anything(), provider, 'TimeLimit');
+        closeSessionMock.mockClear();
+        for (const reason of ['Janitor', 'Shutdown', 'Idle']) {
+            await expect(resolver.CloseAgentSession(SESSION, ctx, reason)).rejects.toThrow(/Unsupported close reason/);
+        }
+        expect(closeSessionMock).not.toHaveBeenCalled();
     });
 
     it('refuses a reason only the server may stamp', async () => {

@@ -20,7 +20,7 @@
  *   (`'open' | 'closed'`) because no per-channel transition observable exists
  *   today; see `ISessionsAdapter` JSDoc for the rationale.
  * - `session-ended` — the session ended client-side. `reason` is a narrowed
- *   union (`'explicit' | 'error' | 'unknown'`) — see `ISessionsAdapter`.
+ *   union (`'explicit' | 'error' | 'deadline' | 'unknown'`) — see `ISessionsAdapter`.
  *
  * **What you DON'T get:** server-side close events that fire while the user's
  * tab is gone (janitor sweep, host shutdown). Those flow into the `MJ: AI Agent
