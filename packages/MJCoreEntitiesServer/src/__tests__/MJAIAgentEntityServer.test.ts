@@ -14,7 +14,10 @@ import {
     type AgentSandboxValidationContext,
     type AgentSandboxValidationTarget,
 } from '../custom/MJAIAgentEntityServer.server';
-import { ValidateAgentPersonaOwnership } from '../custom/MJAIAgentPersonaEntityServer.server';
+import {
+    MJAIAgentPersonaEntityServer,
+    ValidateAgentPersonaOwnership,
+} from '../custom/MJAIAgentPersonaEntityServer.server';
 import {
     MJAIAgentCategoryEntityServer,
     ValidateAgentCategoryDelete,
@@ -1640,5 +1643,186 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
             loadBatchSpy.mockRestore();
             baseValidateSpy.mockRestore();
         }
+    });
+
+    it('C-R3-1 & C-R3-2: derived GraphQL create preserves explicit Configuration.scope.searchScopeAccess and applies R5-6 non-instantiable derived ancestor ceiling', async () => {
+        const l0 = baseAgentRow({
+            ID: COS_ID,
+            Name: 'L0 Root',
+            BaseAgentID: null,
+            InstantiationMode: 'Optional',
+            SearchScopeAccess: 'All',
+            Configuration: null,
+        });
+        // Non-instantiable derived middle node L1 sitting at default SearchScopeAccess='None' + Configuration=null
+        // resolves to 'All' under R5-6!
+        const l1 = baseAgentRow({
+            ID: 'c3200000-0000-4000-8000-000000000001',
+            Name: 'L1 Non-Instantiable Derived',
+            BaseAgentID: l0.ID,
+            InstantiationMode: 'None',
+            SearchScopeAccess: 'None',
+            Configuration: null,
+        });
+
+        const buildDerivedCreate = (opts: {
+            baseId: string;
+            config: string | null;
+            configDirty: boolean;
+            searchNeverSet: boolean;
+        }) => {
+            const fieldState = new Map<string, { Name: string; Dirty: boolean; NeverSet: boolean; OldValue?: unknown }>();
+            fieldState.set('SearchScopeAccess', { Name: 'SearchScopeAccess', Dirty: false, NeverSet: opts.searchNeverSet });
+            fieldState.set('Configuration', { Name: 'Configuration', Dirty: opts.configDirty, NeverSet: false });
+            const server = Object.create(MJAIAgentEntityServer.prototype) as MJAIAgentEntityServer & Record<string, unknown>;
+            server['GetFieldByName'] = (name: string) => fieldState.get(name);
+            Object.defineProperty(server, 'Fields', { get: () => Array.from(fieldState.values()), configurable: true });
+            Object.defineProperty(server, 'IsSaved', { get: () => false, configurable: true });
+            Object.defineProperty(server, 'ContextCurrentUser', { get: () => null, configurable: true });
+            Object.defineProperty(server, 'ID', { value: 'c3200000-0000-4000-8000-000000000099', writable: true, configurable: true });
+            Object.defineProperty(server, 'BaseAgentID', { value: opts.baseId, writable: true, configurable: true });
+            Object.defineProperty(server, 'OwnerUserID', { value: ALICE, writable: true, configurable: true });
+            Object.defineProperty(server, 'TypeID', { value: l0.TypeID, writable: true, configurable: true });
+            Object.defineProperty(server, 'CategoryID', { value: l0.CategoryID, writable: true, configurable: true });
+            Object.defineProperty(server, 'IsPrimaryInstance', { value: false, writable: true, configurable: true });
+            Object.defineProperty(server, 'SearchScopeAccess', { value: 'None', writable: true, configurable: true });
+            Object.defineProperty(server, 'Configuration', { value: opts.config, writable: true, configurable: true });
+            Object.defineProperty(server, 'TypeConfiguration', { value: null, writable: true, configurable: true });
+            vi.spyOn(
+                server as unknown as {
+                    loadGuardMetadataBatch(): Promise<{
+                        AllAgents: MJAIAgentEntity[];
+                        AllPermissions: MJAIAgentPermissionEntity[];
+                        AllCategories: unknown[];
+                        AllAgentTypes: unknown[];
+                    }>;
+                },
+                'loadGuardMetadataBatch'
+            ).mockResolvedValue({ AllAgents: [l0, l1], AllPermissions: [], AllCategories: [], AllAgentTypes: [] });
+            vi.spyOn(
+                server as unknown as { clearOtherPrimaryInstances(): Promise<void> },
+                'clearOtherPrimaryInstances'
+            ).mockResolvedValue(undefined);
+            return server;
+        };
+
+        const baseSaveSpy = vi.spyOn(BaseEntity.prototype, 'Save').mockResolvedValue(true);
+        try {
+            // C-R3-1: GraphQL create with explicit Configuration.scope.searchScopeAccess='Assigned' + untouched SearchScopeAccess='None'
+            const s1 = buildDerivedCreate({
+                baseId: l0.ID,
+                config: JSON.stringify({ scope: { searchScopeAccess: 'Assigned' } }),
+                configDirty: false,
+                searchNeverSet: false,
+            });
+            expect(await s1.Save()).toBe(true);
+            expect(JSON.parse(String(s1['Configuration'])).scope?.searchScopeAccess).toBe('Assigned');
+            expect(s1['SearchScopeAccess']).toBe('Assigned');
+
+            // C-R3-2a: Untouched (NeverSet=true) create under L1 inherits L0's 'All' (not L1's default 'None')
+            const s2 = buildDerivedCreate({
+                baseId: l1.ID,
+                config: null,
+                configDirty: false,
+                searchNeverSet: true,
+            });
+            expect(await s2.Save()).toBe(true);
+            expect(s2['SearchScopeAccess']).toBe('All');
+
+            // C-R3-2b: Explicit SearchScopeAccess='None' (NeverSet=false) create under L1 persists scope.searchScopeAccess='None'
+            // because effective ancestor ceiling through L1 is 'All' (not 'None')!
+            const s3 = buildDerivedCreate({
+                baseId: l1.ID,
+                config: null,
+                configDirty: false,
+                searchNeverSet: false,
+            });
+            expect(await s3.Save()).toBe(true);
+            expect(s3['SearchScopeAccess']).toBe('None');
+            expect(JSON.parse(String(s3['Configuration'])).scope?.searchScopeAccess).toBe('None');
+        } finally {
+            baseSaveSpy.mockRestore();
+        }
+    });
+
+    it('C-R3-3: rejects cross-field compaction & execution pair inversions on create and JSON-only updates for Agent & AgentType', async () => {
+        // Case A: AgentType create with CompactionTriggerPercent=25 (Dirty=true) vs untouched SQL default CompactionTargetPercent=30
+        const typeFieldsA = new Map<string, { Name: string; Dirty: boolean; NeverSet: boolean; OldValue?: unknown }>();
+        typeFieldsA.set('DefaultAgentConfiguration', { Name: 'DefaultAgentConfiguration', Dirty: false, NeverSet: true });
+        typeFieldsA.set('CompactionTriggerPercent', { Name: 'CompactionTriggerPercent', Dirty: true, NeverSet: false });
+        typeFieldsA.set('CompactionTargetPercent', { Name: 'CompactionTargetPercent', Dirty: false, NeverSet: false });
+        const typeServerA = Object.create(MJAIAgentTypeEntityServer.prototype) as MJAIAgentTypeEntityServer & Record<string, unknown>;
+        typeServerA['GetFieldByName'] = (name: string) => typeFieldsA.get(name);
+        Object.defineProperty(typeServerA, 'IsSaved', { get: () => false, configurable: true });
+        Object.defineProperty(typeServerA, 'ContextCurrentUser', { get: () => null, configurable: true });
+        Object.defineProperty(typeServerA, 'Name', { value: 'BadType', writable: true, configurable: true });
+        Object.defineProperty(typeServerA, 'DefaultAgentConfiguration', { value: null, writable: true, configurable: true });
+        Object.defineProperty(typeServerA, 'CompactionTriggerPercent', { value: 25, writable: true, configurable: true });
+        Object.defineProperty(typeServerA, 'CompactionTargetPercent', { value: 30, writable: true, configurable: true });
+
+        // Case B: Saved AIAgent JSON-only update setting compactionTargetPercent=80 against stored CompactionTriggerPercent=75
+        const agentFieldsB = new Map<string, { Name: string; Dirty: boolean; NeverSet: boolean; OldValue?: unknown }>();
+        agentFieldsB.set('Configuration', { Name: 'Configuration', Dirty: true, NeverSet: false, OldValue: null });
+        agentFieldsB.set('CompactionTriggerPercent', { Name: 'CompactionTriggerPercent', Dirty: false, NeverSet: false, OldValue: 75 });
+        agentFieldsB.set('CompactionTargetPercent', { Name: 'CompactionTargetPercent', Dirty: false, NeverSet: false, OldValue: 30 });
+        const agentServerB = Object.create(MJAIAgentEntityServer.prototype) as MJAIAgentEntityServer & Record<string, unknown>;
+        agentServerB['GetFieldByName'] = (name: string) => agentFieldsB.get(name);
+        Object.defineProperty(agentServerB, 'Fields', { get: () => Array.from(agentFieldsB.values()), configurable: true });
+        Object.defineProperty(agentServerB, 'IsSaved', { get: () => true, configurable: true });
+        Object.defineProperty(agentServerB, 'ContextCurrentUser', { get: () => null, configurable: true });
+        Object.defineProperty(agentServerB, 'BaseAgentID', { get: () => null, configurable: true });
+        Object.defineProperty(agentServerB, 'OwnerUserID', { get: () => null, configurable: true });
+        Object.defineProperty(agentServerB, 'TypeConfiguration', { get: () => null, configurable: true });
+        Object.defineProperty(agentServerB, 'Configuration', {
+            value: JSON.stringify({ contextWindow: { compactionTargetPercent: 80 } }),
+            writable: true,
+            configurable: true,
+        });
+        Object.defineProperty(agentServerB, 'CompactionTriggerPercent', { value: 75, writable: true, configurable: true });
+        Object.defineProperty(agentServerB, 'CompactionTargetPercent', { value: 30, writable: true, configurable: true });
+
+        let valA: ValidationResult | null = null;
+        let valB: ValidationResult | null = null;
+        const baseValidateSpy = vi.spyOn(BaseEntity.prototype, 'ValidateAsync').mockImplementation(async () => {
+            const vr = new ValidationResult();
+            vr.Success = true;
+            return vr;
+        });
+        const baseSaveSpy = vi.spyOn(BaseEntity.prototype, 'Save').mockImplementation(async function (this: BaseEntity) {
+            const vr = await this.ValidateAsync();
+            if (this === typeServerA) valA = vr;
+            if (this === agentServerB) valB = vr;
+            return vr.Success;
+        });
+        try {
+            expect(await typeServerA.Save()).toBe(false);
+            expect(valA?.Success).toBe(false);
+            expect((valA?.Errors ?? []).some((e) => /CompactionTargetPercent/i.test(e.Message))).toBe(true);
+
+            expect(await agentServerB.Save()).toBe(false);
+            expect(valB?.Success).toBe(false);
+            expect((valB?.Errors ?? []).some((e) => /CompactionTargetPercent/i.test(e.Message))).toBe(true);
+            expect(agentServerB['CompactionTargetPercent']).toBe(80);
+        } finally {
+            baseSaveSpy.mockRestore();
+            baseValidateSpy.mockRestore();
+        }
+    });
+
+    it('C-R3-4: MJAIAgentPersonaEntityServer.Delete() populates LatestResult.CompleteMessage on refusal', async () => {
+        const uiUser = makeUser(ALICE, 'User', ['UI']);
+        const personaServer = Object.create(MJAIAgentPersonaEntityServer.prototype) as MJAIAgentPersonaEntityServer & Record<string, unknown>;
+        personaServer['_resultHistory'] = [];
+        personaServer['GetFieldByName'] = () => undefined;
+        Object.defineProperty(personaServer, 'ContextCurrentUser', { get: () => uiUser, configurable: true });
+        Object.defineProperty(personaServer, 'AgentID', { get: () => COS_ID, configurable: true });
+        vi.spyOn(
+            personaServer as unknown as { loadAgent(id: string): Promise<MJAIAgentEntity | null> },
+            'loadAgent'
+        ).mockResolvedValue(baseAgentRow({ ID: COS_ID, BaseAgentID: null, OwnerUserID: null }));
+
+        expect(await personaServer.Delete()).toBe(false);
+        expect(personaServer.LatestResult?.Success).toBe(false);
+        expect(personaServer.LatestResult?.CompleteMessage).toMatch(/Non-administrator users can only configure personas/i);
     });
 });

@@ -269,6 +269,46 @@ function collectDefaultPolicyLayers(
 }
 
 /**
+ * Computes the effective monotonic `SearchScopeAccess` ceiling across Category/Type default policy
+ * layers and the ancestor agent chain using the exact `R5-6` node-property rule shared with
+ * `BaseAIEngine.ResolveAgentConfiguration`:
+ * - Only treat an untouched legacy `'None'` (with no explicit JSON value) as unset on a
+ *   non-instantiable derived row (`BaseAgentID != null && InstantiationMode === 'None'`).
+ * - Roots and instantiable templates (`InstantiationMode !== 'None'`) enforce `'None'` as an
+ *   active ceiling.
+ */
+function computeAncestorSearchScopeCeiling(
+    defaultPolicyLayers: readonly IAgentConfiguration[],
+    ancestors: readonly Partial<Pick<MJAIAgentEntity, 'BaseAgentID' | 'InstantiationMode' | 'SearchScopeAccess'>>[],
+    ancestorConfigs: readonly (IAgentConfiguration | null)[]
+): MJAIAgentEntity['SearchScopeAccess'] | null {
+    let ceiling: MJAIAgentEntity['SearchScopeAccess'] | null = null;
+    const apply = (val: MJAIAgentEntity['SearchScopeAccess'] | null | undefined): void => {
+        if (val != null) {
+            if (ceiling === null || SEARCH_ACCESS_RANK[val] < SEARCH_ACCESS_RANK[ceiling]) {
+                ceiling = val;
+            }
+        }
+    };
+    for (const layer of defaultPolicyLayers) {
+        apply(layer.scope?.searchScopeAccess);
+    }
+    for (let i = 0; i < ancestors.length; i++) {
+        const explicit = ancestorConfigs[i]?.scope?.searchScopeAccess ?? null;
+        const legacy = ancestors[i].SearchScopeAccess ?? null;
+        if (explicit != null && legacy != null) {
+            const stricter = SEARCH_ACCESS_RANK[legacy] < SEARCH_ACCESS_RANK[explicit] ? legacy : explicit;
+            apply(stricter);
+        } else {
+            const isNonInstantiableDerived =
+                Boolean(ancestors[i].BaseAgentID) && (ancestors[i].InstantiationMode ?? 'None') === 'None';
+            apply(explicit ?? (legacy && (legacy !== 'None' || !isNonInstantiableDerived) ? legacy : null));
+        }
+    }
+    return ceiling;
+}
+
+/**
  * PURE validation core for `BaseAgentID` prototype inheritance integrity and non-Owner (`UI` role)
  * sandboxing (exported for unit tests and called by {@link MJAIAgentEntityServer.ValidateAsync}):
  *
@@ -809,35 +849,7 @@ export function ValidateAgentInheritanceAndSandbox(
         // Narrow-only capabilities validated across BOTH Configuration JSON and legacy columns
         // as well as Category/AgentType default policy layers (C-R1-2):
         // 4a. SearchScopeAccess (None: 0 < Assigned: 1 < All: 2)
-        let ancestorSearchAccess: MJAIAgentEntity['SearchScopeAccess'] | null = null;
-        const applySearchAccessCeiling = (val: MJAIAgentEntity['SearchScopeAccess'] | null | undefined): void => {
-            if (val != null) {
-                if (ancestorSearchAccess === null || SEARCH_ACCESS_RANK[val] < SEARCH_ACCESS_RANK[ancestorSearchAccess]) {
-                    ancestorSearchAccess = val;
-                }
-            }
-        };
-        for (const layer of defaultPolicyLayers) {
-            applySearchAccessCeiling(layer.scope?.searchScopeAccess);
-        }
-        for (let i = 0; i < ancestors.length; i++) {
-            const explicit = ancestorConfigs[i]?.scope?.searchScopeAccess ?? null;
-            const legacy = ancestors[i].SearchScopeAccess ?? null;
-            if (explicit != null && legacy != null) {
-                const stricter = SEARCH_ACCESS_RANK[legacy] < SEARCH_ACCESS_RANK[explicit] ? legacy : explicit;
-                applySearchAccessCeiling(stricter);
-            } else {
-                // Mirror BaseAIEngine's node-property rule (R5-6): only treat an untouched legacy
-                // `'None'` (with no explicit JSON value) as unset on a non-instantiable derived row
-                // (`BaseAgentID != null && InstantiationMode === 'None'`). Roots and instantiable
-                // templates (`InstantiationMode !== 'None'`) enforce `'None'` as an active ceiling.
-                const isNonInstantiableDerived =
-                    Boolean(ancestors[i].BaseAgentID) && (ancestors[i].InstantiationMode ?? 'None') === 'None';
-                applySearchAccessCeiling(
-                    explicit ?? (legacy && (legacy !== 'None' || !isNonInstantiableDerived) ? legacy : null)
-                );
-            }
-        }
+        const ancestorSearchAccess = computeAncestorSearchScopeCeiling(defaultPolicyLayers, ancestors, ancestorConfigs);
         const targetSearchAccess = targetConfig?.scope?.searchScopeAccess ?? Target.SearchScopeAccess ?? null;
         if (
             shouldEnforceField('SearchScopeAccess') &&
@@ -1042,21 +1054,27 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                 if (baseAgent) {
                     resolvedRootBaseId = this.findRootBaseAgentId(baseAgent, allAgents);
                     if (isCreate) {
-                        this.inheritDefaultsFromBaseAgent(baseAgent, allAgents, allCategories, allAgentTypes);
-                        // R5-1: If the caller explicitly wrote `SearchScopeAccess = 'None'` (`NeverSet === false`)
-                        // on a derived create under a broader base (`SearchScopeAccess !== 'None'`), persist
-                        // `scope.searchScopeAccess = 'None'` into `Configuration` so runtime resolution honors
-                        // the explicit restriction instead of treating the leaf column `'None'` as unset.
+                        const ancestorSearchCeiling = this.inheritDefaultsFromBaseAgent(
+                            baseAgent,
+                            allAgents,
+                            allCategories,
+                            allAgentTypes
+                        );
+                        // R5-1 + C-R3-1 + C-R3-2: If the caller explicitly wrote `SearchScopeAccess = 'None'`
+                        // (`NeverSet === false`) WITHOUT explicitly setting `Configuration.scope.searchScopeAccess`,
+                        // under a broader effective ancestor ceiling (`ancestorSearchCeiling !== 'None'`),
+                        // persist `scope.searchScopeAccess = 'None'` into `Configuration` so runtime resolution
+                        // honors the explicit restriction instead of treating the leaf column `'None'` as unset.
                         const searchField = this.GetFieldByName('SearchScopeAccess');
-                        const baseSearchAccess =
-                            ParseAgentConfiguration(baseAgent.Configuration)?.scope?.searchScopeAccess ??
-                            baseAgent.SearchScopeAccess ??
-                            'None';
+                        const explicitConfigSearchAccess =
+                            ParseAgentConfiguration(this.Configuration)?.scope?.searchScopeAccess;
                         if (
                             this.SearchScopeAccess === 'None' &&
                             searchField &&
                             searchField.NeverSet === false &&
-                            baseSearchAccess !== 'None'
+                            explicitConfigSearchAccess === undefined &&
+                            ancestorSearchCeiling !== null &&
+                            ancestorSearchCeiling !== 'None'
                         ) {
                             callerDirtyLegacyFields.add('SearchScopeAccess');
                         }
@@ -1170,6 +1188,61 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                 result.Success = false;
                 return result;
             }
+        }
+
+        // C-R3-3: Always enforce SQL CHECK cross-field pair invariants against live post-sync
+        // entity properties whenever Configuration or either column of the pair changed (covers
+        // single-sided creates, JSON-only updates, and mixed legacy+JSON updates).
+        const compactionTouched =
+            configDirtyForValidation ||
+            Object.prototype.hasOwnProperty.call(dirtyLegacyPatch, 'CompactionTargetPercent') ||
+            Object.prototype.hasOwnProperty.call(dirtyLegacyPatch, 'CompactionTriggerPercent') ||
+            (this.GetFieldByName('CompactionTargetPercent')?.Dirty ?? false) ||
+            (this.GetFieldByName('CompactionTriggerPercent')?.Dirty ?? false);
+        if (
+            compactionTouched &&
+            typeof this.CompactionTargetPercent === 'number' &&
+            Number.isFinite(this.CompactionTargetPercent) &&
+            typeof this.CompactionTriggerPercent === 'number' &&
+            Number.isFinite(this.CompactionTriggerPercent) &&
+            this.CompactionTargetPercent >= this.CompactionTriggerPercent
+        ) {
+            result.Errors.push(
+                new ValidationErrorInfo(
+                    'CompactionTargetPercent',
+                    `CompactionTargetPercent (${this.CompactionTargetPercent}) must be less than CompactionTriggerPercent (${this.CompactionTriggerPercent}).`,
+                    this.CompactionTargetPercent,
+                    ValidationErrorType.Failure
+                )
+            );
+            result.Success = false;
+            return result;
+        }
+
+        const execRangeTouched =
+            configDirtyForValidation ||
+            Object.prototype.hasOwnProperty.call(dirtyLegacyPatch, 'MinExecutionsPerRun') ||
+            Object.prototype.hasOwnProperty.call(dirtyLegacyPatch, 'MaxExecutionsPerRun') ||
+            (this.GetFieldByName('MinExecutionsPerRun')?.Dirty ?? false) ||
+            (this.GetFieldByName('MaxExecutionsPerRun')?.Dirty ?? false);
+        if (
+            execRangeTouched &&
+            typeof this.MinExecutionsPerRun === 'number' &&
+            Number.isFinite(this.MinExecutionsPerRun) &&
+            typeof this.MaxExecutionsPerRun === 'number' &&
+            Number.isFinite(this.MaxExecutionsPerRun) &&
+            this.MinExecutionsPerRun > this.MaxExecutionsPerRun
+        ) {
+            result.Errors.push(
+                new ValidationErrorInfo(
+                    'MinExecutionsPerRun',
+                    `MinExecutionsPerRun (${this.MinExecutionsPerRun}) cannot exceed MaxExecutionsPerRun (${this.MaxExecutionsPerRun}).`,
+                    this.MinExecutionsPerRun,
+                    ValidationErrorType.Failure
+                )
+            );
+            result.Success = false;
+            return result;
         }
 
         // 1. BaseAgentID inheritance, helperPlugins & non-admin sandbox checks
@@ -1314,7 +1387,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         allAgents?: readonly MJAIAgentEntity[],
         allCategories?: AgentSandboxValidationContext['AllCategories'],
         allAgentTypes?: AgentSandboxValidationContext['AllAgentTypes']
-    ): void {
+    ): MJAIAgentEntity['SearchScopeAccess'] | null {
         const nonLegacySqlDefaults: Partial<Record<keyof MJAIAgentEntity, unknown>> = {
             AcceptsSkills: 'None',
             Isolation: 'InProcess',
@@ -1423,19 +1496,8 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             foldSkillMode(ancestors[i].SkillActivationMode);
         }
 
-        let strictestSearchAccess: MJAIAgentEntity['SearchScopeAccess'] = baseAgent.SearchScopeAccess ?? 'None';
-        const foldSearchAccess = (v: MJAIAgentEntity['SearchScopeAccess'] | null | undefined): void => {
-            if (v != null && SEARCH_ACCESS_RANK[v] < SEARCH_ACCESS_RANK[strictestSearchAccess]) {
-                strictestSearchAccess = v;
-            }
-        };
-        for (const layer of defaultPolicyLayers) {
-            foldSearchAccess(layer.scope?.searchScopeAccess);
-        }
-        for (let i = 0; i < ancestors.length; i++) {
-            foldSearchAccess(ancestorConfigs[i]?.scope?.searchScopeAccess);
-            foldSearchAccess(ancestors[i].SearchScopeAccess);
-        }
+        const ancestorSearchCeiling = computeAncestorSearchScopeCeiling(defaultPolicyLayers, ancestors, ancestorConfigs);
+        const strictestSearchAccess: MJAIAgentEntity['SearchScopeAccess'] = ancestorSearchCeiling ?? 'None';
 
         copyIfNotDirty('ModelSelectionMode');
         copyIfNotDirty('AcceptsSkills');
@@ -1524,6 +1586,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         copyIfNotDirty('CompactionTriggerPercent');
         copyIfNotDirty('CompactionTargetPercent');
         copyIfNotDirty('ConversationSummaryPromptID');
+        return ancestorSearchCeiling;
     }
 
     private findRootBaseAgentId(

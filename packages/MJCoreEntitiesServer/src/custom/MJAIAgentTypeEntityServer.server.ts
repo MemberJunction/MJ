@@ -106,17 +106,47 @@ export class MJAIAgentTypeEntityServer extends MJAIAgentTypeEntity {
                 }
                 result.Success = result.Errors.every((e) => e.Type !== ValidationErrorType.Failure);
             }
-            return result;
+        } else {
+            const errors = ValidateAgentScopedConfigurationJson(
+                this.DefaultAgentConfiguration,
+                'DefaultAgentConfiguration',
+                'AI Agent Type',
+                this.ContextCurrentUser
+            );
+            result.Errors.push(...errors);
+            result.Success = result.Errors.every((e) => e.Type !== ValidationErrorType.Failure);
         }
 
-        const errors = ValidateAgentScopedConfigurationJson(
-            this.DefaultAgentConfiguration,
-            'DefaultAgentConfiguration',
-            'AI Agent Type',
-            this.ContextCurrentUser
-        );
-        result.Errors.push(...errors);
-        result.Success = result.Errors.every((e) => e.Type !== ValidationErrorType.Failure);
+        // C-R3-3: Always enforce the SQL CHECK invariant CompactionTargetPercent < CompactionTriggerPercent
+        // against live post-sync entity properties whenever Configuration or either column changed (covers
+        // single-sided creates, JSON-only updates, and mixed legacy+JSON updates).
+        if (result.Success) {
+            const dirtyPatch = this._dirtyLegacyPatchForValidation ?? {};
+            const compactionTouched =
+                configDirty ||
+                Object.prototype.hasOwnProperty.call(dirtyPatch, 'CompactionTargetPercent') ||
+                Object.prototype.hasOwnProperty.call(dirtyPatch, 'CompactionTriggerPercent') ||
+                (this.GetFieldByName('CompactionTargetPercent')?.Dirty ?? false) ||
+                (this.GetFieldByName('CompactionTriggerPercent')?.Dirty ?? false);
+            if (
+                compactionTouched &&
+                typeof this.CompactionTargetPercent === 'number' &&
+                Number.isFinite(this.CompactionTargetPercent) &&
+                typeof this.CompactionTriggerPercent === 'number' &&
+                Number.isFinite(this.CompactionTriggerPercent) &&
+                this.CompactionTargetPercent >= this.CompactionTriggerPercent
+            ) {
+                result.Errors.push(
+                    new ValidationErrorInfo(
+                        'CompactionTargetPercent',
+                        `CompactionTargetPercent (${this.CompactionTargetPercent}) must be less than CompactionTriggerPercent (${this.CompactionTriggerPercent}).`,
+                        this.CompactionTargetPercent,
+                        ValidationErrorType.Failure
+                    )
+                );
+                result.Success = false;
+            }
+        }
         return result;
     }
 
