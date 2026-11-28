@@ -34,7 +34,6 @@ function baseInput(overrides: Partial<HomeAgentContextInput> = {}): HomeAgentCon
         RecentItems: [],
         EditMode: false,
         AddPanelOpen: false,
-        SidebarOpen: false,
         AddPanelSearchQuery: '',
         PinnedCollapsed: false,
         CurrentDashboardName: null,
@@ -46,7 +45,7 @@ function baseInput(overrides: Partial<HomeAgentContextInput> = {}): HomeAgentCon
 }
 
 describe('buildHomeAgentContext', () => {
-    it('reports the core launcher / pin / sidebar state', () => {
+    it('reports the core launcher / pin state', () => {
         const ctx = BuildHomeAgentContext(baseInput());
         expect(ctx['AppCount']).toBe(2);
         expect(ctx['VisibleAppCount']).toBe(2);
@@ -58,7 +57,7 @@ describe('buildHomeAgentContext', () => {
         expect(ctx['RecentItemsCount']).toBe(5);
         expect(ctx['EditMode']).toBe(false);
         expect(ctx['AddPanelOpen']).toBe(false);
-        expect(ctx['SidebarOpen']).toBe(false);
+        expect('SidebarOpen' in ctx).toBe(false);
     });
 
     it('omits the panel search query when the panel is closed', () => {
@@ -142,10 +141,9 @@ describe('buildHomeAgentContext', () => {
         }
     });
 
-    it('reflects edit mode and sidebar/panel toggles', () => {
-        const ctx = BuildHomeAgentContext(baseInput({ EditMode: true, SidebarOpen: true, AddPanelOpen: true }));
+    it('reflects edit mode and add-pin panel toggles', () => {
+        const ctx = BuildHomeAgentContext(baseInput({ EditMode: true, AddPanelOpen: true }));
         expect(ctx['EditMode']).toBe(true);
-        expect(ctx['SidebarOpen']).toBe(true);
         expect(ctx['AddPanelOpen']).toBe(true);
     });
 

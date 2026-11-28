@@ -218,4 +218,12 @@ describe('CreateRichNotification', () => {
     expect(el.querySelectorAll('img')).toHaveLength(0);
     expect(el.textContent).toContain('<b>x</b>');
   });
+
+  it('positions the toast container cleanly below the 60px Explorer shell header', () => {
+    const service = createService();
+    show(service, { title: 'Saved changes' });
+    const container = document.getElementById('mj-toast-container');
+    expect(container).not.toBeNull();
+    expect(container?.style.top).toBe('72px');
+  });
 });

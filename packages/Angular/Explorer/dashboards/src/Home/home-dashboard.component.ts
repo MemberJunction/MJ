@@ -1,11 +1,10 @@
 import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild, ChangeDetectionStrategy, ElementRef, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem, HomeAppPinService, HomeAppPinnedItem, HomeAppPinInput, ActionPinConfiguration, IsDashboardEntity, SafeDetectChanges, BuildDashboardPinInput } from '@memberjunction/ng-shared';
-import { ResourceTypeForEntity } from '@memberjunction/ng-shared-generic';
+import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem, HomeAppPinService, HomeAppPinnedItem, HomeAppPinInput, ActionPinConfiguration, SafeDetectChanges, BuildDashboardPinInput } from '@memberjunction/ng-shared';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { Metadata, CompositeKey, EntityRecordNameInput, RunView, PermissionConstrainedError, LogError } from '@memberjunction/core';
-import { ResourceData, MJUserFavoriteEntity, MJUserNotificationEntity, UserInfoEngine, DashboardEngine, UserViewEngine, QueryEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJUserNotificationEntity, UserInfoEngine, DashboardEngine, UserViewEngine, QueryEngine } from '@memberjunction/core-entities';
 import type { MJDashboardEntity } from '@memberjunction/core-entities';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
@@ -159,29 +158,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     this.ShowConfigDialog = value;
   }
 
-  // Favorites
-  public Favorites: MJUserFavoriteEntity[] = [];
-
-  /** @deprecated Use {@link Favorites}. */
-  public get favorites(): MJUserFavoriteEntity[] {
-    return this.Favorites;
-  }
-  /** @deprecated Use {@link Favorites}. */
-  public set favorites(value: MJUserFavoriteEntity[]) {
-    this.Favorites = value;
-  }
-  public FavoritesLoading = true;
-
-  /** @deprecated Use {@link FavoritesLoading}. */
-  public get favoritesLoading() {
-    return this.FavoritesLoading;
-  }
-  /** @deprecated Use {@link FavoritesLoading}. */
-  public set favoritesLoading(value) {
-    this.FavoritesLoading = value;
-  }
-
-  // Recents
+  // Recents (used by agent context and OpenRecent tool)
   public RecentItems: RecentAccessItem[] = [];
 
   /** @deprecated Use {@link RecentItems}. */
@@ -192,18 +169,8 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   public set recentItems(value: RecentAccessItem[]) {
     this.RecentItems = value;
   }
-  public RecentsLoading = true;
 
-  /** @deprecated Use {@link RecentsLoading}. */
-  public get recentsLoading() {
-    return this.RecentsLoading;
-  }
-  /** @deprecated Use {@link RecentsLoading}. */
-  public set recentsLoading(value) {
-    this.RecentsLoading = value;
-  }
-
-  // Notifications
+  // Notifications (used by agent context)
   public UnreadNotifications: MJUserNotificationEntity[] = [];
 
   /** @deprecated Use {@link UnreadNotifications}. */
@@ -213,28 +180,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /** @deprecated Use {@link UnreadNotifications}. */
   public set unreadNotifications(value: MJUserNotificationEntity[]) {
     this.UnreadNotifications = value;
-  }
-  public NotificationsLoading = true;
-
-  /** @deprecated Use {@link NotificationsLoading}. */
-  public get notificationsLoading() {
-    return this.NotificationsLoading;
-  }
-  /** @deprecated Use {@link NotificationsLoading}. */
-  public set notificationsLoading(value) {
-    this.NotificationsLoading = value;
-  }
-
-  // Sidebar state - default closed on all screen sizes
-  public SidebarOpen = false;
-
-  /** @deprecated Use {@link SidebarOpen}. */
-  public get sidebarOpen() {
-    return this.SidebarOpen;
-  }
-  /** @deprecated Use {@link SidebarOpen}. */
-  public set sidebarOpen(value) {
-    this.SidebarOpen = value;
   }
 
   // Pin empty-state dismissal preference (persisted in UserSettings via UserInfoEngine)
@@ -334,20 +279,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   public DragOverPinId: string | null = null;
 
   // Cached icon lookups to avoid repeated method calls
-  private favoriteIconCache = new Map<string, string>();
   private resourceIconCache = new Map<string, string>();
-
-  // Resolved display names for favorites (keyed by favorite ID)
-  public FavoriteDisplayNames = new Map<string, string>();
-
-  /** @deprecated Use {@link FavoriteDisplayNames}. */
-  public get favoriteDisplayNames() {
-    return this.FavoriteDisplayNames;
-  }
-  /** @deprecated Use {@link FavoriteDisplayNames}. */
-  public set favoriteDisplayNames(value) {
-    this.FavoriteDisplayNames = value;
-  }
 
   /** True when Home shows its overview: the greeting, Pinned and My applications. */
   public get ShowOverview(): boolean {
@@ -359,11 +291,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     return !this.isLoading && this.CurrentDashboard !== null;
   }
 
-  /** The Quick Access button and sidebar show on the overview only: in the dashboard view the button would cover the header's actions. */
-  public get ShowQuickAccess(): boolean {
-    return this.HasSidebarContent && !this.CurrentDashboard;
-  }
-
   /** The name of the dashboard Home shows, from the dashboard cache; null on the overview. */
   public get CurrentDashboardName(): string | null {
     return this.CurrentDashboardId ? this.cachedDashboardName(this.CurrentDashboardId) : null;
@@ -372,43 +299,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /** True while the dashboard Home shows is in edit mode (see BaseResourceComponent.IsEditing). */
   public override IsEditing(): boolean {
     return this.IsDashboardEditing;
-  }
-
-  /**
-   * Check if sidebar has any content to show
-   */
-  get HasSidebarContent(): boolean {
-    return this.UnreadNotifications.length > 0 ||
-           this.Favorites.length > 0 ||
-           this.RecentItems.length > 0 ||
-           this.FavoritesLoading ||
-           this.RecentsLoading;
-  }
-
-  /** @deprecated Use {@link HasSidebarContent}. */
-  get hasSidebarContent(): boolean {
-    return this.HasSidebarContent;
-  }
-
-  /**
-   * Opens or closes the Quick Access sidebar and marks Home for check, so the change shows at the next render also
-   * when the agent's ToggleSidebar tool calls this outside a template event.
-   */
-  ToggleSidebar(): void {
-    this.SidebarOpen = !this.SidebarOpen;
-    this.cdr.markForCheck();
-  }
-
-  /** @deprecated Use {@link ToggleSidebar}. */
-  toggleSidebar(): void {
-    return this.ToggleSidebar();
-  }
-
-  /**
-   * Check if current device is mobile (width <= 768px)
-   */
-  private isMobileDevice(): boolean {
-    return typeof window !== 'undefined' && window.innerWidth <= 768;
   }
 
   constructor(
@@ -469,12 +359,11 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         this.cdr.markForCheck();
       });
 
-    // Subscribe to unread notifications
+    // Subscribe to unread notifications (kept unsliced so agent context reflects true count)
     MJNotificationService.Notifications$
       .pipe(takeUntil(this.destroy$))
       .subscribe(notifications => {
-        this.UnreadNotifications = notifications.filter(n => n.Unread).slice(0, 5);
-        this.NotificationsLoading = false;
+        this.UnreadNotifications = notifications.filter(n => n.Unread);
         this.publishAgentContext();
         this.cdr.markForCheck();
       });
@@ -484,7 +373,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       .pipe(takeUntil(this.destroy$))
       .subscribe(items => {
         this.RecentItems = this.deduplicateRecents(items).slice(0, 5);
-        this.RecentsLoading = false;
         this.publishAgentContext();
         this.cdr.markForCheck();
       });
@@ -494,11 +382,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => this.refreshPinnedDashboards());
 
-    // Favorites and recents load asynchronously in the sidebar
     this.NotifyLoadComplete();
 
-    // Load favorites and recents asynchronously (don't block rendering)
-    this.loadFavorites();
+    // Load recents asynchronously for agent navigation context (don't block rendering)
     this.loadRecents();
 
     // Load pin empty-state dismissal preference
@@ -579,7 +465,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       RecentItems: this.buildRecentItemSummaries(),
       EditMode: this.EditMode,
       AddPanelOpen: this.AddPanelOpen,
-      SidebarOpen: this.SidebarOpen,
       AddPanelSearchQuery: this.AddPanelSearchQuery,
       PinnedCollapsed: !this.PinnedExpanded,
       CurrentDashboardName: this.CurrentDashboardName,
@@ -674,12 +559,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
           this.publishAgentContext();
           return { Success: true };
         },
-      },
-      {
-        Name: 'ToggleSidebar',
-        Description: `Toggle the Home sidebar (unread notifications, favorites, and recent items). Quick Access shows on the ${HOME_OVERVIEW_NAME} overview only: while Home shows a dashboard, use SwitchHomeDashboard with "${HOME_OVERVIEW_NAME}" first.`,
-        ParameterSchema: { type: 'object', properties: {} },
-        Handler: async () => this.toolToggleSidebar(),
       },
       {
         Name: 'TogglePinEditMode',
@@ -829,16 +708,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       return { Success: false, ErrorMessage: `"${target.Name}" did not open. The user kept editing the open dashboard.` };
     }
     return { Success: true, Data: { CurrentDashboardName: target.Name } };
-  }
-
-  /** Opens or closes Quick Access. While a dashboard shows, where Quick Access does not show, it changes nothing. */
-  private toolToggleSidebar(): AgentToolResult & { Data?: Record<string, unknown> } {
-    if (this.CurrentDashboardId) {
-      return { Success: false, ErrorMessage: overviewOnlyError('Quick Access') };
-    }
-    this.ToggleSidebar();
-    this.publishAgentContext();
-    return { Success: true, Data: { SidebarOpen: this.SidebarOpen } };
   }
 
   /**
@@ -1010,60 +879,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   /**
-   * Load user favorites from UserInfoEngine (cached) and resolve record display names
-   */
-  private async loadFavorites(): Promise<void> {
-    try {
-      this.FavoritesLoading = true;
-
-      // Get first 10 favorites (already ordered by __mj_CreatedAt DESC in engine)
-      this.Favorites = UserInfoEngine.Instance.UserFavorites.slice(0, 10);
-
-      // Batch-resolve record names for all favorites
-      await this.resolveFavoriteNames();
-    } catch (error) {
-      console.error('Error loading favorites:', error);
-    } finally {
-      this.FavoritesLoading = false;
-      this.cdr.markForCheck();
-    }
-  }
-
-  /**
-   * Batch-resolve record display names for favorites using GetEntityRecordNames()
-   */
-  private async resolveFavoriteNames(): Promise<void> {
-    const nameInputs: EntityRecordNameInput[] = [];
-    const favoriteIdByKey = new Map<string, string>(); // map key -> favorite ID
-
-    for (const fav of this.Favorites) {
-      if (!fav.Entity || !fav.RecordID) continue;
-      const compositeKey = this.buildCompositeKeyForRecord(fav.Entity, fav.RecordID);
-      if (!compositeKey) continue;
-
-      nameInputs.push({ EntityName: fav.Entity, CompositeKey: compositeKey });
-      favoriteIdByKey.set(`${fav.Entity}||${compositeKey.ToConcatenatedString()}`, fav.ID);
-    }
-
-    if (nameInputs.length === 0) return;
-
-    try {
-      const nameResults = await this.metadata.GetEntityRecordNames(nameInputs);
-      for (const result of nameResults) {
-        if (result.Success && result.RecordName) {
-          const key = `${result.EntityName}||${result.CompositeKey.ToConcatenatedString()}`;
-          const favId = favoriteIdByKey.get(key);
-          if (favId) {
-            this.FavoriteDisplayNames.set(favId, result.RecordName);
-          }
-        }
-      }
-    } catch (error) {
-      console.warn('Failed to resolve favorite record names:', error);
-    }
-  }
-
-  /**
    * Build a CompositeKey for a record. RecordID may be stored as either:
    * - Concatenated format: "FieldName|Value" or "Field1|Val1||Field2|Val2"
    * - Plain value: just the raw value (e.g. a GUID)
@@ -1078,59 +893,16 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   /**
-   * Get the display name for a favorite (resolved name or entity name fallback)
-   */
-  GetFavoriteDisplayName(favorite: MJUserFavoriteEntity): string {
-    return this.FavoriteDisplayNames.get(favorite.ID) || favorite.Entity || favorite.RecordID;
-  }
-
-  /** @deprecated Use {@link GetFavoriteDisplayName}. */
-  getFavoriteDisplayName(favorite: MJUserFavoriteEntity): string {
-    return this.GetFavoriteDisplayName(favorite);
-  }
-
-  /**
    * Load recent items via the RecentAccessService
    */
   private async loadRecents(): Promise<void> {
     try {
-      this.RecentsLoading = true;
-      this.cdr.markForCheck();
       await this.recentAccessService.loadRecentItems(10);
     } catch (error) {
       console.error('Error loading recents:', error);
     } finally {
-      this.RecentsLoading = false;
       this.cdr.markForCheck();
     }
-  }
-
-  /**
-   * Navigate to a favorite item using NavigationService
-   */
-  OnFavoriteClick(favorite: MJUserFavoriteEntity): void {
-    // Navigate based on entity type using NavigationService
-    const entityName = favorite.Entity?.toLowerCase();
-    const recordId = favorite.RecordID;
-
-    if (IsDashboardEntity(favorite.Entity)) {
-      this.openDashboard(recordId, 'Dashboard');
-    } else if (ResourceTypeForEntity(favorite.Entity) === 'view') {
-      this.navigationService.OpenView(recordId, 'View');
-    } else if (entityName?.includes('artifact')) {
-      this.navigationService.OpenArtifact(recordId, 'Artifact');
-    } else {
-      // Default: navigate to record
-      const compositeKey = this.buildCompositeKeyForRecord(favorite.Entity, recordId);
-      if (compositeKey) {
-        this.navigationService.OpenEntityRecord(favorite.Entity, compositeKey);
-      }
-    }
-  }
-
-  /** @deprecated Use {@link OnFavoriteClick}. */
-  onFavoriteClick(favorite: MJUserFavoriteEntity): void {
-    return this.OnFavoriteClick(favorite);
   }
 
   /**
@@ -1163,19 +935,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /** @deprecated Use {@link OnRecentClick}. */
   onRecentClick(item: RecentAccessItem): void {
     return this.OnRecentClick(item);
-  }
-
-  /**
-   * Navigate to a notification using NavigationService
-   */
-  OnNotificationClick(notification: MJUserNotificationEntity): void {
-    // Navigate to the notifications view using NavigationService
-    this.navigationService.OpenDynamicView('MJ: User Notifications');
-  }
-
-  /** @deprecated Use {@link OnNotificationClick}. */
-  onNotificationClick(notification: MJUserNotificationEntity): void {
-    return this.OnNotificationClick(notification);
   }
 
   /**
@@ -1220,33 +979,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   /**
-   * Format a date for display (pure function, safe to call in template)
-   */
-  formatDate(date: Date): string {
-    if (!date) return '';
-    const now = new Date();
-    const diff = now.getTime() - new Date(date).getTime();
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-    if (days === 0) return 'Today';
-    if (days === 1) return 'Yesterday';
-    if (days < 7) return `${days} days ago`;
-    return new Date(date).toLocaleDateString();
-  }
-
-  /**
-   * Track function for favorites
-   */
-  TrackByFavorite(_index: number, item: MJUserFavoriteEntity): string {
-    return item.ID;
-  }
-
-  /** @deprecated Use {@link TrackByFavorite}. */
-  trackByFavorite(_index: number, item: MJUserFavoriteEntity): string {
-    return this.TrackByFavorite(_index, item);
-  }
-
-  /**
    * Remove duplicate recent items (same entity + recordId). Keeps the first occurrence.
    */
   private deduplicateRecents(items: RecentAccessItem[]): RecentAccessItem[] {
@@ -1259,30 +991,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       seen.add(key);
       return true;
     });
-  }
-
-  /**
-   * Track function for recent items
-   */
-  TrackByRecent(_index: number, item: RecentAccessItem): string {
-    return `${item.entityName}-${item.recordId}`;
-  }
-
-  /** @deprecated Use {@link TrackByRecent}. */
-  trackByRecent(_index: number, item: RecentAccessItem): string {
-    return this.TrackByRecent(_index, item);
-  }
-
-  /**
-   * Track function for notifications
-   */
-  TrackByNotification(_index: number, item: MJUserNotificationEntity): string {
-    return item.ID;
-  }
-
-  /** @deprecated Use {@link TrackByNotification}. */
-  trackByNotification(_index: number, item: MJUserNotificationEntity): string {
-    return this.TrackByNotification(_index, item);
   }
 
   // =============================================
@@ -1605,7 +1313,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     this.focusTitleOnLoad = null;
     this.urlShownDashboardId = null;
     this.EditingPinId = null;
-    this.SidebarOpen = false;
     this.HidePinMenu();
     this.publishAgentContext();
     this.cdr.markForCheck();

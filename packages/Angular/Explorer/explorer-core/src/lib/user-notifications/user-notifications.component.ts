@@ -1,12 +1,25 @@
-import { Component, ChangeDetectorRef, NgZone, OnDestroy, OnInit, AfterViewInit, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, NgZone, OnDestroy, OnInit, AfterViewInit, ViewContainerRef, inject } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
-import { MJUserNotificationEntity, MJUserNotificationTypeEntity, MJUserRoutineEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { CompositeKey, TransactionGroupBase } from '@memberjunction/core';
-import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { ApplicationManager, NavItem } from '@memberjunction/ng-base-application';
+import { MJUserNotificationEntity, MJUserNotificationTypeEntity } from '@memberjunction/core-entities';
+import { TransactionGroupBase } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationUtility } from '@memberjunction/ai-core-plus';
+import { ProfileDialogService } from '../shell/services/profile-dialog.service';
+import {
+  BuildNotificationUrl,
+  FormatRelativeNotificationTime,
+  GetNotificationTypeDisplay,
+  GetSortedNotificationTypes,
+  IsNotificationClickable as IsNotificationClickableHelper,
+  MarkNotificationAsRead,
+  NavigateToNotificationTarget,
+  NotificationUrlInfo,
+} from './notification-action.helpers';
 
 /**
  * Radio button filter options for notification read status
@@ -57,52 +70,6 @@ interface NotificationGroup {
   Key: string;
   Label: string;
   Items: NotificationVM[];
-}
-
-/**
- * Configuration for record-type resource navigation
- */
-interface RecordResourceConfig {
-  Entity?: string;
-}
-
-/**
- * Configuration for conversation-type resource navigation
- */
-interface ConversationResourceConfig {
-  type: 'conversation';
-  conversationId?: string;
-  messageId?: string;
-  artifactId?: string;
-  versionNumber?: string;
-  taskId?: string;
-}
-
-/**
- * Configuration for agent-request-type resource navigation
- */
-interface AgentRequestResourceConfig {
-  type: 'agent-request';
-  requestId: string;
-}
-
-/**
- * Configuration written by the User Routine dispatcher for a routine run. `conversationId` is
- * the routine's own conversation, where the run's reply lives; older notifications lack it.
- */
-interface UserRoutineResourceConfig {
-  type: 'UserRoutine';
-  routineId: string;
-  runId?: string;
-  conversationId?: string;
-}
-
-/**
- * Result of parsing a notification URL
- */
-interface NotificationUrlInfo {
-  urlParts: string[];
-  queryString: string;
 }
 
 /**
@@ -471,6 +438,18 @@ export function ClassifyNotificationMessage(message: string): ClassifiedNotifica
 export class UserNotificationsComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone, { optional: true });
+  private profileDialogService = inject(ProfileDialogService, { optional: true });
+  private viewContainerRef = inject(ViewContainerRef, { optional: true });
+
+  public get CanOpenPreferences(): boolean {
+    return Boolean(this.profileDialogService && this.viewContainerRef);
+  }
+
+  public OpenNotificationPreferences(): void {
+    if (this.profileDialogService && this.viewContainerRef) {
+      this.profileDialogService.Open(this.viewContainerRef);
+    }
+  }
 
   public RadioSelected: ReadFilterOption = 'All';
 
@@ -533,6 +512,8 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   private groupsKey = '';
   private vmCache = new Map<string, NotificationVM>();
   private relativeTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly destroy$ = new Subject<void>();
+  private cacheVersion = 0;
 
   constructor (
     public SharedService: SharedService,
@@ -553,6 +534,12 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
 
   async ngOnInit() {
     this.loadNotificationTypes();
+    MJNotificationService.Notifications$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.invalidateCaches();
+        this.cdr.markForCheck();
+      });
     // Refresh the snapshot relative-time labels between change-detection passes.
     // Run outside NgZone so the 60s timer only triggers Angular CD when a label actually changes.
     const startTimer = () => {
@@ -587,22 +574,23 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
     if (this.relativeTimer != null) {
       clearInterval(this.relativeTimer);
     }
   }
 
+  private invalidateCaches(): void {
+    this.cacheVersion = (this.cacheVersion ?? 0) + 1;
+    this.notificationsToShowKey = '';
+    this.unreadNotificationsKey = '';
+    this.readNotificationsKey = '';
+    this.groupsKey = '';
+  }
+
   private loadNotificationTypes() {
-    // Get notification types from UserInfoEngine cache, sorted client-side
-    // UserInfoEngine is auto-configured via @RegisterForStartup()
-    this.NotificationTypes = [...UserInfoEngine.Instance.NotificationTypes].sort((a, b) => {
-      const priorityA = a.Priority ?? 999;
-      const priorityB = b.Priority ?? 999;
-      if (priorityA !== priorityB) {
-        return priorityA - priorityB;
-      }
-      return a.Name.localeCompare(b.Name);
-    });
+    this.NotificationTypes = GetSortedNotificationTypes();
     this.LoadingTypes = false;
   }
 
@@ -623,7 +611,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     for (let i = 0; i < all.length; i++) {
       if (all[i].Unread) unreadCount++;
     }
-    const baseKey = `${all.length}|${unreadCount}|${all[0]?.ID ?? ''}|${all[all.length - 1]?.ID ?? ''}`;
+    const baseKey = `${this.cacheVersion ?? 0}|${all.length}|${unreadCount}|${all[0]?.ID ?? ''}|${all[all.length - 1]?.ID ?? ''}`;
     return { all, unreadCount, baseKey };
   }
 
@@ -744,17 +732,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
 
   /** Compact "just now / 5m ago / 3h ago / 2d ago" label. NEVER call from templates (NG0100) — snapshot only. */
   private relativeTime(value: Date | string | null | undefined): string {
-    if (!value) {
-      return '';
-    }
-    const ms = Date.now() - new Date(value).getTime();
-    const minutes = Math.floor(ms / 60_000);
-    if (minutes < 1) return 'just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return days < 7 ? `${days}d ago` : '';
+    return FormatRelativeNotificationTime(value);
   }
 
   private dayLabel(value: Date | string | null | undefined): string {
@@ -794,27 +772,11 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   // ========================================================================
-  // Clickability + navigation (unchanged behavior)
+  // Clickability + navigation (delegated to notification-action.helpers)
   // ========================================================================
 
   public IsNotificationClickable(notification: MJUserNotificationEntity): boolean {
-    // Check for special types navigated via NavigationService (not a URL)
-    if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
-      const config = SafeJSONParse<AgentRequestResourceConfig>(notification.ResourceConfiguration);
-      if (config && config.type?.trim().toLowerCase() === 'agent-request' && config.requestId) {
-        return true;
-      }
-      const typeName = SafeJSONParse<{ type?: string }>(notification.ResourceConfiguration)?.type?.trim().toLowerCase();
-      if (typeName === 'meet-room') {
-        return true;
-      }
-      if (this.parseUserRoutineConfig(notification)) {
-        return true;
-      }
-    }
-
-    const info = this.NotificationUrl(notification);
-    return (info !== null && info.urlParts && info.urlParts.length > 0);
+    return IsNotificationClickableHelper(notification, this.SharedService);
   }
 
   /** @deprecated Use {@link IsNotificationClickable}. */
@@ -823,53 +785,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   public NotificationUrl(notification: MJUserNotificationEntity): NotificationUrlInfo {
-    const url: string[] = [];
-    let queryString = '';
-    if (notification.ResourceRecordID && notification.ResourceRecordID.length > 0 &&
-        notification.ResourceTypeID && notification.ResourceTypeID.length > 0) {
-      // we have a resource here, like a Report, Dashboard, etc
-      // we can generate a url to navigate to it
-      const rt = this.SharedService.ResourceTypeByID(notification.ResourceTypeID);
-      let routeSegment: string | null | undefined;
-      if (rt)
-        routeSegment = this.SharedService.mapResourceTypeNameToRouteSegment(rt.Name);
-
-      if (rt && routeSegment && routeSegment.trim().length > 0) {
-        url.push('resource');
-        url.push(routeSegment);
-        url.push(notification.ResourceRecordID.toString());
-        if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
-          if (rt.Name.trim().toLowerCase() === 'records') {
-            // special handling for records
-            const config = SafeJSONParse<RecordResourceConfig>(notification.ResourceConfiguration);
-            if (config && config.Entity)
-              queryString = `Entity=${config.Entity}`;
-          }
-          else
-            queryString = notification.ResourceConfiguration;
-        }
-      }
-    }
-    else if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
-      // we do NOT have a resource type or resource record id, but we do have a ResourceConfiguration
-      // string, which means we might have information on how to navigate to what we want if we parse the config
-      // HOME screen stuff is done this way
-
-      const config = SafeJSONParse<ConversationResourceConfig>(notification.ResourceConfiguration);
-      if (config && config.type?.trim().toLowerCase() === 'conversation') {
-        url.push('chat');
-        // Build query string with conversation and artifact navigation
-        const queryParams: string[] = [];
-        if (config.conversationId) queryParams.push(`conversationId=${config.conversationId}`);
-        if (config.messageId) queryParams.push(`messageId=${config.messageId}`);
-        if (config.artifactId) queryParams.push(`artifactId=${config.artifactId}`);
-        if (config.versionNumber) queryParams.push(`versionNumber=${config.versionNumber}`);
-        if (config.taskId) queryParams.push(`taskId=${config.taskId}`);
-        queryString = queryParams.join('&');
-      }
-    }
-
-    return { urlParts: url, queryString };
+    return BuildNotificationUrl(notification, this.SharedService);
   }
 
   /** @deprecated Use {@link NotificationUrl}. */
@@ -901,6 +817,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
 
   SelectReadOption(option: ReadFilterOption): void {
     this.RadioSelected = option;
+    this.cdr?.markForCheck();
   }
 
   /** @deprecated Use {@link SelectReadOption}. */
@@ -918,39 +835,19 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   async MarkAsRead(notification: MJUserNotificationEntity, bRead: boolean, transGroup: TransactionGroupBase | null): Promise<boolean> {
-    if (notification) {
-      const notificationId = notification.ID;
-      notification.Unread = !bRead;
-      let notificationEntity: MJUserNotificationEntity;
-      if (notification instanceof MJUserNotificationEntity) {
-        // the passed in param truly is a MJUserNotificationEntity or subclass, so just use it, saves a DB round trip
-        notificationEntity = notification;
+    const saved = await MarkNotificationAsRead(notification, bRead, transGroup, this.ProviderToUse);
+    if (!transGroup) {
+      if (!saved) {
+        this.SharedService?.CreateSimpleNotification(
+          bRead ? 'Unable to mark notification as read' : 'Unable to mark notification as unread',
+          'error',
+          5000
+        );
       }
-      else {
-        // the passed in param is just a plain object, so we need to load the entity
-        const md = this.ProviderToUse;
-        notificationEntity = await md.GetEntityObject<MJUserNotificationEntity>('MJ: User Notifications');
-        await notificationEntity.Load(notificationId);
-        notificationEntity.Unread = !bRead;
-      }
-
-      // part of a transaction group, if so, add it as that will defer the actual network traffic/save
-      if (transGroup) {
-        notificationEntity.TransactionGroup = transGroup;
-        await notificationEntity.Save()
-        return true;
-      }
-      else {
-        // Save the notification (not part of transaction group)
-        await notificationEntity.Save();
-        // Update the observables so badge count refreshes immediately
-        MJNotificationService.UpdateNotificationObservables();
-        return true;
-      }
+      this.invalidateCaches();
+      this.cdr?.markForCheck();
     }
-    else {
-      return false;
-    }
+    return saved;
   }
 
   /** @deprecated Use {@link MarkAsRead}. */
@@ -977,26 +874,50 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   public async MarkAll(bRead: boolean) {
+    const targets = this.AllNotifications.filter(
+      notification => (notification.Unread && bRead) || (!notification.Unread && !bRead)
+    );
+    if (targets.length === 0) {
+      return;
+    }
+
     // Use transaction group for batching - all saves are queued and sent in one round-trip
     const md = this.ProviderToUse;
     const transGroup = await md.CreateTransactionGroup();
+    const previousUnread = new Map<MJUserNotificationEntity, boolean>(
+      targets.map(n => [n, n.Unread])
+    );
 
-    // Queue all saves. A grouped Save() runs validation and pre-save hooks before it joins the
-    // group, so wait for every one to be queued; submitting earlier sends an empty group that
-    // reports success and persists nothing. A grouped Save() resolves once queued, not once sent.
-    const queued: Promise<boolean>[] = [];
-    for (const notification of this.AllNotifications) {
-      if (notification.Unread && bRead || !notification.Unread && !bRead) {
-        queued.push(this.MarkAsRead(notification, bRead, transGroup));
+    try {
+      // Queue all saves. A grouped Save() runs validation and pre-save hooks before it joins the
+      // group, so wait for every one to be queued; submitting earlier sends an empty group that
+      // reports success and persists nothing. A grouped Save() resolves once queued, not once sent.
+      await Promise.all(targets.map(notification => this.MarkAsRead(notification, bRead, transGroup)));
+
+      // Submit transaction group - this is where the actual network call happens
+      if (!await transGroup.Submit()) {
+        for (const [notification, prev] of previousUnread) {
+          notification.Unread = prev;
+        }
+        this.SharedService.CreateSimpleNotification(
+          bRead ? 'Unable to mark all notifications as read' : 'Unable to mark all notifications as unread',
+          'error',
+          5000
+        );
+      } else {
+        SharedService.RefreshUserNotifications();
       }
+    } finally {
+      // Always detach the completed/failed TransactionGroup from every cached entity so
+      // subsequent single-item Read/Unread toggles persist immediately instead of enqueuing
+      // into a finished group.
+      for (const notification of targets) {
+        notification.TransactionGroup = null;
+      }
+      MJNotificationService.UpdateNotificationObservables();
+      this.invalidateCaches();
+      this.cdr?.markForCheck();
     }
-    await Promise.all(queued);
-
-    // Submit transaction group - this is where the actual network call happens
-    if (!await transGroup.Submit())
-      this.SharedService.CreateSimpleNotification('Unable to mark all notifications as read', 'error', 5000);
-    else
-      SharedService.RefreshUserNotifications();
   }
 
   /** @deprecated Use {@link MarkAll}. */
@@ -1009,291 +930,18 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       // also mark this as read when we click it
       this.MarkAsRead(notification, true, null);
 
-      // Check for special navigation types that use NavigationService (not router)
-      if (this.navigateToAgentRequest(notification)) {
-        return;
-      }
-      if (this.navigateToConversation(notification)) {
-        return;
-      }
-      if (this.navigateToMeetRoom(notification)) {
-        return;
-      }
-      if (this.navigateToUserRoutine(notification)) {
-        return;
-      }
-      if (this.navigateToHandoffConsole(notification)) {
-        return;
-      }
-      if (this.navigateToMeeting(notification)) {
-        return;
-      }
-
-      this.navigateToResource(notification);
+      NavigateToNotificationTarget(notification, {
+        SharedService: this.SharedService,
+        NavigationService: this.navigationService,
+        AppManager: this.appManager,
+        Provider: this.ProviderToUse,
+      });
     }
   }
 
   /** @deprecated Use {@link NotificationClicked}. */
   notificationClicked(notification: MJUserNotificationEntity): void {
     return this.NotificationClicked(notification);
-  }
-
-  /**
-   * Opens the Meet app's Live Room in JOIN mode for a `meet-room` invite notification (the
-   * `{ type:'meet-room', room }` ResourceConfiguration), mirroring {@link navigateToConversation}.
-   * Returns `false` (not handled) when the config isn't a meet-room invite or the Meet app is absent.
-   */
-  private navigateToMeetRoom(notification: MJUserNotificationEntity): boolean {
-    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
-      return false;
-    }
-    const config = SafeJSONParse<{ type?: string; room?: string }>(notification.ResourceConfiguration);
-    if (!config || config.type?.trim().toLowerCase() !== 'meet-room') {
-      return false;
-    }
-    const meetApp = this.appManager.GetAppByName('Meet');
-    if (!meetApp) {
-      return false;
-    }
-    const navConfig: Record<string, string> = {};
-    if (config.room) {
-      navConfig['room'] = config.room;
-    }
-    this.navigationService.OpenNavItemByName('Live Room', navConfig, meetApp.ID);
-    return true;
-  }
-
-  /**
-   * Opens the Conversation Console for a `handoff-offer` notification (the `{ type:'handoff-offer', offerId, room }`
-   * ResourceConfiguration the server sends when an AI agent offers a conversation to this person). The nav item is built here
-   * rather than looked up, so it works without an application metadata row; it lands in the Meet app when present, otherwise
-   * in whichever app the person is in. Returns `false` (not handled) for any other notification or when there is no app to host it.
-   */
-  private navigateToHandoffConsole(notification: MJUserNotificationEntity): boolean {
-    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
-      return false;
-    }
-    const config = SafeJSONParse<{ type?: string; offerId?: string }>(notification.ResourceConfiguration);
-    if (!config || config.type?.trim().toLowerCase() !== 'handoff-offer') {
-      return false;
-    }
-    const app = this.appManager.GetAppByName('Meet') ?? this.appManager.GetActiveApp();
-    if (!app) {
-      return false;
-    }
-    const consoleItem: NavItem = {
-      Label: 'Conversation Console',
-      Icon: 'fa-solid fa-headset',
-      ResourceType: 'Custom',
-      DriverClass: 'HumanHandoffConsoleResource',
-      Configuration: config.offerId ? { offer: config.offerId } : {},
-    };
-    this.navigationService.OpenNavItem(app.ID, consoleItem, app.GetColor());
-    return true;
-  }
-
-  /**
-   * Opens the Meet app's Meetings resource for a `meeting` or `meeting-invitation` notification (the
-   * `{ type:'meeting', meetingId }` ResourceConfiguration), or when NotificationType is 'Meeting Invitation'.
-   * Returns `false` (not handled) when the config isn't a meeting invite or the Meet app is absent.
-   */
-  private navigateToMeeting(notification: MJUserNotificationEntity): boolean {
-    let meetingId: string | undefined;
-    if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
-      const config = SafeJSONParse<{ type?: string; meetingId?: string }>(notification.ResourceConfiguration);
-      if (
-        config &&
-        (config.type?.trim().toLowerCase() === 'meeting' ||
-          config.type?.trim().toLowerCase() === 'meeting-invitation')
-      ) {
-        meetingId = config.meetingId;
-      }
-    }
-    const typeName = notification.NotificationType?.trim();
-    if (!meetingId && typeName !== 'Meeting Invitation') {
-      return false;
-    }
-    const app = this.appManager.GetAppByName('Meet') ?? this.appManager.GetActiveApp();
-    if (!app) {
-      return false;
-    }
-    const meetingItem: NavItem = {
-      Label: 'Meetings',
-      Icon: 'fa-solid fa-users',
-      ResourceType: 'Custom',
-      DriverClass: 'MeetingsResource',
-      Configuration: meetingId ? { meeting: meetingId } : {},
-    };
-    this.navigationService.OpenNavItem(app.ID, meetingItem, app.GetColor());
-    return true;
-  }
-
-  /**
-   * Navigate to a resource-based notification using NavigationService methods.
-   * Routes to the correct resource based on the notification's ResourceType.
-   */
-  private navigateToResource(notification: MJUserNotificationEntity): void {
-    if (!notification.ResourceRecordID || !notification.ResourceTypeID) return;
-
-    const rt = this.SharedService.ResourceTypeByID(notification.ResourceTypeID);
-    if (!rt) return;
-
-    const recordId = notification.ResourceRecordID.toString();
-    const rtName = rt.Name.trim().toLowerCase();
-
-    switch (rtName) {
-      case 'records': {
-        const config = SafeJSONParse<RecordResourceConfig>(notification.ResourceConfiguration || '');
-        if (config?.Entity) {
-          const key = new CompositeKey();
-          key.SimpleLoadFromURLSegment(recordId);
-          this.navigationService.OpenEntityRecord(config.Entity, key);
-        }
-        break;
-      }
-      case 'user views':
-      case 'mj: user views':
-        this.navigationService.OpenView(recordId, 'View');
-        break;
-      case 'dashboards':
-        this.navigationService.OpenDashboard(recordId, 'Dashboard');
-        break;
-      default:
-        console.warn(`[UserNotifications] Unhandled resource type for navigation: ${rt.Name}`);
-        break;
-    }
-  }
-
-  /**
-   * Handle navigation to an agent request via NavigationService.
-   * Returns true if the notification was an agent-request type and navigation was attempted.
-   */
-  private navigateToAgentRequest(notification: MJUserNotificationEntity): boolean {
-    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
-      return false;
-    }
-
-    const config = SafeJSONParse<AgentRequestResourceConfig>(notification.ResourceConfiguration);
-    if (!config || config.type?.trim().toLowerCase() !== 'agent-request' || !config.requestId) {
-      return false;
-    }
-
-    // Try the AI app first (has dedicated Agent Requests nav item)
-    const aiApp = this.appManager.GetAppByName('AI');
-    if (aiApp) {
-      this.navigationService.OpenNavItemByName(
-        'Agent Requests',
-        { requestId: config.requestId },
-        aiApp.ID
-      );
-      return true;
-    }
-
-    // Fallback: navigate to Chat app's Conversations with the request context
-    const chatApp = this.appManager.GetAppByName('Chat');
-    if (chatApp) {
-      this.navigationService.OpenNavItemByName(
-        'Conversations',
-        { requestId: config.requestId },
-        chatApp.ID
-      );
-      return true;
-    }
-
-    return false;
-  }
-
-  /**
-   * Handle navigation to a conversation via NavigationService.
-   * Returns true if the notification was a conversation type and navigation was attempted.
-   */
-  private navigateToConversation(notification: MJUserNotificationEntity): boolean {
-    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
-      return false;
-    }
-
-    const config = SafeJSONParse<ConversationResourceConfig>(notification.ResourceConfiguration);
-    if (!config || config.type?.trim().toLowerCase() !== 'conversation') {
-      return false;
-    }
-
-    const chatApp = this.appManager.GetAppByName('Chat');
-    if (!chatApp) {
-      return false;
-    }
-
-    const navConfig: Record<string, string> = {};
-    if (config.conversationId) navConfig['conversationId'] = config.conversationId;
-    if (config.messageId) navConfig['messageId'] = config.messageId;
-    if (config.artifactId) navConfig['artifactId'] = config.artifactId;
-    if (config.versionNumber) navConfig['versionNumber'] = config.versionNumber;
-    if (config.taskId) navConfig['taskId'] = config.taskId;
-
-    // The Chat tab is usually already open and gets reused; a reused tab reads its configuration
-    // only at init, so the same values go in the query params, which it does react to.
-    this.navigationService.OpenNavItemByName(
-      'Conversations',
-      navConfig,
-      chatApp.ID,
-      { queryParams: { ...navConfig } }
-    );
-    return true;
-  }
-
-  /** The routine-run config of a notification, or null when it is not one (or names no routine). */
-  private parseUserRoutineConfig(notification: MJUserNotificationEntity): UserRoutineResourceConfig | null {
-    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
-      return null;
-    }
-    const config = SafeJSONParse<UserRoutineResourceConfig>(notification.ResourceConfiguration);
-    if (!config || config.type?.trim().toLowerCase() !== 'userroutine' || !config.routineId) {
-      return null;
-    }
-    return config;
-  }
-
-  /**
-   * Opens what a routine run produced: its reply, in the routine's own conversation (the
-   * `{ type:'UserRoutine', routineId, runId, conversationId? }` ResourceConfiguration). That
-   * conversation is application-scoped, so the chat sidebar never lists it; the click deep-links
-   * into the Chat app's Conversations item. A notification written before the config carried the
-   * conversation reads it off the routine; a routine with no conversation opens in the Routines
-   * app. Returns false (not handled) when the notification is not a routine run.
-   */
-  private navigateToUserRoutine(notification: MJUserNotificationEntity): boolean {
-    const config = this.parseUserRoutineConfig(notification);
-    if (!config) {
-      return false;
-    }
-    void this.openUserRoutineOutput(config);
-    return true;
-  }
-
-  private async openUserRoutineOutput(config: UserRoutineResourceConfig): Promise<void> {
-    const conversationId = config.conversationId ?? await this.loadRoutineConversationId(config.routineId);
-    const chatApp = conversationId ? this.appManager.GetAppByName('Chat') : null;
-    if (conversationId && chatApp) {
-      // Query params as well as configuration: an already-open Chat tab is reused and reacts
-      // only to a query-param change (its configuration is read once, at init).
-      await this.navigationService.OpenNavItemByName('Conversations', { conversationId }, chatApp.ID, { queryParams: { conversationId } });
-      return;
-    }
-    const routinesApp = this.appManager.GetAppByName('Routines');
-    if (routinesApp) {
-      await this.navigationService.OpenNavItemByName('My Routines', { routine: config.routineId }, routinesApp.ID);
-      return;
-    }
-    MJNotificationService.Instance.CreateSimpleNotification('The Routines app is not installed, so this routine cannot be opened', 'error', 4000);
-  }
-
-  /** The routine's ConversationID, or null when the routine cannot be read or has none. */
-  private async loadRoutineConversationId(routineId: string): Promise<string | null> {
-    const p = this.ProviderToUse;
-    const routine = await p.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', p.CurrentUser);
-    if (!await routine.Load(routineId)) {
-      return null;
-    }
-    return routine.ConversationID ?? null;
   }
 
   public GetNotificationType(typeId: string | null): MJUserNotificationTypeEntity | null {
@@ -1307,8 +955,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   public GetTypeIcon(notification: MJUserNotificationEntity): string {
-    const type = this.GetNotificationType(notification.NotificationTypeID);
-    return type?.Icon || 'fa-bell';
+    return GetNotificationTypeDisplay(notification.NotificationTypeID, this.NotificationTypes).Icon;
   }
 
   /** @deprecated Use {@link GetTypeIcon}. */
@@ -1317,8 +964,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   public GetTypeColor(notification: MJUserNotificationEntity): string {
-    const type = this.GetNotificationType(notification.NotificationTypeID);
-    return type?.Color || 'var(--mj-text-muted)';
+    return GetNotificationTypeDisplay(notification.NotificationTypeID, this.NotificationTypes).Color;
   }
 
   /** @deprecated Use {@link GetTypeColor}. */
@@ -1327,8 +973,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   public GetTypeName(notification: MJUserNotificationEntity): string {
-    const type = this.GetNotificationType(notification.NotificationTypeID);
-    return type ? type.Name : 'Notification';
+    return GetNotificationTypeDisplay(notification.NotificationTypeID, this.NotificationTypes).Name;
   }
 
   /** @deprecated Use {@link GetTypeName}. */

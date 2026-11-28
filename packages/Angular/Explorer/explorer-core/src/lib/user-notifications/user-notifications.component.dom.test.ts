@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo, type TransactionGroupBase } from '@memberjunction/core';
 import { MJUserNotificationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationService, SharedService } from '@memberjunction/ng-shared';
@@ -31,7 +31,7 @@ function createNotificationEntity(id: string, title: string, message: string): M
       { Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Status: 'Active' },
       { Name: 'Title', Type: 'nvarchar', IsPrimaryKey: false, Status: 'Active' },
       { Name: 'Message', Type: 'nvarchar', IsPrimaryKey: false, Status: 'Active' },
-      { Name: 'Unread', Type: 'bit', IsPrimaryKey: false, Status: 'Active' },
+      { Name: 'Unread', Type: 'bit', IsPrimaryKey: false, Status: 'Active', AllowUpdateAPI: true },
       { Name: 'NotificationTypeID', Type: 'uniqueidentifier', IsPrimaryKey: false, Status: 'Active' },
       { Name: 'ResourceTypeID', Type: 'uniqueidentifier', IsPrimaryKey: false, Status: 'Active' },
       { Name: 'ResourceRecordID', Type: 'nvarchar', IsPrimaryKey: false, Status: 'Active' },
@@ -58,7 +58,7 @@ function renderNotifications(notifications: MJUserNotificationEntity[]): Compone
     imports: [CommonModule, FormsModule, EmptyStateStub, MarkdownStub],
     declarations: [UserNotificationsComponent],
     providers: [
-      { provide: SharedService, useValue: { InvokeManualResize: vi.fn(), ResourceTypeByID: vi.fn() } },
+      { provide: SharedService, useValue: { InvokeManualResize: vi.fn(), ResourceTypeByID: vi.fn(), CreateSimpleNotification: vi.fn() } },
       { provide: NavigationService, useValue: {} },
       { provide: ApplicationManager, useValue: {} },
     ],
@@ -120,5 +120,47 @@ describe('UserNotificationsComponent (DOM) — expanded plain-text normalization
     expect(expandedHtml?.textContent ?? '').toContain('Reviewed Northwind with @Elena <Admin> and flagged Contoso.');
     expect(expandedHtml?.textContent ?? '').not.toContain('_mode');
     expect(expandedHtml?.textContent ?? '').not.toContain('Northwind Northwind');
+  });
+
+  it('toggles a read card to unread and back to read when clicking the card Unread/Read button (even with a stale TransactionGroup)', async () => {
+    const entity = createNotificationEntity('notif-toggle-1', 'Agent Completed', 'Finished Q4 summary.');
+    entity.Unread = false;
+    entity.TransactionGroup = { Status: 'Complete' } as unknown as TransactionGroupBase;
+    const saveSpy = vi.spyOn(entity, 'Save').mockImplementation(async () => {
+      // Simulate GraphQLDataProvider: a stale TransactionGroup would skip saving
+      return entity.TransactionGroup === null;
+    });
+
+    const fixture = renderNotifications([entity]);
+    Object.defineProperty(fixture.componentInstance, 'ProviderToUse', {
+      get: () => ({}),
+      configurable: true,
+    });
+
+    const cardBefore = fixture.nativeElement.querySelector('.notification-card') as HTMLElement;
+    expect(cardBefore.classList.contains('unread')).toBe(false);
+
+    const unreadBtn = fixture.nativeElement.querySelector('.card-action-btn') as HTMLButtonElement;
+    expect(unreadBtn.textContent).toContain('Unread');
+    unreadBtn.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(entity.TransactionGroup).toBeNull();
+    expect(entity.Unread).toBe(true);
+    expect(cardBefore.classList.contains('unread')).toBe(true);
+    const readBtn = fixture.nativeElement.querySelector('.card-action-btn') as HTMLButtonElement;
+    expect(readBtn.textContent).toContain('Read');
+
+    // Toggle back to read and verify the Unread filter pill stays rendered at 0 instead of vanishing
+    readBtn.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(entity.Unread).toBe(false);
+    expect(cardBefore.classList.contains('unread')).toBe(false);
+    const statPills = Array.from(fixture.nativeElement.querySelectorAll('.stat-pill')) as HTMLButtonElement[];
+    expect(statPills.map(p => p.querySelector('.stat-label')?.textContent?.trim())).toEqual(['All', 'Unread', 'Read']);
   });
 });

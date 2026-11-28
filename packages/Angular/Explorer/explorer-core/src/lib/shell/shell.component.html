@@ -161,14 +161,29 @@
         </div>
       }
       @if (ShowNotifications) {
-        <button class="icon-btn desktop-only notification-btn" title="Notifications" (click)="showNotifications()">
-          <i class="fa-solid fa-bell"></i>
-          @if (unreadNotificationCount > 0) {
-            <span class="notification-badge">
-              {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
-            </span>
-          }
-        </button>
+        <div class="notification-wrap">
+          <button type="button"
+                  class="icon-btn desktop-only notification-btn"
+                  [class.is-open]="NotificationsPopoverOpen"
+                  title="Notifications"
+                  [attr.aria-label]="unreadNotificationCount > 0 ? 'Notifications (' + unreadNotificationCount + ' unread)' : 'Notifications'"
+                  aria-haspopup="dialog"
+                  [attr.aria-expanded]="NotificationsPopoverOpen"
+                  (click)="ToggleNotificationsPopover($event)">
+            <i class="fa-solid fa-bell" aria-hidden="true"></i>
+            @if (unreadNotificationCount > 0) {
+              <span class="notification-badge">
+                {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
+              </span>
+            }
+          </button>
+          <mj-notification-popover
+            [IsOpen]="NotificationsPopoverOpen"
+            (CloseRequested)="CloseNotificationsPopover()"
+            (ViewAllRequested)="OnNotificationPopoverViewAll()"
+            (PreferencesRequested)="OnNotificationPopoverPreferences()">
+          </mj-notification-popover>
+        </div>
       }
       <!-- Nav Bar Apps: Left of User Menu -->
       @if (leftOfUserMenuApps.length > 0 && !appSwitchingLocked && ShowAppSwitcher) {

@@ -1,0 +1,146 @@
+@if (IsOpen) {
+  <div class="notif-popover"
+       role="dialog"
+       aria-label="Notifications"
+       (click)="$event.stopPropagation()"
+       (keydown)="OnPopoverKeydown($event)">
+    <!-- Header -->
+    <div class="notif-pop-header">
+      <div class="notif-pop-top">
+        <div class="notif-pop-title">
+          <span>Notifications</span>
+          <span class="notif-pop-count-pill">
+            @if (UnreadCount > 0) {
+              {{ UnreadCount }} unread
+            } @else {
+              All caught up
+            }
+          </span>
+        </div>
+        <div class="notif-pop-header-actions">
+          <button type="button"
+                  class="pop-ghost-btn"
+                  [disabled]="UnreadCount === 0 || MarkingAllRead"
+                  (click)="OnMarkAllReadClick()"
+                  aria-label="Mark all notifications as read">
+            <i class="fa-solid fa-check-double" aria-hidden="true"></i>
+            <span>Mark all read</span>
+          </button>
+          <button type="button"
+                  class="pop-icon-btn"
+                  title="Notification preferences"
+                  aria-label="Notification preferences"
+                  (click)="OnPreferencesClick()">
+            <i class="fa-solid fa-gear" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="pop-tabs" role="tablist" aria-label="Filter notifications">
+        <button type="button"
+                class="pop-tab"
+                role="tab"
+                [class.active]="ActiveTab === 'unread'"
+                [attr.aria-selected]="ActiveTab === 'unread'"
+                (click)="SelectTab('unread')">
+          <span>Unread</span>
+          <span class="pop-tab-badge" [class.unread]="UnreadCount > 0">{{ UnreadCount }}</span>
+        </button>
+        <button type="button"
+                class="pop-tab"
+                role="tab"
+                [class.active]="ActiveTab === 'all'"
+                [attr.aria-selected]="ActiveTab === 'all'"
+                (click)="SelectTab('all')">
+          <span>All</span>
+          <span class="pop-tab-badge">{{ AllNotifications.length }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="notif-pop-list">
+      @if (VisibleItems.length === 0) {
+        <div class="notif-pop-empty">
+          <div class="empty-circle" aria-hidden="true">
+            <i class="fa-solid fa-check"></i>
+          </div>
+          <h4>
+            @if (ActiveTab === 'unread') {
+              You're all caught up
+            } @else {
+              No notifications yet
+            }
+          </h4>
+          <p>New alerts, agent completions, and mentions will appear here.</p>
+        </div>
+      } @else {
+        @for (vm of VisibleItems; track vm.Notification.ID) {
+          <div class="notif-row"
+               [class.unread]="vm.Notification.Unread"
+               [class.clickable]="vm.Clickable"
+               role="button"
+               tabindex="0"
+               [attr.aria-label]="vm.Notification.Title"
+               (click)="OnNotificationClick(vm)"
+               (keydown.enter)="OnNotificationClick(vm)"
+               (keydown.space)="$event.preventDefault(); OnNotificationClick(vm)">
+            <span class="notif-row-dot" aria-hidden="true"></span>
+
+            <div class="notif-row-icon"
+                 aria-hidden="true"
+                 [style.background]="'color-mix(in srgb, ' + vm.TypeColor + ' 13%, transparent)'"
+                 [style.color]="vm.TypeColor">
+              <i [class]="'fa-solid ' + vm.TypeIcon"></i>
+            </div>
+
+            <div class="notif-row-body">
+              <div class="notif-row-head">
+                <span class="notif-row-title">{{ vm.Notification.Title }}</span>
+                <span class="notif-row-time" [title]="(vm.Notification.__mj_CreatedAt | date:'medium') ?? ''">
+                  @if (vm.RelativeTime) {
+                    {{ vm.RelativeTime }}
+                  } @else {
+                    {{ vm.Notification.__mj_CreatedAt | date:'MMM d' }}
+                  }
+                </span>
+              </div>
+
+              @if (vm.Preview) {
+                <p class="notif-row-preview">{{ vm.Preview }}</p>
+              }
+
+              <div class="notif-row-meta">
+                <span class="notif-type-chip">{{ vm.TypeName }}</span>
+                @if (vm.Clickable) {
+                  <span class="notif-open-cue">
+                    <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i> Open
+                  </span>
+                }
+              </div>
+            </div>
+
+            <button type="button"
+                    class="notif-row-quick-read"
+                    [title]="vm.Notification.Unread ? 'Mark as read' : 'Mark as unread'"
+                    [attr.aria-label]="(vm.Notification.Unread ? 'Mark as read: ' : 'Mark as unread: ') + vm.Notification.Title"
+                    (click)="OnToggleReadClick(vm, $event)">
+              <i class="fa-solid" [class.fa-check]="vm.Notification.Unread" [class.fa-envelope]="!vm.Notification.Unread" aria-hidden="true"></i>
+            </button>
+          </div>
+        }
+      }
+    </div>
+
+    <!-- Footer -->
+    <div class="notif-pop-footer">
+      <button type="button" class="pop-footer-link" (click)="OnViewAllClick()">
+        <span>View all notifications</span>
+        <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+      </button>
+      @if (AllNotifications.length > 0) {
+        <span class="pop-footer-meta">Showing {{ VisibleItems.length }} of {{ FilteredTotalCount }}</span>
+      }
+    </div>
+  </div>
+}
