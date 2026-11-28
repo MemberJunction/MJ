@@ -33483,7 +33483,7 @@ export class MJAgentDecisionLogEntity extends BaseEntity<MJAgentDecisionLogEntit
 
     /**
     * * Field Name: SessionRunID
-    * * Display Name: Session Run ID
+    * * Display Name: Session Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
     * * Description: The session: the run that wrote its first decision row. A run continues its LastRunID run's session while that session's newest row is not terminal (report, decline-*).
@@ -33497,7 +33497,7 @@ export class MJAgentDecisionLogEntity extends BaseEntity<MJAgentDecisionLogEntit
 
     /**
     * * Field Name: AgentRunID
-    * * Display Name: Agent Run ID
+    * * Display Name: Agent Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
     * * Description: The run that took the decision.
@@ -33511,7 +33511,7 @@ export class MJAgentDecisionLogEntity extends BaseEntity<MJAgentDecisionLogEntit
 
     /**
     * * Field Name: AgentRunStepID
-    * * Display Name: Agent Run Step ID
+    * * Display Name: Agent Run Step
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
     * * Description: The run step the decision was taken in, when the run had stored one.
@@ -33562,7 +33562,7 @@ export class MJAgentDecisionLogEntity extends BaseEntity<MJAgentDecisionLogEntit
 
     /**
     * * Field Name: PromptRunID
-    * * Display Name: Prompt Run ID
+    * * Display Name: Prompt Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
     * * Description: The prompt run whose recorded output changed the plan since the previous row; NULL when no prompt changed it (a code-decided step on the previous row's plan).
@@ -33641,7 +33641,7 @@ export class MJAgentDecisionLogEntity extends BaseEntity<MJAgentDecisionLogEntit
 
     /**
     * * Field Name: BuildApprovalRequestID
-    * * Display Name: Build Approval Request ID
+    * * Display Name: Build Approval Request
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Requests (vwAIAgentRequests.ID)
     * * Description: The approved request a request-build decision claimed.
@@ -33675,7 +33675,7 @@ export class MJAgentDecisionLogEntity extends BaseEntity<MJAgentDecisionLogEntit
 
     /**
     * * Field Name: SessionRun
-    * * Display Name: Session Run
+    * * Display Name: Session Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get SessionRun(): string | null {
@@ -33684,7 +33684,7 @@ export class MJAgentDecisionLogEntity extends BaseEntity<MJAgentDecisionLogEntit
 
     /**
     * * Field Name: AgentRun
-    * * Display Name: Agent Run
+    * * Display Name: Agent Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get AgentRun(): string | null {
@@ -33693,7 +33693,7 @@ export class MJAgentDecisionLogEntity extends BaseEntity<MJAgentDecisionLogEntit
 
     /**
     * * Field Name: AgentRunStep
-    * * Display Name: Agent Run Step
+    * * Display Name: Agent Run Step Name
     * * SQL Data Type: nvarchar(255)
     */
     get AgentRunStep(): string | null {
@@ -33702,7 +33702,7 @@ export class MJAgentDecisionLogEntity extends BaseEntity<MJAgentDecisionLogEntit
 
     /**
     * * Field Name: PromptRun
-    * * Display Name: Prompt Run
+    * * Display Name: Prompt Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get PromptRun(): string | null {
@@ -77596,7 +77596,7 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
 
     /**
     * * Field Name: SourceUserID
-    * * Display Name: Source User
+    * * Display Name: Source User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: Human rows: the user who entered the value (the user of the record's newest Record Change when the entity tracks record changes); NULL when unknown and on every other row.
@@ -77673,7 +77673,7 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
 
     /**
     * * Field Name: SourceUser
-    * * Display Name: Source User Record
+    * * Display Name: Source User
     * * SQL Data Type: nvarchar(100)
     */
     get SourceUser(): string | null {
@@ -88758,7 +88758,7 @@ export class MJMLBuildApprovalClaimEntity extends BaseEntity<MJMLBuildApprovalCl
 
     /**
     * * Field Name: AgentRequestID
-    * * Display Name: Agent Request ID
+    * * Display Name: Agent Request
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Requests (vwAIAgentRequests.ID)
     * * Description: The approved build request this claim consumes; unique, so a request is claimed once.
@@ -88832,7 +88832,7 @@ export class MJMLBuildApprovalClaimEntity extends BaseEntity<MJMLBuildApprovalCl
 
     /**
     * * Field Name: MLTrainingPipelineID
-    * * Display Name: ML Training Pipeline ID
+    * * Display Name: ML Training Pipeline
     * * SQL Data Type: uniqueidentifier
     * * Description: The ID of the training pipeline the build created, when it created one: a provenance record with no foreign key, kept when that pipeline is later deleted (the claim and its consumed approval outlive the build).
     */

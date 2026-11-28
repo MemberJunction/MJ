@@ -15,7 +15,7 @@ export class MJFeaturePipelineRederivationLeaseFormComponent extends BaseFormCom
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'leaseInformation', sectionName: 'Lease Information', isExpanded: true },
+            { sectionKey: 'leaseDetails', sectionName: 'Lease Details', isExpanded: true },
             { sectionKey: 'leaseTimeline', sectionName: 'Lease Timeline', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);

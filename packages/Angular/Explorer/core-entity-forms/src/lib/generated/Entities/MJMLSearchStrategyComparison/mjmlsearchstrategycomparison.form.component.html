@@ -33,16 +33,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Evaluation Results Section -->
-    <mj-collapsible-panel
-        SectionKey="evaluationResults"
-        SectionName="Evaluation Results"
-        Icon="fa fa-chart-bar"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -51,6 +41,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Comparison Results Section -->
+    <mj-collapsible-panel
+        SectionKey="comparisonResults"
+        SectionName="Comparison Results"
+        Icon="fa fa-chart-line"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -78,10 +78,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Comparison Context Section -->
+    <!-- Execution Audit Section -->
     <mj-collapsible-panel
-        SectionKey="comparisonContext"
-        SectionName="Comparison Context"
+        SectionKey="executionAudit"
+        SectionName="Execution Audit"
         Icon="fa fa-user-clock"
         [Form]="this"
         [FormContext]="formContext">

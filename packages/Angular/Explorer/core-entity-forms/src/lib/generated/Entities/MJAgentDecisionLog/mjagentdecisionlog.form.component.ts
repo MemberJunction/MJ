@@ -15,9 +15,9 @@ export class MJAgentDecisionLogFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'sessionAndRunInfo', sectionName: 'Session and Run Info', isExpanded: true },
-            { sectionKey: 'decisionDetails', sectionName: 'Decision Details', isExpanded: true },
-            { sectionKey: 'executionPayloadAndTools', sectionName: 'Execution Payload and Tools', isExpanded: true },
+            { sectionKey: 'sessionAndRunDetails', sectionName: 'Session and Run Details', isExpanded: true },
+            { sectionKey: 'decisionInformation', sectionName: 'Decision Information', isExpanded: true },
+            { sectionKey: 'planAndPayloads', sectionName: 'Plan and Payloads', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
