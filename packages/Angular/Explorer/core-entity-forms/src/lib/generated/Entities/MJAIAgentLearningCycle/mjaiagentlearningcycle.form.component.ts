@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { MJAIAgentLearningCycleEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Learning Cycles') // Tell MemberJunction about this class
 @Component({
@@ -18,7 +19,8 @@ export class MJAIAgentLearningCycleFormComponent extends BaseFormComponent {
             { sectionKey: 'agentReference', sectionName: 'Agent Reference', isExpanded: true },
             { sectionKey: 'cycleTimingStatus', sectionName: 'Cycle Timing & Status', isExpanded: true },
             { sectionKey: 'learningDetailsAudit', sectionName: 'Learning Details & Audit', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycleProposals', sectionName: 'AI Agent Learning Cycle Proposals', isExpanded: false }
         ]);
     }
 }

@@ -197,13 +197,13 @@ class RecordingConcept {
     public Description = '';
     public Specification: string | null = null;
     public Synonyms: string | null = null;
-    public Status: 'Draft' | 'Proposed' | 'Approved' | 'Deprecated' = 'Draft';
+    public Status: MJGraphConceptEntity['Status'] = 'Draft';
     public LatestResult = { CompleteMessage: '' };
 
     public constructor(
         private readonly user: UserInfo,
         private readonly saves: ConceptSaveRecord[],
-        private readonly existingById: ReadonlyMap<string, { Name: string; Status: 'Draft' | 'Proposed' | 'Approved' | 'Deprecated' }>,
+        private readonly existingById: ReadonlyMap<string, { Name: string; Status: MJGraphConceptEntity['Status'] }>,
     ) {}
 
     public async InnerLoad(key: { GetValueByIndex(idx: number): unknown }): Promise<boolean> {
@@ -236,7 +236,7 @@ class RecordingConcept {
 
 function makeConceptProvider(
     saves: ConceptSaveRecord[],
-    existingById: ReadonlyMap<string, { Name: string; Status: 'Draft' | 'Proposed' | 'Approved' | 'Deprecated' }> = new Map(),
+    existingById: ReadonlyMap<string, { Name: string; Status: MJGraphConceptEntity['Status'] }> = new Map(),
 ): IMetadataProvider {
     const provider = {
         Entities: [],

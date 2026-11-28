@@ -18,7 +18,8 @@ export class MJGraphAuthorityTierFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'mJGraphConcepts', sectionName: 'Graph Concepts', isExpanded: false },
-            { sectionKey: 'mJGraphTypes', sectionName: 'Graph Types', isExpanded: false }
+            { sectionKey: 'mJGraphTypes', sectionName: 'Graph Types', isExpanded: false },
+            { sectionKey: 'mJGraphEdges', sectionName: 'Graph Edges', isExpanded: false }
         ]);
     }
 }

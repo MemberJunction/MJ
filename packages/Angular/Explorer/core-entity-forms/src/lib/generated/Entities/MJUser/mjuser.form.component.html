@@ -922,23 +922,23 @@
 
     <!-- AI Agent Notes Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentNotes"
+        SectionKey="mJAIAgentNotesUserID"
         SectionName="AI Agent Notes"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentNotes')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentNotesUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Notes','UserID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Notes','UserID')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentNotes')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentNotesUserID')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentNotes', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentNotesUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -2895,25 +2895,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Skills Section -->
+    <!-- AI Skills (Created By User ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJAISkills"
-        SectionName="AI Skills"
+        SectionKey="mJAISkillsCreatedByUserID"
+        SectionName="AI Skills (Created By User ID)"
         Icon="fa fa-wand-magic-sparkles"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAISkills')"
+        [BadgeCount]="GetSectionRowCount('mJAISkillsCreatedByUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Skills','CreatedByUserID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Skills','CreatedByUserID')"
-                [AllowLoad]="IsSectionExpanded('mJAISkills')"
+                [AllowLoad]="IsSectionExpanded('mJAISkillsCreatedByUserID')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAISkills', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAISkillsCreatedByUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -3714,6 +3714,106 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRecordArtifacts', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Notes (Canon Approved By User) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentNotesCanonApprovedByUserID"
+        SectionName="AI Agent Notes (Canon Approved By User)"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentNotesCanonApprovedByUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Notes','CanonApprovedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Notes','CanonApprovedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentNotesCanonApprovedByUserID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentNotesCanonApprovedByUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Skills (Canon Approved By User ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAISkillsCanonApprovedByUserID"
+        SectionName="AI Skills (Canon Approved By User ID)"
+        Icon="fa fa-wand-magic-sparkles"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAISkillsCanonApprovedByUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Skills','CanonApprovedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Skills','CanonApprovedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJAISkillsCanonApprovedByUserID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAISkillsCanonApprovedByUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Learning Cycle Proposals Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentLearningCycleProposals"
+        SectionName="AI Agent Learning Cycle Proposals"
+        Icon="fa fa-brain"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentLearningCycleProposals')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Learning Cycle Proposals','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Learning Cycle Proposals','UserID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentLearningCycleProposals')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentLearningCycleProposals', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Graph Permissions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJGraphPermissions"
+        SectionName="Graph Permissions"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJGraphPermissions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Graph Permissions','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Graph Permissions','UserID')"
+                [AllowLoad]="IsSectionExpanded('mJGraphPermissions')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJGraphPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

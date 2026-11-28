@@ -21,6 +21,9 @@ export type SemanticGraphType = 'Canon' | 'Knowledge' | 'Network' | 'Custom' | (
  */
 export type GraphConceptType = 'Policy' | 'Metric' | 'Process' | 'Role' | 'Domain' | 'Term' | (string & {});
 
+/** Governance lifecycle status of a `MJ: Graph Concepts` row (`CK_GraphConcept_Status`). */
+export type GraphConceptStatus = 'Draft' | 'Proposed' | 'Provisional' | 'Approved' | 'Deprecated';
+
 /** Descriptor for a row in `MJ: Graph Types` (`__mj.GraphType`). */
 export interface GraphTypeDescriptor {
     readonly ID: string;

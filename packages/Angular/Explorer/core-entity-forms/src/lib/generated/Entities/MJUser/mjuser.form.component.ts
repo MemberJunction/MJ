@@ -48,7 +48,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJUserViewRuns', sectionName: 'User View Runs', isExpanded: false },
             { sectionKey: 'mJUserViewsUserID', sectionName: 'User Views', isExpanded: false },
             { sectionKey: 'mJWorkspaces', sectionName: 'Workspaces', isExpanded: false },
-            { sectionKey: 'mJAIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
+            { sectionKey: 'mJAIAgentNotesUserID', sectionName: 'AI Agent Notes', isExpanded: false },
             { sectionKey: 'mJAIAgentRequestsRequestForUserID', sectionName: 'AI Agent Requests', isExpanded: false },
             { sectionKey: 'mJAPIKeysCreatedByUserID', sectionName: 'API Keys (Created By User)', isExpanded: false },
             { sectionKey: 'mJArchiveConfigurations', sectionName: 'Archive Configurations', isExpanded: false },
@@ -127,7 +127,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJProjects', sectionName: 'Projects', isExpanded: false },
             { sectionKey: 'mJRecordCloneLogs', sectionName: 'Record Clone Logs', isExpanded: false },
             { sectionKey: 'mJWorkQueueDeliveries', sectionName: 'Work Queue Deliveries', isExpanded: false },
-            { sectionKey: 'mJAISkills', sectionName: 'AI Skills', isExpanded: false },
+            { sectionKey: 'mJAISkillsCreatedByUserID', sectionName: 'AI Skills (Created By User ID)', isExpanded: false },
             { sectionKey: 'mJWorkQueueMessages', sectionName: 'Work Queue Messages', isExpanded: false },
             { sectionKey: 'mJEntityFormContributions', sectionName: 'Entity Form Contributions', isExpanded: false },
             { sectionKey: 'mJRubricVersions', sectionName: 'Rubric Versions', isExpanded: false },
@@ -159,7 +159,11 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJCommunicationConsentAuditLogs', sectionName: 'Communication Consent Audit Logs', isExpanded: false },
             { sectionKey: 'mJCommunicationSuppressionsRevokedByUserID', sectionName: 'Communication Suppressions (Revoked By User ID)', isExpanded: false },
             { sectionKey: 'mJCommunicationSuppressionsCreatedByUserID', sectionName: 'Communication Suppressions (Created By User ID)', isExpanded: false },
-            { sectionKey: 'mJRecordArtifacts', sectionName: 'Record Artifacts', isExpanded: false }
+            { sectionKey: 'mJRecordArtifacts', sectionName: 'Record Artifacts', isExpanded: false },
+            { sectionKey: 'mJAIAgentNotesCanonApprovedByUserID', sectionName: 'AI Agent Notes (Canon Approved By User)', isExpanded: false },
+            { sectionKey: 'mJAISkillsCanonApprovedByUserID', sectionName: 'AI Skills (Canon Approved By User ID)', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycleProposals', sectionName: 'AI Agent Learning Cycle Proposals', isExpanded: false },
+            { sectionKey: 'mJGraphPermissions', sectionName: 'Graph Permissions', isExpanded: false }
         ]);
     }
 }

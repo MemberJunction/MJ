@@ -126,7 +126,11 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJCommunicationSenderTypes', sectionName: 'Communication Sender Types', isExpanded: false },
             { sectionKey: 'mJCommunicationSuppressions', sectionName: 'Communication Suppressions', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false },
-            { sectionKey: 'mJRecordArtifacts', sectionName: 'Record Artifacts', isExpanded: false }
+            { sectionKey: 'mJRecordArtifacts', sectionName: 'Record Artifacts', isExpanded: false },
+            { sectionKey: 'mJAIAgentContextItems', sectionName: 'AI Agent Context Items', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycleProposalSources', sectionName: 'AI Agent Learning Cycle Proposal Sources', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycleProposalsPrimaryScopeEntityID', sectionName: 'AI Agent Learning Cycle Proposals (Primary Scope Entity)', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycleProposalsAppliedEntityID', sectionName: 'AI Agent Learning Cycle Proposals (Applied Entity)', isExpanded: false }
         ]);
     }
 }

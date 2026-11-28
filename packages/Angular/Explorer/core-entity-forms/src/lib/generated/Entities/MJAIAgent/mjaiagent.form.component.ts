@@ -21,7 +21,7 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'runtimeLimitsExecutionSettings', sectionName: 'Runtime Limits & Execution Settings', isExpanded: true },
             { sectionKey: 'attachmentStorage', sectionName: 'Attachment Storage', isExpanded: true },
             { sectionKey: 'contextCompression', sectionName: 'Context Compression', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'contextMemoryManagement', sectionName: 'Context & Memory Management', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentActions', sectionName: 'AIAgent Actions', isExpanded: false },
             { sectionKey: 'mJAIAgentArtifactTypes', sectionName: 'AI Agent Artifact Types', isExpanded: false },
@@ -70,7 +70,8 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentRhythmTemplates', sectionName: 'AI Agent Rhythm Templates', isExpanded: false },
             { sectionKey: 'mJAIAgentUserPolicies', sectionName: 'AI Agent User Policies', isExpanded: false },
             { sectionKey: 'mJAIAgentSuggestions', sectionName: 'AI Agent Suggestions', isExpanded: false },
-            { sectionKey: 'mJAIAgentsBaseAgentID', sectionName: 'AI Agents (Base Agent ID)', isExpanded: false }
+            { sectionKey: 'mJAIAgentsBaseAgentID', sectionName: 'AI Agents (Base Agent ID)', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycleProposals', sectionName: 'AI Agent Learning Cycle Proposals', isExpanded: false }
         ]);
     }
 }

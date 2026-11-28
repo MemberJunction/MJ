@@ -19,6 +19,7 @@ import {
     type ConceptTaxonomyMode,
     type GraphAuthorityTier,
     type GraphAuthorityTierDescriptor,
+    type GraphConceptStatus,
     type GraphConceptType,
     type GraphConceptTypeDescriptor,
 } from './GraphOverlay.types.js';
@@ -56,8 +57,8 @@ export interface ExistingGraphConceptSeed {
     readonly AuthorityTier?: GraphAuthorityTier;
     /** Optional foreign key to `MJ: Graph Authority Tiers` (`__mj.GraphAuthorityTier.ID`). */
     readonly AuthorityTierID?: string | null;
-    /** Existing governance status (`'Draft' | 'Proposed' | 'Approved' | 'Deprecated'`). */
-    readonly Status?: 'Draft' | 'Proposed' | 'Approved' | 'Deprecated';
+    /** Existing governance status (`GraphConceptStatus`). */
+    readonly Status?: GraphConceptStatus;
 }
 
 /** Lightweight MJ schema/query descriptor used when `GroundingMode !== 'none'`. */

@@ -30,7 +30,8 @@ export class MJSearchScopeFormComponent extends BaseFormComponent {
             { sectionKey: 'mJSearchScopeTestQueries', sectionName: 'Search Scope Test Queries', isExpanded: false },
             { sectionKey: 'mJAIAgentSearchScopes', sectionName: 'AI Agent Search Scopes', isExpanded: false },
             { sectionKey: 'mJSearchExecutionLogs', sectionName: 'Search Execution Logs', isExpanded: false },
-            { sectionKey: 'mJAISkillSearchScopes', sectionName: 'AI Skill Search Scopes', isExpanded: false }
+            { sectionKey: 'mJAISkillSearchScopes', sectionName: 'AI Skill Search Scopes', isExpanded: false },
+            { sectionKey: 'mJSearchScopeGraphs', sectionName: 'Search Scope Graphs', isExpanded: false }
         ]);
     }
 }

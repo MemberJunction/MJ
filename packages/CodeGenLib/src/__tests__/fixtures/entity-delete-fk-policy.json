@@ -22,11 +22,42 @@
       "reason": "Nullable reference; cleared so the row survives without the entity."
     },
     {
+      "table": "AIAgentContextItem",
+      "column": "ItemEntityID",
+      "nullable": true,
+      "action": "delete",
+      "reason": "CK_AIAgentContextItem_OneTarget requires one target; clearing ItemEntityID without setting another FK would fail the constraint, so rows targeting the deleted entity are removed."
+    },
+    {
       "table": "AIAgentExample",
       "column": "PrimaryScopeEntityID",
       "nullable": true,
       "action": "delete",
       "reason": "Nulling the scope would widen a record-scoped example to every record of the agent."
+    },
+    {
+      "table": "AIAgentLearningCycleProposal",
+      "column": "AppliedEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared with AppliedRecordID (CK_AIAgentProposal_AppliedPair both-or-neither CHECK) so the proposal history survives without the entity.",
+      "alsoNull": [
+        "AppliedRecordID"
+      ]
+    },
+    {
+      "table": "AIAgentLearningCycleProposal",
+      "column": "PrimaryScopeEntityID",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nulling the scope would widen a record-scoped learning cycle proposal to every record of the agent."
+    },
+    {
+      "table": "AIAgentLearningCycleProposalSource",
+      "column": "SourceEntityID",
+      "nullable": true,
+      "action": "delete",
+      "reason": "CK_ProposalSource_OneTarget requires one source target; clearing SourceEntityID without setting another FK would fail the constraint, so source links targeting the deleted entity are removed."
     },
     {
       "table": "AIAgentNote",
@@ -750,12 +781,116 @@
   ],
   "dependents": [
     {
+      "table": "AIAgentContextItem",
+      "column": "AgentExampleID",
+      "references": "AIAgentExample",
+      "nullable": true,
+      "action": "delete",
+      "reason": "CK_AIAgentContextItem_OneTarget requires one target; context items referencing a deleted AIAgentExample row are removed first."
+    },
+    {
+      "table": "AIAgentContextItem",
+      "column": "AgentNoteID",
+      "references": "AIAgentNote",
+      "nullable": true,
+      "action": "delete",
+      "reason": "CK_AIAgentContextItem_OneTarget requires one target; context items referencing a deleted AIAgentNote row are removed first."
+    },
+    {
+      "table": "AIAgentContextItem",
+      "column": "ScopedPromptPartID",
+      "references": "ScopedPromptPart",
+      "nullable": true,
+      "action": "delete",
+      "reason": "CK_AIAgentContextItem_OneTarget requires one target; context items referencing a deleted ScopedPromptPart row are removed first."
+    },
+    {
+      "table": "AIAgentLearningCycleProposal",
+      "column": "AppliedGraphEdgeID",
+      "references": "GraphEdge",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a GraphEdge row this proc deletes; cleared."
+    },
+    {
+      "table": "AIAgentLearningCycleProposal",
+      "column": "AppliedNoteID",
+      "references": "AIAgentNote",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to an AIAgentNote row this proc deletes; cleared."
+    },
+    {
+      "table": "AIAgentLearningCycleProposal",
+      "column": "SupersedesProposalID",
+      "references": "AIAgentLearningCycleProposal",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable self-reference to an AIAgentLearningCycleProposal row this proc deletes; cleared."
+    },
+    {
+      "table": "AIAgentLearningCycleProposalSource",
+      "column": "ProposalID",
+      "references": "AIAgentLearningCycleProposal",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to an AIAgentLearningCycleProposal row this proc deletes; deleted first."
+    },
+    {
+      "table": "AIAgentLearningCycleProposalSource",
+      "column": "SourceGraphEdgeID",
+      "references": "GraphEdge",
+      "nullable": true,
+      "action": "delete",
+      "reason": "CK_ProposalSource_OneTarget requires one source target; proposal source rows referencing a deleted GraphEdge are removed first."
+    },
+    {
+      "table": "AIAgentLearningCycleProposalSource",
+      "column": "SourceNoteID",
+      "references": "AIAgentNote",
+      "nullable": true,
+      "action": "delete",
+      "reason": "CK_ProposalSource_OneTarget requires one source target; proposal source rows referencing a deleted AIAgentNote are removed first."
+    },
+    {
       "table": "AIAgentNote",
       "column": "ConsolidatedIntoNoteID",
       "references": "AIAgentNote",
       "nullable": true,
       "action": "null",
       "reason": "Nullable reference to a AIAgentNote row this proc deletes; cleared."
+    },
+    {
+      "table": "AIAgentNote",
+      "column": "OriginProposalID",
+      "references": "AIAgentLearningCycleProposal",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to an AIAgentLearningCycleProposal row this proc deletes; cleared."
+    },
+    {
+      "table": "AIAgentNoteSource",
+      "column": "NoteID",
+      "references": "AIAgentNote",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to an AIAgentNote row this proc deletes; deleted first."
+    },
+    {
+      "table": "AIAgentNoteSource",
+      "column": "SourceNoteID",
+      "references": "AIAgentNote",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to an AIAgentNote row this proc deletes; deleted first."
+    },
+    {
+      "table": "AISkill",
+      "column": "OriginProposalID",
+      "references": "AIAgentLearningCycleProposal",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to an AIAgentLearningCycleProposal row this proc deletes; cleared."
     },
     {
       "table": "CommunicationConsentAuditLog",

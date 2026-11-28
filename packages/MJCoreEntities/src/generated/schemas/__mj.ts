@@ -613,6 +613,166 @@ export const MJAIAgentConfigurationSchema = z.object({
 export type MJAIAgentConfigurationEntityType = z.infer<typeof MJAIAgentConfigurationSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Context Items
+ */
+export const MJAIAgentContextItemSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentRunID: z.string().nullable().describe(`
+        * * Field Name: AgentRunID
+        * * Display Name: Agent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)`),
+    AgentRunStepID: z.string().nullable().describe(`
+        * * Field Name: AgentRunStepID
+        * * Display Name: Agent Run Step ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)`),
+    AgentSessionID: z.string().nullable().describe(`
+        * * Field Name: AgentSessionID
+        * * Display Name: Agent Session ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)`),
+    ConversationDetailID: z.string().nullable().describe(`
+        * * Field Name: ConversationDetailID
+        * * Display Name: Conversation Detail ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)`),
+    EventType: z.union([z.literal('Cited'), z.literal('Injected'), z.literal('Other'), z.literal('Retrieved'), z.literal('Withheld')]).describe(`
+        * * Field Name: EventType
+        * * Display Name: Event Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cited
+    *   * Injected
+    *   * Other
+    *   * Retrieved
+    *   * Withheld
+        * * Description: Context telemetry event kind: Retrieved, Injected, Withheld, Cited, or Other.`),
+    ItemType: z.union([z.literal('Example'), z.literal('Graph Concept'), z.literal('Note'), z.literal('Other'), z.literal('Scoped Prompt Part'), z.literal('Skill')]).describe(`
+        * * Field Name: ItemType
+        * * Display Name: Item Type
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Example
+    *   * Graph Concept
+    *   * Note
+    *   * Other
+    *   * Scoped Prompt Part
+    *   * Skill
+        * * Description: Context item classification: Note, Example, Skill, Graph Concept, Scoped Prompt Part, or Other.`),
+    AgentNoteID: z.string().nullable().describe(`
+        * * Field Name: AgentNoteID
+        * * Display Name: Agent Note ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)`),
+    AgentExampleID: z.string().nullable().describe(`
+        * * Field Name: AgentExampleID
+        * * Display Name: Agent Example ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Examples (vwAIAgentExamples.ID)`),
+    SkillID: z.string().nullable().describe(`
+        * * Field Name: SkillID
+        * * Display Name: Skill ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)`),
+    GraphConceptID: z.string().nullable().describe(`
+        * * Field Name: GraphConceptID
+        * * Display Name: Graph Concept ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Concepts (vwGraphConcepts.ID)`),
+    ScopedPromptPartID: z.string().nullable().describe(`
+        * * Field Name: ScopedPromptPartID
+        * * Display Name: Scoped Prompt Part ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scoped Prompt Parts (vwScopedPromptParts.ID)`),
+    ItemEntityID: z.string().nullable().describe(`
+        * * Field Name: ItemEntityID
+        * * Display Name: Item Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    ItemRecordID: z.string().nullable().describe(`
+        * * Field Name: ItemRecordID
+        * * Display Name: Item Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Polymorphic target record ID paired with ItemEntityID for item types without dedicated FK columns.`),
+    ShortID: z.string().nullable().describe(`
+        * * Field Name: ShortID
+        * * Display Name: Short ID
+        * * SQL Data Type: nvarchar(10)
+        * * Description: Compact reference identifier rendered into the prompt so cited items resolve reliably.`),
+    Rank: z.number().nullable().describe(`
+        * * Field Name: Rank
+        * * Display Name: Rank
+        * * SQL Data Type: int
+        * * Description: Zero-based or 1-based display rank position within the assembled context block.`),
+    Similarity: z.number().nullable().describe(`
+        * * Field Name: Similarity
+        * * Display Name: Similarity
+        * * SQL Data Type: decimal(5, 4)
+        * * Description: Vector similarity score captured during semantic retrieval when available.`),
+    Details: z.any().nullable().describe(`
+        * * Field Name: Details
+        * * Display Name: Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIAgentContextItemEntity_IAgentContextItemDetails
+        * * Description: Structured JSON telemetry details conforming to IAgentContextItemDetails (strategy, lane, scores, snapshot flags, citation source).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    AgentRun: z.string().nullable().describe(`
+        * * Field Name: AgentRun
+        * * Display Name: Agent Run
+        * * SQL Data Type: nvarchar(255)`),
+    AgentRunStep: z.string().nullable().describe(`
+        * * Field Name: AgentRunStep
+        * * Display Name: Agent Run Step
+        * * SQL Data Type: nvarchar(255)`),
+    ConversationDetail: z.string().nullable().describe(`
+        * * Field Name: ConversationDetail
+        * * Display Name: Conversation Detail
+        * * SQL Data Type: nvarchar(100)`),
+    AgentNote: z.string().nullable().describe(`
+        * * Field Name: AgentNote
+        * * Display Name: Agent Note
+        * * SQL Data Type: nvarchar(20)`),
+    AgentExample: z.string().nullable().describe(`
+        * * Field Name: AgentExample
+        * * Display Name: Agent Example
+        * * SQL Data Type: nvarchar(20)`),
+    Skill: z.string().nullable().describe(`
+        * * Field Name: Skill
+        * * Display Name: Skill
+        * * SQL Data Type: nvarchar(255)`),
+    GraphConcept: z.string().nullable().describe(`
+        * * Field Name: GraphConcept
+        * * Display Name: Graph Concept
+        * * SQL Data Type: nvarchar(255)`),
+    ScopedPromptPart: z.string().nullable().describe(`
+        * * Field Name: ScopedPromptPart
+        * * Display Name: Scoped Prompt Part
+        * * SQL Data Type: nvarchar(255)`),
+    ItemEntity: z.string().nullable().describe(`
+        * * Field Name: ItemEntity
+        * * Display Name: Item Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJAIAgentContextItemEntityType = z.infer<typeof MJAIAgentContextItemSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Credentials
  */
 export const MJAIAgentCredentialSchema = z.object({
@@ -1107,6 +1267,559 @@ export const MJAIAgentHarnessSchema = z.object({
 export type MJAIAgentHarnessEntityType = z.infer<typeof MJAIAgentHarnessSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Learning Cycle Proposal Sources
+ */
+export const MJAIAgentLearningCycleProposalSourceSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ProposalID: z.string().describe(`
+        * * Field Name: ProposalID
+        * * Display Name: Proposal
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Learning Cycle Proposals (vwAIAgentLearningCycleProposals.ID)`),
+    Role: z.union([z.literal('Bridge Node'), z.literal('Contradicting Note'), z.literal('Exemplar Run'), z.literal('Failed Run'), z.literal('Other'), z.literal('Supporting Note'), z.literal('User Correction')]).describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(40)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Bridge Node
+    *   * Contradicting Note
+    *   * Exemplar Run
+    *   * Failed Run
+    *   * Other
+    *   * Supporting Note
+    *   * User Correction
+        * * Description: Evidentiary role of this source: Supporting Note, Contradicting Note, Failed Run, Exemplar Run, User Correction, Bridge Node, or Other.`),
+    TrustTierAtSnapshot: z.union([z.literal('Canonical'), z.literal('Provisional User'), z.literal('Untrusted External'), z.literal('Verified Active')]).describe(`
+        * * Field Name: TrustTierAtSnapshot
+        * * Display Name: Trust Tier At Snapshot
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Canonical
+    *   * Provisional User
+    *   * Untrusted External
+    *   * Verified Active
+        * * Description: Trust tier snapshot recorded when the source was attached to the proposal.`),
+    SourceNoteID: z.string().nullable().describe(`
+        * * Field Name: SourceNoteID
+        * * Display Name: Source Note
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)`),
+    SourceAgentRunID: z.string().nullable().describe(`
+        * * Field Name: SourceAgentRunID
+        * * Display Name: Source Agent Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)`),
+    SourceConversationDetailID: z.string().nullable().describe(`
+        * * Field Name: SourceConversationDetailID
+        * * Display Name: Source Conversation Detail
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)`),
+    SourceGraphConceptID: z.string().nullable().describe(`
+        * * Field Name: SourceGraphConceptID
+        * * Display Name: Source Graph Concept
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Concepts (vwGraphConcepts.ID)`),
+    SourceGraphEdgeID: z.string().nullable().describe(`
+        * * Field Name: SourceGraphEdgeID
+        * * Display Name: Source Graph Edge
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Edges (vwGraphEdges.ID)`),
+    SourceEntityID: z.string().nullable().describe(`
+        * * Field Name: SourceEntityID
+        * * Display Name: Source Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    SourceRecordID: z.string().nullable().describe(`
+        * * Field Name: SourceRecordID
+        * * Display Name: Source Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Polymorphic source record ID paired with SourceEntityID when the source is outside the dedicated FK columns.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    SourceNote: z.string().nullable().describe(`
+        * * Field Name: SourceNote
+        * * Display Name: Source Note Text
+        * * SQL Data Type: nvarchar(20)`),
+    SourceAgentRun: z.string().nullable().describe(`
+        * * Field Name: SourceAgentRun
+        * * Display Name: Source Agent Run Text
+        * * SQL Data Type: nvarchar(255)`),
+    SourceConversationDetail: z.string().nullable().describe(`
+        * * Field Name: SourceConversationDetail
+        * * Display Name: Source Conversation Detail Text
+        * * SQL Data Type: nvarchar(100)`),
+    SourceGraphConcept: z.string().nullable().describe(`
+        * * Field Name: SourceGraphConcept
+        * * Display Name: Source Graph Concept Text
+        * * SQL Data Type: nvarchar(255)`),
+    SourceEntity: z.string().nullable().describe(`
+        * * Field Name: SourceEntity
+        * * Display Name: Source Entity Text
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJAIAgentLearningCycleProposalSourceEntityType = z.infer<typeof MJAIAgentLearningCycleProposalSourceSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Agent Learning Cycle Proposals
+ */
+export const MJAIAgentLearningCycleProposalSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    LearningCycleID: z.string().describe(`
+        * * Field Name: LearningCycleID
+        * * Display Name: Learning Cycle
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Learning Cycles (vwAIAgentLearningCycles.ID)`),
+    TargetAgentID: z.string().nullable().describe(`
+        * * Field Name: TargetAgentID
+        * * Display Name: Target Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
+    CompanyID: z.string().nullable().describe(`
+        * * Field Name: CompanyID
+        * * Display Name: Company
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    PrimaryScopeEntityID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeEntityID
+        * * Display Name: Primary Scope Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    PrimaryScopeRecordID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeRecordID
+        * * Display Name: Primary Scope Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Record identifier within PrimaryScopeEntityID when the proposal is scoped to a single entity record.`),
+    SecondaryScopes: z.string().nullable().describe(`
+        * * Field Name: SecondaryScopes
+        * * Display Name: Secondary Scopes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON specification matching ScopedPromptPart/AIAgentNote SecondaryScopes isolation filters.`),
+    ProposalType: z.union([z.literal('Create Canon Concept'), z.literal('Create Graph Edge'), z.literal('Create Note'), z.literal('Draft Skill'), z.literal('Evolve Workflow'), z.literal('Promote To Canon'), z.literal('Promote Workflow'), z.literal('Prompt Revision'), z.literal('Resolve Graph Contradiction'), z.literal('Supersede Notes')]).describe(`
+        * * Field Name: ProposalType
+        * * Display Name: Proposal Type
+        * * SQL Data Type: nvarchar(40)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Create Canon Concept
+    *   * Create Graph Edge
+    *   * Create Note
+    *   * Draft Skill
+    *   * Evolve Workflow
+    *   * Promote To Canon
+    *   * Promote Workflow
+    *   * Prompt Revision
+    *   * Resolve Graph Contradiction
+    *   * Supersede Notes
+        * * Description: Kind of change proposed (Create Note, Supersede Notes, Promote To Canon, Draft Skill, Create Graph Edge, Create Canon Concept, Promote Workflow, Evolve Workflow, Resolve Graph Contradiction, Prompt Revision).`),
+    SamplerStrategy: z.union([z.literal('Contradiction Resolution'), z.literal('Cross User Pattern'), z.literal('Distant Note Pair'), z.literal('Failed Run Cluster'), z.literal('Graph Bridge Walk'), z.literal('Graph Overlay Conflict'), z.literal('Harness Refiner Probe'), z.literal('Successful Trajectory'), z.literal('Taxonomy Import'), z.literal('Workflow Telemetry')]).describe(`
+        * * Field Name: SamplerStrategy
+        * * Display Name: Sampler Strategy
+        * * SQL Data Type: nvarchar(40)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Contradiction Resolution
+    *   * Cross User Pattern
+    *   * Distant Note Pair
+    *   * Failed Run Cluster
+    *   * Graph Bridge Walk
+    *   * Graph Overlay Conflict
+    *   * Harness Refiner Probe
+    *   * Successful Trajectory
+    *   * Taxonomy Import
+    *   * Workflow Telemetry
+        * * Description: Sampler or generator pipeline stage that discovered this candidate proposal.`),
+    Title: z.string().describe(`
+        * * Field Name: Title
+        * * Display Name: Title
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Concise human-readable title summarizing the proposed change.`),
+    Claim: z.string().describe(`
+        * * Field Name: Claim
+        * * Display Name: Claim
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Core factual or behavioral claim asserted by this proposal.`),
+    TestablePrediction: z.string().nullable().describe(`
+        * * Field Name: TestablePrediction
+        * * Display Name: Testable Prediction
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional falsifiable prediction describing how downstream evaluation should improve if this proposal holds.`),
+    ProposedPayload: z.string().describe(`
+        * * Field Name: ProposedPayload
+        * * Display Name: Proposed Payload
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Structured JSON payload consumed by the deterministic materializer when the proposal is applied.`),
+    ClaimHash: z.string().describe(`
+        * * Field Name: ClaimHash
+        * * Display Name: Claim Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 hash of the canonicalized claim used for deduplication and anti-redreaming lookup.`),
+    SourceTrustCeiling: z.union([z.literal('Canonical'), z.literal('Provisional User'), z.literal('Untrusted External'), z.literal('Verified Active')]).describe(`
+        * * Field Name: SourceTrustCeiling
+        * * Display Name: Source Trust Ceiling
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: Provisional User
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Canonical
+    *   * Provisional User
+    *   * Untrusted External
+    *   * Verified Active
+        * * Description: Monotonic minimum trust tier across all attached proposal sources.`),
+    DistinctUserCount: z.number().nullable().describe(`
+        * * Field Name: DistinctUserCount
+        * * Display Name: Distinct User Count
+        * * SQL Data Type: int
+        * * Description: Number of distinct users represented in the supporting evidence (for k-anonymity cross-user promotion rules).`),
+    GeneratorMetadata: z.string().nullable().describe(`
+        * * Field Name: GeneratorMetadata
+        * * Display Name: Generator Metadata
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON metadata describing candidate generation prompts, temperatures, and ensemble members.`),
+    CrossModelAgreementCount: z.number().describe(`
+        * * Field Name: CrossModelAgreementCount
+        * * Display Name: Cross Model Agreement Count
+        * * SQL Data Type: int
+        * * Default Value: 1
+        * * Description: Count of independent proposer models agreeing on this claim.`),
+    IsSingleModelOutlier: z.boolean().describe(`
+        * * Field Name: IsSingleModelOutlier
+        * * Display Name: Is Single Model Outlier
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True if surfaced by a single high-temperature outlier generator rather than consensus.`),
+    GateProbability: z.number().nullable().describe(`
+        * * Field Name: GateProbability
+        * * Display Name: Gate Probability
+        * * SQL Data Type: decimal(5, 4)
+        * * Description: Pre-verification admission probability assigned by the proposal gate (0.0000 to 1.0000).`),
+    FalsifierVerdict: z.union([z.literal('Needs Scope Narrowing'), z.literal('Passed'), z.literal('Rejected')]).nullable().describe(`
+        * * Field Name: FalsifierVerdict
+        * * Display Name: Falsifier Verdict
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Needs Scope Narrowing
+    *   * Passed
+    *   * Rejected
+        * * Description: Result from the falsifier check: Passed, Rejected, or Needs Scope Narrowing.`),
+    FalsifierCritique: z.string().nullable().describe(`
+        * * Field Name: FalsifierCritique
+        * * Display Name: Falsifier Critique
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed critique explaining why the falsifier rejected or requested scope narrowing.`),
+    VerificationMethod: z.union([z.literal('Counterfactual Replay'), z.literal('Hybrid'), z.literal('Manual Only'), z.literal('None'), z.literal('Query Check')]).describe(`
+        * * Field Name: VerificationMethod
+        * * Display Name: Verification Method
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Counterfactual Replay
+    *   * Hybrid
+    *   * Manual Only
+    *   * None
+    *   * Query Check
+        * * Description: Verification mechanism used for this proposal: Counterfactual Replay, Query Check, Hybrid, Manual Only, or None.`),
+    ReplayTrialsCount: z.number().describe(`
+        * * Field Name: ReplayTrialsCount
+        * * Display Name: Replay Trials Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of counterfactual replay trials executed.`),
+    ReplayWinsCount: z.number().describe(`
+        * * Field Name: ReplayWinsCount
+        * * Display Name: Replay Wins Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of replay trials won with this proposal active.`),
+    ReplayLossesCount: z.number().describe(`
+        * * Field Name: ReplayLossesCount
+        * * Display Name: Replay Losses Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of replay trials lost with this proposal active.`),
+    ReplayWinDelta: z.number().nullable().describe(`
+        * * Field Name: ReplayWinDelta
+        * * Display Name: Replay Win Delta
+        * * SQL Data Type: decimal(6, 4)
+        * * Description: Net win-rate delta observed across paired counterfactual replay trials.`),
+    QueryCheckPassed: z.boolean().nullable().describe(`
+        * * Field Name: QueryCheckPassed
+        * * Display Name: Query Check Passed
+        * * SQL Data Type: bit
+        * * Description: Outcome of deterministic SQL/query verification checks when applicable.`),
+    VerificationEvidence: z.string().nullable().describe(`
+        * * Field Name: VerificationEvidence
+        * * Display Name: Verification Evidence
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Structured JSON verification evidence linking paired trial prompt runs, judges, and query outputs.`),
+    ProblemKey: z.string().describe(`
+        * * Field Name: ProblemKey
+        * * Display Name: Problem Key
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Normalized recurring problem key grouping prior attempts for Self-Improvement Memory retrieval.`),
+    ProblemSummary: z.string().nullable().describe(`
+        * * Field Name: ProblemSummary
+        * * Display Name: Problem Summary
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable description of the underlying problem targeted by this proposal.`),
+    Rationale: z.string().describe(`
+        * * Field Name: Rationale
+        * * Display Name: Rationale
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Proposer rationale explaining why this edit is expected to improve outcomes.`),
+    PredictedEffect: z.number().nullable().describe(`
+        * * Field Name: PredictedEffect
+        * * Display Name: Predicted Effect
+        * * SQL Data Type: decimal(6, 4)
+        * * Description: Proposer forecast of expected metric improvement prior to verification.`),
+    ObservedEffect: z.number().nullable().describe(`
+        * * Field Name: ObservedEffect
+        * * Display Name: Observed Effect
+        * * SQL Data Type: decimal(6, 4)
+        * * Description: Measured metric effect observed during verification or post-promotion evaluation.`),
+    EffectMetric: z.string().nullable().describe(`
+        * * Field Name: EffectMetric
+        * * Display Name: Effect Metric
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Name of the metric quantified by PredictedEffect and ObservedEffect.`),
+    EvaluationContext: z.string().nullable().describe(`
+        * * Field Name: EvaluationContext
+        * * Display Name: Evaluation Context
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON snapshot of model, vendor, prompt version, agent config, cohort, and sample size under which effects were measured.`),
+    SupersedesProposalID: z.string().nullable().describe(`
+        * * Field Name: SupersedesProposalID
+        * * Display Name: Supersedes Proposal
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Learning Cycle Proposals (vwAIAgentLearningCycleProposals.ID)`),
+    ImpactLevel: z.union([z.literal('Critical'), z.literal('High'), z.literal('Low'), z.literal('Medium')]).nullable().describe(`
+        * * Field Name: ImpactLevel
+        * * Display Name: Impact Level
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Critical
+    *   * High
+    *   * Low
+    *   * Medium
+        * * Description: Rule 6 computed impact classification: Low, Medium, High, or Critical.`),
+    ImpactInputs: z.string().nullable().describe(`
+        * * Field Name: ImpactInputs
+        * * Display Name: Impact Inputs
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON capture of exact inputs that produced ImpactLevel.`),
+    ConfidenceScore: z.number().nullable().describe(`
+        * * Field Name: ConfidenceScore
+        * * Display Name: Confidence Score
+        * * SQL Data Type: decimal(5, 4)
+        * * Description: Rule 6 computed evidence confidence score (0.0000 to 1.0000).`),
+    ConfidenceInputs: z.string().nullable().describe(`
+        * * Field Name: ConfidenceInputs
+        * * Display Name: Confidence Inputs
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON capture of exact evidence inputs that produced ConfidenceScore.`),
+    PromotionRoute: z.union([z.literal('Approved by Policy'), z.literal('Human'), z.literal('Named Owner'), z.literal('Provisional')]).nullable().describe(`
+        * * Field Name: PromotionRoute
+        * * Display Name: Promotion Route
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved by Policy
+    *   * Human
+    *   * Named Owner
+    *   * Provisional
+        * * Description: Selected Rule 6 promotion route: Approved by Policy, Provisional, Human, or Named Owner.`),
+    ReviewByDate: z.date().nullable().describe(`
+        * * Field Name: ReviewByDate
+        * * Display Name: Review By Date
+        * * SQL Data Type: datetimeoffset
+        * * Description: Deadline by which a Provisional approval must be ratified, re-evaluated, or withdrawn.`),
+    ReviewBrief: z.string().nullable().describe(`
+        * * Field Name: ReviewBrief
+        * * Display Name: Review Brief
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON or structured markdown review brief presenting evidence, dependents, and pros/cons to reviewers.`),
+    ProposingModelID: z.string().nullable().describe(`
+        * * Field Name: ProposingModelID
+        * * Display Name: Proposing Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
+    AIReviewerModelID: z.string().nullable().describe(`
+        * * Field Name: AIReviewerModelID
+        * * Display Name: AI Reviewer Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
+    AIReviewerDecision: z.union([z.literal('Approve'), z.literal('Needs Revision'), z.literal('Reject')]).nullable().describe(`
+        * * Field Name: AIReviewerDecision
+        * * Display Name: AI Reviewer Decision
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approve
+    *   * Needs Revision
+    *   * Reject
+        * * Description: AI reviewer recommendation: Approve, Reject, or Needs Revision.`),
+    AIReviewerRationale: z.string().nullable().describe(`
+        * * Field Name: AIReviewerRationale
+        * * Display Name: AI Reviewer Rationale
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Written rationale recorded by the independent AI reviewer model.`),
+    AIReviewerConfidence: z.number().nullable().describe(`
+        * * Field Name: AIReviewerConfidence
+        * * Display Name: AI Reviewer Confidence
+        * * SQL Data Type: decimal(5, 4)
+        * * Description: Confidence score reported by the AI reviewer model (0.0000 to 1.0000).`),
+    AIReviewedAt: z.date().nullable().describe(`
+        * * Field Name: AIReviewedAt
+        * * Display Name: AI Reviewed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when the AI reviewer evaluation completed.`),
+    HumanOverruleReason: z.string().nullable().describe(`
+        * * Field Name: HumanOverruleReason
+        * * Display Name: Human Overrule Reason
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human reviewer explanation captured when overruling the AI reviewer recommendation or policy route.`),
+    Status: z.union([z.literal('Applied'), z.literal('Approved'), z.literal('Awaiting Approval'), z.literal('Draft'), z.literal('Filtered Out'), z.literal('Rejected'), z.literal('Rolled Back'), z.literal('Verification Failed'), z.literal('Verifying')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Applied
+    *   * Approved
+    *   * Awaiting Approval
+    *   * Draft
+    *   * Filtered Out
+    *   * Rejected
+    *   * Rolled Back
+    *   * Verification Failed
+    *   * Verifying
+        * * Description: Proposal lifecycle status (Draft, Filtered Out, Verifying, Verification Failed, Awaiting Approval, Approved, Applied, Rejected, or Rolled Back).`),
+    ApprovalRequestID: z.string().nullable().describe(`
+        * * Field Name: ApprovalRequestID
+        * * Display Name: Approval Request
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Requests (vwAIAgentRequests.ID)`),
+    AppliedNoteID: z.string().nullable().describe(`
+        * * Field Name: AppliedNoteID
+        * * Display Name: Applied Note
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)`),
+    AppliedSkillID: z.string().nullable().describe(`
+        * * Field Name: AppliedSkillID
+        * * Display Name: Applied Skill
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)`),
+    AppliedGraphConceptID: z.string().nullable().describe(`
+        * * Field Name: AppliedGraphConceptID
+        * * Display Name: Applied Graph Concept
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Concepts (vwGraphConcepts.ID)`),
+    AppliedGraphEdgeID: z.string().nullable().describe(`
+        * * Field Name: AppliedGraphEdgeID
+        * * Display Name: Applied Graph Edge
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Edges (vwGraphEdges.ID)`),
+    AppliedEntityID: z.string().nullable().describe(`
+        * * Field Name: AppliedEntityID
+        * * Display Name: Applied Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    AppliedRecordID: z.string().nullable().describe(`
+        * * Field Name: AppliedRecordID
+        * * Display Name: Applied Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Polymorphic applied record ID paired with AppliedEntityID when the materialized target is outside the dedicated FK columns.`),
+    AppliedAt: z.date().nullable().describe(`
+        * * Field Name: AppliedAt
+        * * Display Name: Applied At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when the approved proposal was materialized to target records.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    LearningCycle: z.string().nullable().describe(`
+        * * Field Name: LearningCycle
+        * * Display Name: Learning Cycle Name
+        * * SQL Data Type: nvarchar(255)`),
+    TargetAgent: z.string().nullable().describe(`
+        * * Field Name: TargetAgent
+        * * Display Name: Target Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    Company: z.string().nullable().describe(`
+        * * Field Name: Company
+        * * Display Name: Company Name
+        * * SQL Data Type: nvarchar(50)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+    PrimaryScopeEntity: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeEntity
+        * * Display Name: Primary Scope Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+    ProposingModel: z.string().nullable().describe(`
+        * * Field Name: ProposingModel
+        * * Display Name: Proposing Model Name
+        * * SQL Data Type: nvarchar(50)`),
+    AIReviewerModel: z.string().nullable().describe(`
+        * * Field Name: AIReviewerModel
+        * * Display Name: AI Reviewer Model Name
+        * * SQL Data Type: nvarchar(50)`),
+    AppliedNote: z.string().nullable().describe(`
+        * * Field Name: AppliedNote
+        * * Display Name: Applied Note Name
+        * * SQL Data Type: nvarchar(20)`),
+    AppliedSkill: z.string().nullable().describe(`
+        * * Field Name: AppliedSkill
+        * * Display Name: Applied Skill Name
+        * * SQL Data Type: nvarchar(255)`),
+    AppliedGraphConcept: z.string().nullable().describe(`
+        * * Field Name: AppliedGraphConcept
+        * * Display Name: Applied Graph Concept Name
+        * * SQL Data Type: nvarchar(255)`),
+    AppliedEntity: z.string().nullable().describe(`
+        * * Field Name: AppliedEntity
+        * * Display Name: Applied Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJAIAgentLearningCycleProposalEntityType = z.infer<typeof MJAIAgentLearningCycleProposalSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Learning Cycles
  */
 export const MJAIAgentLearningCycleSchema = z.object({
@@ -1158,9 +1871,63 @@ export const MJAIAgentLearningCycleSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CycleType: z.union([z.literal('Consolidation'), z.literal('Dreaming'), z.literal('Harness Refinement'), z.literal('Mixed'), z.literal('Skill Extraction')]).describe(`
+        * * Field Name: CycleType
+        * * Display Name: Cycle Type
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: Mixed
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Consolidation
+    *   * Dreaming
+    *   * Harness Refinement
+    *   * Mixed
+    *   * Skill Extraction
+        * * Description: Classification of the learning cycle pass: Consolidation, Dreaming, Skill Extraction, Harness Refinement, or Mixed.`),
+    CompanyID: z.string().nullable().describe(`
+        * * Field Name: CompanyID
+        * * Display Name: Company
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)`),
+    ExecutedByAgentRunID: z.string().nullable().describe(`
+        * * Field Name: ExecutedByAgentRunID
+        * * Display Name: Executed By Agent Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)`),
+    ProposalsGenerated: z.number().describe(`
+        * * Field Name: ProposalsGenerated
+        * * Display Name: Proposals Generated
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Count of candidate proposals generated during this learning cycle.`),
+    ProposalsVerified: z.number().describe(`
+        * * Field Name: ProposalsVerified
+        * * Display Name: Proposals Verified
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Count of proposals verified by replay or deterministic checks during this learning cycle.`),
+    ProposalsApplied: z.number().describe(`
+        * * Field Name: ProposalsApplied
+        * * Display Name: Proposals Applied
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Count of proposals materialized/applied to live records during this learning cycle.`),
+    TotalCostUSD: z.number().nullable().describe(`
+        * * Field Name: TotalCostUSD
+        * * Display Name: Total Cost (USD)
+        * * SQL Data Type: decimal(10, 4)
+        * * Description: Total LLM and execution cost in USD incurred by this learning cycle.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    Company: z.string().nullable().describe(`
+        * * Field Name: Company
+        * * Display Name: Company Name
+        * * SQL Data Type: nvarchar(50)`),
+    ExecutedByAgentRun: z.string().nullable().describe(`
+        * * Field Name: ExecutedByAgentRun
+        * * Display Name: Executed By Agent Run Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -1285,6 +2052,66 @@ export const MJAIAgentModelSchema = z.object({
 });
 
 export type MJAIAgentModelEntityType = z.infer<typeof MJAIAgentModelSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Agent Note Sources
+ */
+export const MJAIAgentNoteSourceSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    NoteID: z.string().describe(`
+        * * Field Name: NoteID
+        * * Display Name: Note
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)`),
+    SourceNoteID: z.string().describe(`
+        * * Field Name: SourceNoteID
+        * * Display Name: Source Note
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)`),
+    RelationshipType: z.union([z.literal('Consolidated From'), z.literal('Disambiguated From'), z.literal('Dream Synthesized From'), z.literal('Other'), z.literal('Supersedes')]).describe(`
+        * * Field Name: RelationshipType
+        * * Display Name: Relationship Type
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: Consolidated From
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Consolidated From
+    *   * Disambiguated From
+    *   * Dream Synthesized From
+    *   * Other
+    *   * Supersedes
+        * * Description: Provenance relationship kind: Consolidated From, Supersedes, Disambiguated From, Dream Synthesized From, or Other.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Zero-based ordering position among source notes contributing to the derived note.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Note: z.string().nullable().describe(`
+        * * Field Name: Note
+        * * Display Name: Note Text
+        * * SQL Data Type: nvarchar(20)`),
+    SourceNote: z.string().nullable().describe(`
+        * * Field Name: SourceNote
+        * * Display Name: Source Note Text
+        * * SQL Data Type: nvarchar(20)`),
+});
+
+export type MJAIAgentNoteSourceEntityType = z.infer<typeof MJAIAgentNoteSourceSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Note Types
@@ -1495,7 +2322,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * Field Name: DerivedFromNoteIDs
         * * Display Name: Derived From Note IDs
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON array of source note IDs that were consolidated into this note. Enables provenance chain resolution and rollback.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by the relational MJ: AI Agent Note Sources table. Existing IDs are backfilled into __mj.AIAgentNoteSource.`),
     ProtectionTier: z.union([z.literal('Ephemeral'), z.literal('Immutable'), z.literal('Protected'), z.literal('Standard')]).describe(`
         * * Field Name: ProtectionTier
         * * Display Name: Protection Tier
@@ -1529,6 +2356,27 @@ export const MJAIAgentNoteSchema = z.object({
         * * Display Name: Embedding Vector Binary
         * * SQL Data Type: varbinary(MAX)
         * * Description: The note embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.`),
+    IsCanonical: z.boolean().describe(`
+        * * Field Name: IsCanonical
+        * * Display Name: Is Canonical
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when this note has been ratified as authoritative organizational behavioral Canon.`),
+    CanonApprovedByUserID: z.string().nullable().describe(`
+        * * Field Name: CanonApprovedByUserID
+        * * Display Name: Canon Approved By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    CanonApprovedAt: z.date().nullable().describe(`
+        * * Field Name: CanonApprovedAt
+        * * Display Name: Canon Approved At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when this note was approved into organizational Canon.`),
+    OriginProposalID: z.string().nullable().describe(`
+        * * Field Name: OriginProposalID
+        * * Display Name: Origin Proposal
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Learning Cycle Proposals (vwAIAgentLearningCycleProposals.ID)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
@@ -1569,6 +2417,10 @@ export const MJAIAgentNoteSchema = z.object({
         * * Field Name: ConsolidatedIntoNote
         * * Display Name: Consolidated Into Note Name
         * * SQL Data Type: nvarchar(20)`),
+    CanonApprovedByUser: z.string().nullable().describe(`
+        * * Field Name: CanonApprovedByUser
+        * * Display Name: Canon Approved By User Name
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJAIAgentNoteEntityType = z.infer<typeof MJAIAgentNoteSchema>;
@@ -5180,6 +6032,12 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJAIAgentEntity_IAgentConfiguration
         * * Description: Unified typed JSON configuration bag (IAgentConfiguration) consolidating operational agent settings across execution, contextWindow, memory, payload, subAgentExecution, attachments, artifacts, scope, skills, clientTools, recording, helperPlugins, instantiation, and promptDefaults. Cascades across Instance -> BaseAgent Chain -> Category -> Parent Categories -> AgentType -> System Default.`),
+    AllowInFlightMemorySearch: z.boolean().describe(`
+        * * Field Name: AllowInFlightMemorySearch
+        * * Display Name: Allow In-Flight Memory Search
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, permits the agent to invoke in-flight memory search tools during a run; off by default.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -8827,9 +9685,34 @@ export const MJAISkillSchema = z.object({
     *   * Conversation
     *   * Run
         * * Description: How long an activation lasts. Run (default): the skill is active for the run that activated it and no longer — a one-shot capability. Conversation: once activated in a run that belongs to a conversation, the skill stays active for that conversation (an MJ: Conversation Skills row, Status Active) and is re-requested at the start of every later root run there until ended — a persona, or a mode whose menu is pressed on the next turn. Subject to every availability gate on each run; ActivationMode still decides who may trigger the FIRST activation.`),
+    IsCanonical: z.boolean().describe(`
+        * * Field Name: IsCanonical
+        * * Display Name: Is Canonical
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when this skill has been ratified as authoritative organizational procedural Canon.`),
+    CanonApprovedByUserID: z.string().nullable().describe(`
+        * * Field Name: CanonApprovedByUserID
+        * * Display Name: Canon Approved By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    CanonApprovedAt: z.date().nullable().describe(`
+        * * Field Name: CanonApprovedAt
+        * * Display Name: Canon Approved At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when this skill was approved into organizational Canon.`),
+    OriginProposalID: z.string().nullable().describe(`
+        * * Field Name: OriginProposalID
+        * * Display Name: Origin Proposal ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Learning Cycle Proposals (vwAIAgentLearningCycleProposals.ID)`),
     CreatedByUser: z.string().nullable().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User
+        * * SQL Data Type: nvarchar(100)`),
+    CanonApprovedByUser: z.string().nullable().describe(`
+        * * Field Name: CanonApprovedByUser
+        * * Display Name: Canon Approved By User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -27962,7 +28845,7 @@ export const MJGraphConceptSchema = z.object({
         * * Display Name: Synonyms
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of alternative names, acronyms, and surface forms that resolve to this concept.`),
-    Status: z.union([z.literal('Approved'), z.literal('Deprecated'), z.literal('Draft'), z.literal('Proposed')]).describe(`
+    Status: z.union([z.literal('Approved'), z.literal('Deprecated'), z.literal('Draft'), z.literal('Proposed'), z.literal('Provisional')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -27973,7 +28856,8 @@ export const MJGraphConceptSchema = z.object({
     *   * Deprecated
     *   * Draft
     *   * Proposed
-        * * Description: Governance lifecycle status of the concept: Draft, Proposed, Approved, or Deprecated.`),
+    *   * Provisional
+        * * Description: Governance lifecycle status of the concept: Draft, Proposed, Provisional, Approved, or Deprecated.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -27994,6 +28878,16 @@ export const MJGraphConceptSchema = z.object({
     *   * Declared
     *   * Inferred
         * * Description: How the concept came to exist. Declared: authored by a person or seeded; visible to anyone who can read concepts. Inferred: synthesized by the Content Pipeline from document chunks; visible only to someone who can read its sources (SourcedFrom edges), unless it is Approved in a Canon graph.`),
+    EffectiveFrom: z.date().nullable().describe(`
+        * * Field Name: EffectiveFrom
+        * * Display Name: Effective From
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional inclusive start timestamp from which this concept takes effect for date-scoped Canon queries.`),
+    EffectiveTo: z.date().nullable().describe(`
+        * * Field Name: EffectiveTo
+        * * Display Name: Effective To
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional inclusive end timestamp after which this concept is superseded/expired for date-scoped Canon queries.`),
     Graph: z.string().nullable().describe(`
         * * Field Name: Graph
         * * Display Name: Graph
@@ -28258,7 +29152,7 @@ export const MJGraphEdgeSchema = z.object({
     *   * Declared
     *   * Inferred
         * * Description: How this edge was created: Declared (explicitly authored by a human or seed metadata) or Inferred (proposed by an AI or content pipeline stage).`),
-    Status: z.union([z.literal('Approved'), z.literal('Proposed'), z.literal('Rejected')]).describe(`
+    Status: z.union([z.literal('Approved'), z.literal('Proposed'), z.literal('Provisional'), z.literal('Rejected')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -28267,8 +29161,9 @@ export const MJGraphEdgeSchema = z.object({
     * * Possible Values 
     *   * Approved
     *   * Proposed
+    *   * Provisional
     *   * Rejected
-        * * Description: Governance lifecycle status of the edge: Proposed, Approved, or Rejected. Default graph traversal includes Approved edges only.`),
+        * * Description: Governance lifecycle status of the edge: Proposed, Provisional, Approved, or Rejected. Default graph traversal includes Approved edges only.`),
     Confidence: z.number().nullable().describe(`
         * * Field Name: Confidence
         * * Display Name: Confidence
@@ -28284,6 +29179,12 @@ export const MJGraphEdgeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    AuthorityTierID: z.string().nullable().describe(`
+        * * Field Name: AuthorityTierID
+        * * Display Name: Authority Tier
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Authority Tiers (vwGraphAuthorityTiers.ID)
+        * * Description: Optional foreign key to GraphAuthorityTier overriding the source authority tier for this specific edge.`),
     Graph: z.string().nullable().describe(`
         * * Field Name: Graph
         * * Display Name: Graph
@@ -28300,9 +29201,74 @@ export const MJGraphEdgeSchema = z.object({
         * * Field Name: TargetEntity
         * * Display Name: Target Entity
         * * SQL Data Type: nvarchar(255)`),
+    AuthorityTier: z.string().nullable().describe(`
+        * * Field Name: AuthorityTier
+        * * Display Name: Authority Tier Name
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJGraphEdgeEntityType = z.infer<typeof MJGraphEdgeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Permissions
+ */
+export const MJGraphPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    GraphID: z.string().describe(`
+        * * Field Name: GraphID
+        * * Display Name: Graph ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    RoleID: z.string().nullable().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)`),
+    PermissionLevel: z.union([z.literal('Approve'), z.literal('None'), z.literal('Read'), z.literal('Use')]).describe(`
+        * * Field Name: PermissionLevel
+        * * Display Name: Permission Level
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approve
+    *   * None
+    *   * Read
+    *   * Use
+        * * Description: Grant level on the graph: None, Read, Use, or Approve.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Graph: z.string().nullable().describe(`
+        * * Field Name: Graph
+        * * Display Name: Graph
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    Role: z.string().nullable().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJGraphPermissionEntityType = z.infer<typeof MJGraphPermissionSchema>;
 
 /**
  * zod schema definition for the entity MJ: Graph Types
@@ -28451,6 +29417,22 @@ export const MJGraphSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    StaleMemberPolicy: z.union([z.literal('Hide'), z.literal('Show With Warning')]).describe(`
+        * * Field Name: StaleMemberPolicy
+        * * Display Name: Stale Member Policy
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: Hide
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Hide
+    *   * Show With Warning
+        * * Description: Default handling and ceiling for stale fingerprinted Canon members on this graph: Hide (default) or Show With Warning.`),
+    PublishNonHumanApprovals: z.boolean().describe(`
+        * * Field Name: PublishNonHumanApprovals
+        * * Display Name: Publish Non-Human Approvals
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, permits concepts approved by policy or AI reviewer to publish to readers who cannot see underlying sources; off by default.`),
     GraphType: z.string().nullable().describe(`
         * * Field Name: GraphType
         * * Display Name: Graph Type
@@ -40651,6 +41633,58 @@ export const MJSearchScopeExternalIndexSchema = z.object({
 });
 
 export type MJSearchScopeExternalIndexEntityType = z.infer<typeof MJSearchScopeExternalIndexSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Search Scope Graphs
+ */
+export const MJSearchScopeGraphSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SearchScopeID: z.string().describe(`
+        * * Field Name: SearchScopeID
+        * * Display Name: Search Scope
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Search Scopes (vwSearchScopes.ID)`),
+    GraphID: z.string().describe(`
+        * * Field Name: GraphID
+        * * Display Name: Graph
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Relative retrieval priority across graphs bound to the same SearchScope; lower values are queried first.`),
+    MaxResults: z.number().nullable().describe(`
+        * * Field Name: MaxResults
+        * * Display Name: Max Results
+        * * SQL Data Type: int
+        * * Description: Optional per-graph result cap within the SearchScope retrieval lane.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    SearchScope: z.string().nullable().describe(`
+        * * Field Name: SearchScope
+        * * Display Name: Search Scope Name
+        * * SQL Data Type: nvarchar(200)`),
+    Graph: z.string().nullable().describe(`
+        * * Field Name: Graph
+        * * Display Name: Graph Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJSearchScopeGraphEntityType = z.infer<typeof MJSearchScopeGraphSchema>;
 
 /**
  * zod schema definition for the entity MJ: Search Scope Permissions

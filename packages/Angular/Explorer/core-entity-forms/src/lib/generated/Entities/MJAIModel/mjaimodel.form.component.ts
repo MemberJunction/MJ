@@ -50,7 +50,9 @@ export class MJAIModelFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIModelPersonas', sectionName: 'AI Model Personas', isExpanded: false },
             { sectionKey: 'mJFeaturePipelineVersions', sectionName: 'Feature Pipeline Versions', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false },
-            { sectionKey: 'mJFeatureValueCaches', sectionName: 'Feature Value Caches', isExpanded: false }
+            { sectionKey: 'mJFeatureValueCaches', sectionName: 'Feature Value Caches', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycleProposalsProposingModelID', sectionName: 'AI Agent Learning Cycle Proposals (Proposing Model)', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycleProposalsAIReviewerModelID', sectionName: 'AI Agent Learning Cycle Proposals (AI Reviewer Model)', isExpanded: false }
         ]);
     }
 }

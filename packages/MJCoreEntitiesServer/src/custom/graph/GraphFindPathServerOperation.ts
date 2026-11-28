@@ -88,7 +88,8 @@ function edgeOf(edge: GraphEdgeView): GraphFindPathEdge {
         Weight: edge.Weight,
         Description: edge.Description,
         Origin: edge.Origin,
-        Status: edge.Status,
+        // Map Provisional edges onto Proposed on the existing wire contract until Wave 5.3 extends GraphFindPathEdge.
+        Status: edge.Status === 'Provisional' ? 'Proposed' : edge.Status,
     };
 }
 

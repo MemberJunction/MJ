@@ -37,7 +37,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (536 classes)
+// @memberjunction/core-entities (542 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -67,15 +67,19 @@ import {
     MJAIAgentClientToolEntity,
     MJAIAgentCoAgentEntity,
     MJAIAgentConfigurationEntity,
+    MJAIAgentContextItemEntity,
     MJAIAgentCredentialEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
     MJAIAgentExampleEntity,
     MJAIAgentHarnessEntity,
     MJAIAgentLearningCycleEntity,
+    MJAIAgentLearningCycleProposalEntity,
+    MJAIAgentLearningCycleProposalSourceEntity,
     MJAIAgentModalityEntity,
     MJAIAgentModelEntity,
     MJAIAgentNoteEntity,
+    MJAIAgentNoteSourceEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
     MJAIAgentPersonaEntity,
@@ -358,6 +362,7 @@ import {
     MJGraphEdgeTypeEndpointEntity,
     MJGraphEdgeTypeEntity,
     MJGraphEntity,
+    MJGraphPermissionEntity,
     MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
@@ -491,6 +496,7 @@ import {
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
+    MJSearchScopeGraphEntity,
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
@@ -1008,15 +1014,19 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentClientToolEntity,
     MJAIAgentCoAgentEntity,
     MJAIAgentConfigurationEntity,
+    MJAIAgentContextItemEntity,
     MJAIAgentCredentialEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
     MJAIAgentExampleEntity,
     MJAIAgentHarnessEntity,
     MJAIAgentLearningCycleEntity,
+    MJAIAgentLearningCycleProposalEntity,
+    MJAIAgentLearningCycleProposalSourceEntity,
     MJAIAgentModalityEntity,
     MJAIAgentModelEntity,
     MJAIAgentNoteEntity,
+    MJAIAgentNoteSourceEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
     MJAIAgentPersonaEntity,
@@ -1303,6 +1313,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJGraphEdgeTypeEndpointEntity,
     MJGraphEdgeTypeEntity,
     MJGraphEntity,
+    MJGraphPermissionEntity,
     MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
@@ -1440,6 +1451,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
+    MJSearchScopeGraphEntity,
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
@@ -1843,7 +1855,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 846;
+export const CLASS_REGISTRATIONS_COUNT = 852;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
