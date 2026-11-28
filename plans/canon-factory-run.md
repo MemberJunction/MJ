@@ -221,7 +221,7 @@ Slices in a wave are independent of each other. A wave starts when the one befor
 
 ## Tests that cannot be traded away
 
-These are written into the frozen plans for waves 3 and 4. The factory may add tests; it may not remove or weaken these. Each runs as a restricted user and was seen to fail before the fix.
+These are written into the frozen plans for waves 3 to 5. The factory may add tests; it may not remove or weaken these. Each runs as a restricted user and was seen to fail before the fix.
 
 1. A concept synthesized only from documents the reader cannot see is hidden: its name, synonyms, description and specification never reach the reader, through the graph engine, `Get Graph Context`, a plain `RunView`, search, or a rendered Canon document.
 2. A concept with some visible sources is redacted, not shown.
