@@ -21,7 +21,6 @@ import {
     ResolveDecisionState,
     ResolveDecisionStepAnswers,
     SelectOutgoingEdges,
-    ValidateTaskGraphSpec,
     type AgentDecisionAnswerSummary,
     type ConditionHold,
     type DecisionStepAnswers,
@@ -32,7 +31,12 @@ import {
     type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
 import { AIEngineGraphRepository, SafeConditionEvaluator } from './flow-graph-adapters';
-import { CompileFlowAgentToTaskGraph, FormatFlowCompileErrors, FormatFlowValidationErrors } from './flow-graph-executor';
+import {
+    CompileAndValidateFlowAgent,
+    FindDispatcherOnlyFlowSteps,
+    FormatFlowCompileErrors,
+    ResolveFlowExecutionMode,
+} from './flow-graph-executor';
 import { BaseAgentType, type AgentTypeExecutionRouting } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation, type LoopBodyActionStep } from '@memberjunction/ai-core-plus';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
@@ -43,6 +47,7 @@ import { ActionResult } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { PayloadManager } from '../PayloadManager';
+import { AgentStepTypeRegistry } from '../helpers/steps/AgentStepTypeRegistry';
 import { ConversationMessageResolver } from '../utils/ConversationMessageResolver';
 
 /**
@@ -1092,15 +1097,60 @@ export class FlowAgentType extends BaseAgentType {
 
             case 'Human':
                 // A Human step waits for a person, which only the task-graph dispatcher can do: it
-                // parks the task until someone answers. The in-run walker has nowhere to wait, so the
-                // run stops here, naming the step. Only a run that reaches the step is refused, so a
-                // Human step on a branch the run does not take never fails it (#4621).
+                // parks the task until someone answers. Workflows combining Custom steps with
+                // dispatcher-only steps (Human, Wait, External, ForEach+enqueue) are refused up front
+                // before step 1; non-Custom in-run runs (e.g. sub-agent runs) refuse lazily here only
+                // if the run actually reaches the Human step (#4621).
                 return this.stopFlow(
                     `Workflow '${params.agent.Name}' reached Human step '${node.Name}', which this run cannot ` +
                     `execute: Human steps wait for a person and run only on the task-graph dispatcher. Run the ` +
                     `workflow as a top-level run with executionMode 'dispatch' (the default for a top-level run).`,
                     payload
                 );
+
+            case 'Custom': {
+                let parsedConfig: Record<string, unknown> | undefined;
+                if (typeof node.Configuration === 'string' && node.Configuration.trim().length > 0) {
+                    try {
+                        const raw = JSON.parse(node.Configuration) as unknown;
+                        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+                            const safe: Record<string, unknown> = {};
+                            for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+                                if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+                                safe[k] = v;
+                            }
+                            parsedConfig = safe;
+                        }
+                    } catch {
+                        return this.createNextStep('Failed', {
+                            errorMessage: `Custom flow step '${node.Name}' has invalid JSON in Configuration`,
+                            newPayload: payload,
+                            previousPayload: payload
+                        });
+                    }
+                }
+                const configuredKey = typeof parsedConfig?.['stepType'] === 'string'
+                    ? (parsedConfig['stepType'] as string)
+                    : null;
+                const policy =
+                    (node.StepTypeID
+                        ? AgentStepTypeRegistry.Instance.ResolveEffectivePolicyByID(node.StepTypeID)
+                        : null) ??
+                    (configuredKey ? AgentStepTypeRegistry.Instance.ResolveEffectivePolicy(configuredKey) : null);
+                if (!policy || policy.IsBuiltIn || !AgentStepTypeRegistry.Instance.DoesStepApplyToAgentType(policy.AppliesTo, 'Flow')) {
+                    return this.createNextStep('Failed', {
+                        errorMessage: `Custom flow step '${node.Name}' could not resolve an active non-built-in Flow-compatible custom step type (StepTypeID=${node.StepTypeID ?? 'null'})`,
+                        newPayload: payload,
+                        previousPayload: payload
+                    });
+                }
+                return this.createNextStep(policy.StepKey, {
+                    ...(policy.StepTypeID ? { stepTypeID: policy.StepTypeID } : {}),
+                    ...(parsedConfig ? { customStepData: parsedConfig } : {}),
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
 
             default:
                 return this.createNextStep('Failed', {
@@ -1166,7 +1216,7 @@ export class FlowAgentType extends BaseAgentType {
         if ('ErrorMessage' in resolved) {
             return this.decisionNotAsked(key, resolved.ErrorMessage, payload);
         }
-        return this.createNextStep<P>('Decision' as BaseAgentNextStep['step'], {
+        return this.createNextStep<P>('Decision', {
             decisions: [{ id: key, state: state ?? 'payload', questions }],
             ...(promptName ? { decisionPromptName: promptName } : {}),
             newPayload: payload,
@@ -1638,22 +1688,9 @@ export class FlowAgentType extends BaseAgentType {
         params: ExecuteAgentParams<P>,
         flowParams: FlowAgentExecuteParams | undefined
     ): void {
-        const requested = flowParams?.executionMode;
-        if (requested === 'inRun') {
-            flowState.executionMode = 'inRun';
-            flowState.executionModeReason = 'requested by the caller';
-        } else if (params.parentRun) {
-            flowState.executionMode = 'inRun';
-            flowState.executionModeReason = 'running as a sub-agent, so the calling run needs its result';
-        } else {
-            flowState.executionMode = 'dispatch';
-            flowState.executionModeReason = requested === 'dispatch'
-                ? 'requested by the caller'
-                // No parentRun: a top-level run, or a task-graph task whose submitting run could not be
-                // loaded (the runner logs that). The reason says both, so the recorded routing does
-                // not claim a nested flow was started at the top level (#4623).
-                : 'default for a run with no parent run (a top-level run, or a nested task whose submitting run did not resolve)';
-        }
+        const resolved = ResolveFlowExecutionMode(flowState.agentId, Boolean(params.parentRun), flowParams?.executionMode);
+        flowState.executionMode = resolved.Mode;
+        flowState.executionModeReason = resolved.Reason;
     }
 
     /**
@@ -1746,25 +1783,16 @@ export class FlowAgentType extends BaseAgentType {
      * IDs, and an incomplete fork, for one, is reported by its group, which is its origin's ID.
      */
     private compileAndValidateFlow<P>(
-        params: ExecuteAgentParams<P>
+        params: ExecuteAgentParams<P>,
+        allowCustomStepPlaceholders: boolean = false
     ): { Spec: TaskGraphSpec; Excluded: FlowCompileResult['Excluded'] } | { ErrorMessage: string } {
-        const compiled = CompileFlowAgentToTaskGraph(
+        return CompileAndValidateFlowAgent(
             params.agent.ID,
             params.agent.Name,
             params.agent.Description ?? undefined,
             params.agent.Isolation,
+            { AllowCustomStepPlaceholders: allowCustomStepPlaceholders }
         );
-        if (!compiled.Success || !compiled.Spec) {
-            return { ErrorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowCompileErrors(compiled)}` };
-        }
-
-        const validation = ValidateTaskGraphSpec(compiled.Spec);
-        if (!validation.Valid) {
-            return {
-                ErrorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowValidationErrors(validation.Errors, compiled.Spec)}`
-            };
-        }
-        return { Spec: compiled.Spec, Excluded: compiled.Excluded };
     }
 
     /**
@@ -1819,13 +1847,30 @@ export class FlowAgentType extends BaseAgentType {
             );
         }
 
+        // R5 Follow-up #3: refuse workflows combining in-process Custom steps with dispatcher-only
+        // steps (Human / ForEach+Enqueue) up front rather than failing mid-flow with contradictory advice.
+        const activeCustomSteps = activeSteps.filter(s => s.StepType === 'Custom');
+        if (activeCustomSteps.length > 0) {
+            const dispatcherOnly = FindDispatcherOnlyFlowSteps(activeSteps);
+            if (dispatcherOnly.length > 0) {
+                const customNames = activeCustomSteps.map(s => `'${s.Name}'`).join(', ');
+                const dispNames = dispatcherOnly.map(s => `'${s.Name}'`).join(', ');
+                return this.stopFlow(
+                    `Workflow '${params.agent.Name}' combines in-process Custom step(s) (${customNames}) with ` +
+                    `dispatcher-only step(s) (${dispNames}). Custom steps require executionMode 'inRun' while ` +
+                    `${dispNames} require the task-graph dispatcher; split these into separate workflows.`,
+                    payloadToUse
+                );
+            }
+        }
+
         // A flow with a Decision step gets the dispatched path's whole check, once, before its first
         // step: an incomplete Choice fork ends the flow "successfully" on the option nobody drew a
         // path for, and in-run is the default mode for every sub-agent flow. So such a flow must be
         // one the dispatcher would accept — which also rules out a loop drawn with a path back. A
         // flow without a Decision step is walked as it always was.
         if (activeSteps.some(s => s.StepType === 'Decision')) {
-            const prepared = this.compileAndValidateFlow(params);
+            const prepared = this.compileAndValidateFlow(params, true);
             if ('ErrorMessage' in prepared) return this.stopFlow(prepared.ErrorMessage, payloadToUse);
         }
 

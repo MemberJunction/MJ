@@ -144,6 +144,7 @@ import { RunViewFeatureChecks } from '../checks/runview-features.checks';
 import { WorkBusCoreChecks } from '../checks/work-bus-core.checks';
 import { IntegrationSchemaPipelineChecks } from '../checks/integration-schema-pipeline.checks';
 import { UserImpersonationChecks } from '../checks/user-impersonation.checks';
+import { AgentExtensionsAndConfigCascadeChecks } from '../checks/agent-extensions-and-config-cascade.checks';
 import { GeminiDecisionsChecks } from '../checks/gemini-decisions.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
@@ -354,6 +355,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 5], // ISP1-ISP5 live SQL native typing, key capping, Soft PK/FK/Organic Key auto-indexing, and ADD COLUMN descriptions (IT165)
         ['gemini-decisions', GeminiDecisionsChecks, 8], // GD1-GD8 Gemini Decision 1 catalog, ClassFactory, guarded Google & OpenRouter runner calls, bound credentials, block_reason & 400/403 failover, and Default Decision ordering (IT175)
         ['user-impersonation', UserImpersonationChecks, 5], // UI1-UI5 end-to-end grant/enable/mint/read/refused-write/end, all 8 refusals, HTTP/WS expiry, Started/Ended/Denied audit + failed-audit rollback, normal session/API-key regression (IT194)
+        ['agent-extensions-and-config-cascade', AgentExtensionsAndConfigCascadeChecks, 5], // AEC1-AEC5 MJ: AI Agent Step Types + StepTypeID FK + custom BaseAgentStepHandler, 3-table IAgentConfiguration cascade & narrow-only clamping, bidirectional Save() sync, admin-only helperPlugins / code-only seam rejection, #6852 UI-role RLS & sandbox (IT195)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -409,6 +411,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-decisions-switch': 9,
         'agent-execution-primitives': 6,
         'agent-execution-primitives-live': 4,
+        'agent-extensions-and-config-cascade': 5,
         'agent-external-harness': 7,
         'agent-handoff': 6,
         'agent-instances-and-inheritance': 7,
@@ -717,7 +720,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(293);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(294);
     });
 });
 

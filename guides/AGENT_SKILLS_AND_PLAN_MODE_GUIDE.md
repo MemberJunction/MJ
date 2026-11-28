@@ -4,7 +4,11 @@ Two `BaseAgent`-framework capabilities that ship together (they share one migrat
 
 **Audience**: developers building/configuring agents, authoring skills, or wiring skills/plan-mode into a chat surface.
 
-Both are **agent-framework** features, not chat-widget features. They work for any agent invocation — the conversations UI, headless/scheduled runs, the API — because the logic lives in `BaseAgent` / `AIEngineBase`, and the chat surface is just one caller.
+Both are **agent-framework** features, not chat-widget features. They work for any agent invocation — the conversations UI, headless/scheduled runs, the API — because the logic lives in `BaseAgent` (`BaseAgentSkillsHelper` / `BaseAgentStepExecutionHelper` / `AgentStepTypeRegistry`) and `AIEngineBase`, and the chat surface is just one caller.
+
+**Canonical Guides:** [Agent Administrator Guide](AGENT_ADMINISTRATOR_GUIDE.md) · [Agent Builder & Extension Guide](AGENT_BUILDER_EXTENSION_GUIDE.md) · [Agent End-User Guide](AGENT_END_USER_GUIDE.md) · [BaseAgent Rebase Map](BASE_AGENT_REBASE_MAP.md).
+
+> **v6.x `IAgentConfiguration` Note:** `AIAgent.SkillActivationMode`, `AIAgent.SupportsPlanMode`, and `AIAgent.RequirePlanMode` now live canonically in `AIAgent.Configuration` (`skills.activationMode`, `execution.supportsPlanMode`, `execution.requirePlanMode`) with 3-table cascade support (`AIAgentType` → `AIAgentCategory` → `AIAgent`) and automatic bidirectional sync to the deprecated legacy columns throughout `v6.x` (removal slated for `v7.0`). See [Agent Administrator Guide §2–3](AGENT_ADMINISTRATOR_GUIDE.md#2-three-table-iagentconfiguration-cascade).
 
 ---
 
@@ -116,9 +120,9 @@ executeSkillStep  ── for each newly-activated skill:
 executePromptStep  ── loop continues; next turn's gatherPromptTemplateData picks up the widened tool surface
 ```
 
-Key implementation notes (all in [`base-agent.ts`](../packages/AI/Agents/src/base-agent.ts)):
+Key implementation notes (in [`helpers/skills/AgentSkillsHelper.ts`](../packages/AI/Agents/src/helpers/skills/AgentSkillsHelper.ts) and [`helpers/steps/BuiltInAgentStepHandlers.ts`](../packages/AI/Agents/src/helpers/steps/BuiltInAgentStepHandlers.ts), wired through `BaseAgent` and `AgentStepTypeRegistry`):
 
-- **`'Skill'` is a non-terminal step.** Like `'ClientTools'`, it is deliberately **not** part of the generated `AIAgentRun.FinalStep` union (that column is DB-CHECK-constrained to terminal outcomes). `BaseAgentNextStep.step` is typed off `FinalStep`, so the switch sites use an explicit `'Skill' as typeof …step` cast. It **is** in the `AIAgentRunStep.StepType` CHECK — that column records what executed, a different concern from a run's final outcome.
+- **`'Skill'` is a first-class registered step type (`SkillStepHandler`).** Like `'ClientTools'`, `'Skill'` is non-terminal (distinct from `AIAgentRun.FinalStep`) and is registered in `MJ: AI Agent Step Types` (`AgentStepTypeRegistry`) with `AllowedInUnapprovedPlanMode: true` and `CountsAgainstTreeBudget: true` — eliminating earlier `switch` type-assertion casts. It **is** in the `AIAgentRunStep.StepType` CHECK — that column records what executed, a different concern from a run's final outcome.
 - **`ExposeToModel` decides whether a bundled action joins the run at all** (v6.1.x, #4226). `enableSkillCapabilities` pushes `GetSkillExposedActionIDs(skill.ID)` — the rows with the flag set (default) — onto `params.actionChanges`. The run's effective action set is one list that is both the prompt's tool surface and the execution allow-list, so a row with the flag **off** is not described to the model *and* cannot be executed by the agent through any path (`Actions` step, a `PreProcessActionStep`, a loop's action lookup all resolve against that set and reject it). That is deliberate: hiding it from the prompt alone would still let the model call it by name the moment a skill's Instructions mention it. The row keeps the action associated with the skill for SKILL.md export and tooling; application code — a menu button in the skill's reply — invokes it directly through the Actions API, whose authorization is its own (bundling grants nothing there). Because the agent never runs such an action, skill attribution on the Actions step does not apply to it.
 - **Tool-surface widening uses `scope: 'specific'` targeting the activating agent's own ID** (`agentIds: [agent.ID]`), pushed onto `params.actionChanges` / `params.subAgentChanges`. This applies to the activating agent **at any depth** (a sub-agent that activates a skill still gets its tools — a `'root'` scope would only apply at depth 0) and never cascades to that agent's own sub-agents (via `filterActionChangesForSubAgent`). Because `params` is the same object for the whole run, every later turn's `gatherPromptTemplateData()` re-applies it automatically.
 - **Idempotent re-activation.** `_activatedSkillIDs` tracks what's already active; re-requesting an active skill is a harmless no-op (no duplicate instructions, no duplicate change entries).
@@ -340,7 +344,7 @@ Loop agents configure prompt catalog caps in `LoopAgentPromptParams` (`AgentType
 - **`maxSkillsInPrompt`** (default `25` when `decisionsEnabled: true` or when explicitly set): Maximum number of skills rendered in the `## Available Skills` prompt catalog per turn.
 - **`maxSkillDecisionCandidates`** (default `60`): Maximum candidate skills passed to the fast decision model (`selectRelevantCatalogItems`) before LLM narrowing.
 
-When an agent's available skills exceed `maxSkillsInPrompt`, [`BaseAgent.narrowCatalogsIfConfigured`](../packages/AI/Agents/src/base-agent.ts) runs a **two-stage narrowing pipeline** implemented in [`catalog-narrowing.ts`](../packages/AI/Agents/src/catalog-narrowing.ts):
+When an agent's available skills exceed `maxSkillsInPrompt`, [`AgentPromptCatalogAndNarrowingHelper.EnsureCatalogNarrowing`](../packages/AI/Agents/src/helpers/prompt/AgentPromptCatalogAndNarrowingHelper.ts) (exposed via `BaseAgentPromptHelper`) runs a **two-stage narrowing pipeline** implemented in [`catalog-narrowing.ts`](../packages/AI/Agents/src/catalog-narrowing.ts):
 
 ```
 Stage 1: PreFilterSkillCandidatesForDecision (in-memory, 0ms)

@@ -2,7 +2,9 @@
 
 ## Overview
 
-MemberJunction's agent framework supports **human-in-the-loop** workflows where running agents can pause execution, request feedback or approval from a human, and resume once a response is provided. This enables agents to handle tasks that require judgment, oversight, or domain-specific input that only a human can provide.
+MemberJunction's agent framework supports **human-in-the-loop** workflows where running agents can pause execution, request feedback or approval from a human, and resume once a response is provided. While awaiting human input, `AgentLivenessWatchdog.SuspendForExternalWait()` pauses the sliding inactivity timer so multi-day approvals never time out prematurely.
+
+**Canonical Guides:** [Agent End-User Guide](../../../../guides/AGENT_END_USER_GUIDE.md) · [Agent Administrator Guide](../../../../guides/AGENT_ADMINISTRATOR_GUIDE.md) · [Agent Builder & Extension Guide](../../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) · [BaseAgent Rebase Map](../../../../guides/BASE_AGENT_REBASE_MAP.md).
 
 ### Key Concepts
 

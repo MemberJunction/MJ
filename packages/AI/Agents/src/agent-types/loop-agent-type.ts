@@ -29,6 +29,7 @@ import { LimitsConfigResolver, LogError, LogStatusEx } from '@memberjunction/cor
 import { MJAIPromptEntityExtended, type AgentToolCallRequest } from '@memberjunction/ai-core-plus';
 import { LoopAgentResponse, LOOP_NEXT_STEP_TYPES } from './loop-agent-response-type';
 import { IsValidFinishIf } from '../finish-if-state';
+import { AgentStepTypeRegistry } from '../helpers/steps/AgentStepTypeRegistry';
 import { ConversationMessageResolver } from '../utils/ConversationMessageResolver'; 
 /** A native tool call paired with the binding it resolved to. */
 interface ResolvedNativeCall<B extends NativeToolBinding = NativeToolBinding> {
@@ -220,7 +221,7 @@ export class LoopAgentType extends BaseAgentType {
             return;
         }
 
-        retVal.step = 'Tasks' as BaseAgentNextStep['step'];
+        retVal.step = 'Tasks';
         retVal.taskGraph = { spec, folded: false };
 
         // Single-node constant folding (D9) — the compiler-flattening analogy: don't spin up loop
@@ -355,7 +356,7 @@ export class LoopAgentType extends BaseAgentType {
         }
 
         const reason = typeof handoff.reason === 'string' ? handoff.reason.trim() : '';
-        retVal.step = 'Handoff' as BaseAgentNextStep['step'];
+        retVal.step = 'Handoff';
         retVal.handoff = {
             agentName,
             brief,
@@ -1136,7 +1137,7 @@ export class LoopAgentType extends BaseAgentType {
                         retVal.errorMessage = 'Client tools not specified for ClientTools type';
                     }
                     else {
-                        retVal.step = 'ClientTools' as BaseAgentNextStep['step'];
+                        retVal.step = 'ClientTools';
                         retVal.clientTools = response.nextStep.clientTools.map(tool => ({
                             Name: tool.name ?? tool.Name,
                             Params: tool.params ?? tool.Params ?? {},
@@ -1152,7 +1153,7 @@ export class LoopAgentType extends BaseAgentType {
                         retVal.errorMessage = 'Skills not specified for Skill type';
                     }
                     else {
-                        retVal.step = 'Skill' as BaseAgentNextStep['step'];
+                        retVal.step = 'Skill';
                         retVal.skillActivations = response.nextStep.skills.map(skill => ({
                             name: skill.name,
                             ...(skill.reason ? { reason: skill.reason } : {})
@@ -1166,7 +1167,7 @@ export class LoopAgentType extends BaseAgentType {
                         retVal.errorMessage = 'Plan text not specified for Plan type';
                     }
                     else {
-                        retVal.step = 'Plan' as BaseAgentNextStep['step'];
+                        retVal.step = 'Plan';
                         retVal.planDetails = { plan: response.nextStep.plan };
                     }
                     break;
@@ -1211,10 +1212,43 @@ export class LoopAgentType extends BaseAgentType {
                 case 'Handoff':
                     this.applyHandoffStep(retVal, response.nextStep.handoff, response.message, params);
                     break;
-                default:
-                    retVal.step = 'Retry';
-                    retVal.errorMessage = `Unknown next step type: ${response.nextStep.type}`;
+                default: {
+                    const customPolicy = AgentStepTypeRegistry.Instance.ResolveEffectivePolicy(response.nextStep.type);
+                    if (
+                        customPolicy &&
+                        !customPolicy.IsBuiltIn &&
+                        customPolicy.DefaultEnabledInPrompt &&
+                        (customPolicy.AppliesTo === 'Loop' || customPolicy.AppliesTo === 'Both' || customPolicy.AppliesTo === 'All')
+                    ) {
+                        retVal.step = customPolicy.StepKey;
+                        if (customPolicy.StepTypeID) {
+                            retVal.stepTypeID = customPolicy.StepTypeID;
+                        }
+                        const rawNextStep = response.nextStep as unknown as Record<string, unknown>;
+                        const explicitData = rawNextStep['customStepData'];
+                        const sanitizeCustomData = (obj: Record<string, unknown>): Record<string, unknown> => {
+                            const safe: Record<string, unknown> = {};
+                            for (const [k, v] of Object.entries(obj)) {
+                                if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+                                safe[k] = v;
+                            }
+                            return safe;
+                        };
+                        if (explicitData && typeof explicitData === 'object' && !Array.isArray(explicitData)) {
+                            retVal.customStepData = sanitizeCustomData(explicitData as Record<string, unknown>);
+                        } else {
+                            const { type: _ignoredType, ...restFields } = rawNextStep;
+                            const sanitized = sanitizeCustomData(restFields);
+                            if (Object.keys(sanitized).length > 0) {
+                                retVal.customStepData = sanitized;
+                            }
+                        }
+                    } else {
+                        retVal.step = 'Retry';
+                        retVal.errorMessage = `Unknown next step type: ${response.nextStep.type}`;
+                    }
                     break;
+                }
             }
             return retVal as BaseAgentNextStep<P>;
         } catch (error) {
@@ -1365,9 +1399,20 @@ export class LoopAgentType extends BaseAgentType {
             }
 
             if (!validStepTypes.includes(lcaseType)) {
-                const message = `LoopAgentResponse has invalid nextStep.type: ${response.nextStep.type}`;
-                LogError(message);
-                return {success: false, message};
+                const customPolicy = lcaseType
+                    ? AgentStepTypeRegistry.Instance.ResolveEffectivePolicy(response.nextStep.type)
+                    : null;
+                const isRegisteredCustomLoopStep = Boolean(
+                    customPolicy &&
+                    !customPolicy.IsBuiltIn &&
+                    customPolicy.DefaultEnabledInPrompt &&
+                    (customPolicy.AppliesTo === 'Loop' || customPolicy.AppliesTo === 'Both' || customPolicy.AppliesTo === 'All')
+                );
+                if (!isRegisteredCustomLoopStep) {
+                    const message = `LoopAgentResponse has invalid nextStep.type: ${response.nextStep.type}`;
+                    LogError(message);
+                    return {success: false, message};
+                }
             }
 
             // Validate specific fields based on type

@@ -4686,7 +4686,7 @@ export class RealtimeClientSessionService {
             Success: result.success,
             Output: result.success
                 ? (result.agentRun?.Message || 'The delegated work is complete. Share the outcome with the user in your own first-person voice.')
-                : (result.agentRun?.ErrorMessage || 'The work could not be completed. Tell the user, in first person, that you hit a problem and offer a next step.'),
+                : (result.agentRun?.ErrorMessage || result.errorMessage || 'The work could not be completed. Tell the user, in first person, that you hit a problem and offer a next step.'),
             RunID: result.agentRun?.ID,
             Artifacts: artifacts
         };

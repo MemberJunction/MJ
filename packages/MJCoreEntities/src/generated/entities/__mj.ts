@@ -38,6 +38,7 @@ import type {
   MJAIAgentSessionEntityType,
   MJAIAgentSkillEntityType,
   MJAIAgentStepPathEntityType,
+  MJAIAgentStepTypeEntityType,
   MJAIAgentStepEntityType,
   MJAIAgentSuggestionEntityType,
   MJAIAgentTypeEntityType,
@@ -1156,6 +1157,619 @@ export class MJAIAgentArtifactTypeEntity extends BaseEntity<MJAIAgentArtifactTyp
 
 
 /**
+ * Unified typed AI Agent configuration bag stored across the 3-table settings cascade:
+ *   - `MJ: AI Agents.Configuration`
+ *   - `MJ: AI Agent Categories.DefaultConfiguration`
+ *   - `MJ: AI Agent Types.DefaultAgentConfiguration`
+ *
+ * Resolution precedence:
+ *   Instance -> BaseAgent Chain (root..leaf) -> Category -> Parent Categories -> AgentType -> System Default
+ *
+ * Narrow-only security invariants (`supportsPlanMode`, `requirePlanMode`, `skills.activationMode`,
+ * `scope.searchScopeAccess`, `clientTools.allowEphemeral`, `attachments.acceptUnregisteredFiles`,
+ * and numeric execution/consult ceilings) can never be loosened down the chain or via category/type
+ * defaults.
+ *
+ * **Single source of truth**: this file is canonical for both CodeGen (`MJCoreEntities`) and
+ * `@memberjunction/ai-core-plus`, which auto-copies it into
+ * `packages/AI/CorePlus/src/JSONType-interfaces/` during `prebuild`
+ * (`npm run sync:json-types`). Do not maintain separate physical copies.
+ */
+export interface MJAIAgentCategoryEntity_IAgentConfiguration {
+    /**
+     * Core execution, planning, model selection, and tool-calling protocol settings.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    execution?: {
+        /**
+         * Controls which model selection hierarchy is consulted for the agent's prompts:
+         * - `'Agent'`: uses the agent's own prompt/model bindings.
+         * - `'Agent Type'`: defers to the agent type's default prompt model selection.
+         *
+         * When a derived agent owns no active prompts, resolution falls back to the nearest
+         * prompt-owning ancestor before category/type defaults. Default: `'Agent Type'`.
+         * Supersedes `AIAgent.ModelSelectionMode`.
+         */
+        modelSelectionMode?: 'Agent' | 'Agent Type' | null;
+
+        /**
+         * Default reasoning / thinking effort level (typically `1`–`100`, where higher values
+         * allocate more model reasoning budget) applied to prompt runs when neither the caller
+         * nor the prompt overrides it. `null` leaves effort selection to the prompt or model
+         * default. Supersedes `AIAgent.DefaultPromptEffortLevel`.
+         */
+        defaultPromptEffortLevel?: number | null;
+
+        /**
+         * Determines how `BaseAgent` handles a plain conversational chat response when a
+         * structured action or completion was expected:
+         * - `'Consult'`: escalates to the parent agent or user for clarification.
+         * - `'Failed'`: marks the run as failed.
+         * - `'Retry'`: re-prompts the agent to produce a valid structured response.
+         * - `'Success'`: accepts the chat message as a valid completion.
+         *
+         * `null` uses the runtime default. Supersedes `AIAgent.ChatHandlingOption`.
+         */
+        chatHandlingOption?: 'Consult' | 'Failed' | 'Retry' | 'Success' | null;
+
+        /**
+         * Whether the agent is permitted to enter structured plan mode before executing actions.
+         * **Narrow-only security invariant** (monotonic logical `AND` down the `BaseAgentID` chain
+         * and defaults cascade): once `false` on an ancestor, category, or agent type, descendants
+         * cannot re-enable it. Default: `true`. Supersedes `AIAgent.SupportsPlanMode`.
+         */
+        supportsPlanMode?: boolean | null;
+
+        /**
+         * Whether the agent must produce and have a plan approved before executing actions.
+         * **Narrow-only security invariant** (monotonic logical `OR` down the `BaseAgentID` chain
+         * and defaults cascade): once `true` on an ancestor, category, or agent type, descendants
+         * cannot disable it. Default: `false`. Supersedes `AIAgent.RequirePlanMode`.
+         */
+        requirePlanMode?: boolean | null;
+
+        /**
+         * When `true`, exposes available actions to the underlying LLM as native provider
+         * function/tool declarations rather than relying solely on JSON-in-prompt action
+         * instructions. Default: `true`. Supersedes `AIAgent.DeclareActionsAsNativeTools`.
+         */
+        declareActionsAsNativeTools?: boolean | null;
+    } | null;
+
+    /**
+     * Context window sizing, token-budget compaction thresholds, and legacy message-count
+     * compression settings. Also configurable at the agent-type tier via
+     * `AIAgentType.DefaultAgentConfiguration.contextWindow`.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    contextWindow?: {
+        /**
+         * Enables legacy message-count-based context compression during long agent runs.
+         * Default: `false`. Supersedes `AIAgent.EnableContextCompression`.
+         */
+        enableCompression?: boolean | null;
+
+        /**
+         * Minimum number of messages in the conversation/step history before legacy context
+         * compression triggers. `null` inherits from category/agent type or disables
+         * message-count-triggered compression. Supersedes
+         * `AIAgent.ContextCompressionMessageThreshold` and
+         * `AIAgentType.ContextCompressionMessageThreshold`.
+         */
+        compressionMessageThreshold?: number | null;
+
+        /**
+         * Foreign key UUID (`MJ: AI Prompts.ID`) of the prompt executed to compress older
+         * messages when legacy context compression runs. `null` uses the inherited or system
+         * default compression prompt. Supersedes `AIAgent.ContextCompressionPromptID` and
+         * `AIAgentType.ContextCompressionPromptID`.
+         */
+        compressionPromptID?: string | null;
+
+        /**
+         * Number of most-recent messages kept verbatim (uncompressed) whenever legacy context
+         * compression summarizes older history. `null` uses the inherited or system default
+         * retention count. Supersedes `AIAgent.ContextCompressionMessageRetentionCount` and
+         * `AIAgentType.ContextCompressionMessageRetentionCount`.
+         */
+        compressionMessageRetentionCount?: number | null;
+
+        /**
+         * Maximum token budget targeted for the agent's active context window before automatic
+         * compaction runs. `null` defers to the category, agent type, or underlying model limit.
+         * Supersedes `AIAgent.ContextWindowMaxTokens` and `AIAgentType.ContextWindowMaxTokens`.
+         */
+        maxTokens?: number | null;
+
+        /**
+         * Percentage (`0`–`100`) of `maxTokens` at which automatic token-budget context
+         * compaction triggers. `null` uses the inherited or system default trigger threshold.
+         * Supersedes `AIAgent.CompactionTriggerPercent` and
+         * `AIAgentType.CompactionTriggerPercent`.
+         */
+        compactionTriggerPercent?: number | null;
+
+        /**
+         * Target context utilization percentage (`0`–`100`, lower than `compactionTriggerPercent`)
+         * that automatic compaction aims to reduce the active context window down to. `null` uses
+         * the inherited or system default target. Supersedes `AIAgent.CompactionTargetPercent`
+         * and `AIAgentType.CompactionTargetPercent`.
+         */
+        compactionTargetPercent?: number | null;
+
+        /**
+         * Foreign key UUID (`MJ: AI Prompts.ID`) of the prompt used to generate conversation or
+         * run summaries during token-budget compaction. `null` uses the inherited or system
+         * default summary prompt. Supersedes `AIAgent.ConversationSummaryPromptID` and
+         * `AIAgentType.ConversationSummaryPromptID`.
+         */
+        summaryPromptID?: string | null;
+    } | null;
+
+    /**
+     * Notes and few-shot examples memory injection, retention lifecycle, write access, and
+     * semantic reranker settings.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    memory?: {
+        /**
+         * When `true`, injects matching `MJ: AI Agent Notes` records into the agent's prompt
+         * context at run start. Default: `true`. Supersedes `AIAgent.InjectNotes`.
+         */
+        injectNotes?: boolean | null;
+
+        /**
+         * Maximum number of agent notes injected into a single run's context when `injectNotes`
+         * is enabled. Default: `5` (setting `null` resets the legacy NOT NULL column to `5`).
+         * Supersedes `AIAgent.MaxNotesToInject`.
+         */
+        maxNotesToInject?: number | null;
+
+        /**
+         * Selection strategy for choosing which notes are injected:
+         * - `'All'`: includes all eligible notes up to `maxNotesToInject`.
+         * - `'Recent'`: prioritizes the most recently created or updated notes.
+         * - `'Relevant'`: ranks notes by semantic/contextual similarity to the current task.
+         *
+         * Supersedes `AIAgent.NoteInjectionStrategy`.
+         */
+        noteInjectionStrategy?: 'All' | 'Recent' | 'Relevant' | null;
+
+        /**
+         * When `true`, injects matching `MJ: AI Agent Examples` few-shot records into the agent's
+         * prompt context. Default: `false`. Supersedes `AIAgent.InjectExamples`.
+         */
+        injectExamples?: boolean | null;
+
+        /**
+         * Maximum number of few-shot examples injected into a single run's context when
+         * `injectExamples` is enabled. Default: `3` (setting `null` resets the legacy NOT NULL
+         * column to `3`). Supersedes `AIAgent.MaxExamplesToInject`.
+         */
+        maxExamplesToInject?: number | null;
+
+        /**
+         * Ranking strategy for choosing which few-shot examples are injected:
+         * - `'Rated'`: prioritizes highest-rated examples.
+         * - `'Recent'`: prioritizes most recently created or updated examples.
+         * - `'Semantic'`: ranks examples by embedding similarity to the current request.
+         *
+         * Supersedes `AIAgent.ExampleInjectionStrategy`.
+         */
+        exampleInjectionStrategy?: 'Rated' | 'Recent' | 'Semantic' | null;
+
+        /**
+         * Number of days before eligible agent notes age out for archiving/cleanup. `null`
+         * disables age-based note expiration. Supersedes `AIAgent.NoteRetentionDays`.
+         */
+        noteRetentionDays?: number | null;
+
+        /**
+         * Number of days before eligible agent examples age out for archiving/cleanup. `null`
+         * disables age-based example expiration. Supersedes `AIAgent.ExampleRetentionDays`.
+         */
+        exampleRetentionDays?: number | null;
+
+        /**
+         * When `true`, enables automatic archiving of expired or superseded agent notes and
+         * examples according to `noteRetentionDays` and `exampleRetentionDays`. Default: `true`.
+         * Supersedes `AIAgent.AutoArchiveEnabled`.
+         */
+        autoArchiveEnabled?: boolean | null;
+
+        /**
+         * Controls whether the agent is permitted to create, update, or persist new memory records
+         * (notes/examples) during execution. Default: `true`. Supersedes
+         * `AIAgent.AllowMemoryWrite`.
+         */
+        allowMemoryWrite?: boolean | null;
+
+        /**
+         * Optional structured configuration object for the memory reranker (for example enabled
+         * flag, reranker model/provider selection, top-K cutoff, and minimum score threshold).
+         * `null` disables custom reranker settings. Supersedes `AIAgent.RerankerConfiguration`.
+         */
+        reranker?: { [key: string]: unknown } | null;
+    } | null;
+
+    /**
+     * Payload path scoping (downstream, upstream, and self read/write isolation) and
+     * starting/final JSON Schema payload validation settings.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    payload?: {
+        /**
+         * JSON path patterns defining which fields from a parent agent's payload are passed
+         * downstream into this agent when invoked as a sub-agent (for example `['*']` for full
+         * visibility or `['customer.*', 'orderId']`). Setting `null` resets the legacy NOT NULL
+         * column to `'["*"]'`. Supersedes `AIAgent.PayloadDownstreamPaths`.
+         */
+        downstreamPaths?: string[] | null;
+
+        /**
+         * JSON path patterns defining which payload fields this sub-agent is permitted to merge
+         * back upstream into the parent agent's payload upon completion (for example `['*']` or
+         * `['analysis.summary']`). Setting `null` resets the legacy NOT NULL column to `'["*"]'`.
+         * Supersedes `AIAgent.PayloadUpstreamPaths`.
+         */
+        upstreamPaths?: string[] | null;
+
+        /**
+         * Optional JSON path patterns restricting which portions of its own payload the agent's
+         * prompts may read. `null` imposes no additional self-read restriction. Supersedes
+         * `AIAgent.PayloadSelfReadPaths`.
+         */
+        selfReadPaths?: string[] | null;
+
+        /**
+         * Optional JSON path patterns restricting which portions of its own payload the agent may
+         * mutate via payload change requests. `null` imposes no additional self-write restriction.
+         * Supersedes `AIAgent.PayloadSelfWritePaths`.
+         */
+        selfWritePaths?: string[] | null;
+
+        /**
+         * Optional dot-delimited root path within the parent payload where this sub-agent's scoped
+         * view is anchored (for example `'research'` mounts `parentPayload.research` as the
+         * sub-agent's root payload). `null` operates at the payload root. Supersedes
+         * `AIAgent.PayloadScope`.
+         */
+        scope?: string | null;
+
+        /**
+         * Optional JSON Schema string used to validate the incoming payload before execution
+         * starts. `null` disables starting payload validation. Supersedes
+         * `AIAgent.StartingPayloadValidation`.
+         */
+        startingValidationSchema?: string | null;
+
+        /**
+         * Behavior when the incoming payload fails `startingValidationSchema`:
+         * - `'Fail'`: aborts execution immediately with a validation error.
+         * - `'Warn'`: logs a warning and continues execution.
+         *
+         * Supersedes `AIAgent.StartingPayloadValidationMode`.
+         */
+        startingValidationMode?: 'Fail' | 'Warn' | null;
+
+        /**
+         * Optional JSON Schema string used to validate the agent's final output payload before
+         * marking the run complete. `null` disables final payload validation. Supersedes
+         * `AIAgent.FinalPayloadValidation`.
+         */
+        finalValidationSchema?: string | null;
+
+        /**
+         * Behavior when the final output payload fails `finalValidationSchema`:
+         * - `'Fail'`: fails the run immediately.
+         * - `'Retry'`: feeds validation errors back to the agent up to `finalValidationMaxRetries`
+         *   times to self-correct.
+         * - `'Warn'`: logs a warning and accepts the payload.
+         *
+         * Supersedes `AIAgent.FinalPayloadValidationMode`.
+         */
+        finalValidationMode?: 'Fail' | 'Retry' | 'Warn' | null;
+
+        /**
+         * Maximum number of self-correction retry attempts allowed when `finalValidationMode` is
+         * `'Retry'`. Default: `3` (setting `null` resets the legacy NOT NULL column to `3`).
+         * Supersedes `AIAgent.FinalPayloadValidationMaxRetries`.
+         */
+        finalValidationMaxRetries?: number | null;
+    } | null;
+
+    /**
+     * Sub-agent invocation concurrency mode, per-run execution count bounds, and parent-child
+     * consultation round ceiling.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    subAgentExecution?: {
+        /**
+         * Controls whether multiple sub-agent invocations dispatched in a single step execute
+         * concurrently (`'Parallel'`) or one after another (`'Sequential'`). Supersedes
+         * `AIAgent.ExecutionMode`.
+         */
+        mode?: 'Parallel' | 'Sequential' | null;
+
+        /**
+         * Optional minimum number of times this sub-agent should be executed within a parent run.
+         * `null` imposes no minimum execution count. Supersedes `AIAgent.MinExecutionsPerRun`.
+         */
+        minExecutionsPerRun?: number | null;
+
+        /**
+         * Maximum number of times this sub-agent may be invoked within a single parent run.
+         * **Narrow-only ceiling invariant** (clamped via `Math.min` across defaults and
+         * `BaseAgentID` ancestors): descendants may lower the cap, never raise it. `null` leaves
+         * the cap unconstrained at this tier. Supersedes `AIAgent.MaxExecutionsPerRun`.
+         */
+        maxExecutionsPerRun?: number | null;
+
+        /**
+         * Maximum number of back-and-forth consultation rounds allowed between a parent agent and
+         * this sub-agent during a single invocation. **Narrow-only ceiling invariant** (clamped
+         * via `Math.min` across defaults and `BaseAgentID` ancestors). `null` uses the inherited
+         * or system default ceiling. Supersedes `AIAgent.MaxSubAgentConsultRounds`.
+         */
+        maxConsultRounds?: number | null;
+    } | null;
+
+    /**
+     * Conversation message windowing, attachment storage path, inline threshold, and unregistered
+     * file policy.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    attachments?: {
+        /**
+         * Controls which prior conversation messages are passed into the agent:
+         * - `'All'`: passes the entire conversation history.
+         * - `'Bookend'`: retains the opening and most-recent messages up to `maxMessages`.
+         * - `'Latest'`: retains only the most-recent `maxMessages`.
+         * - `'None'`: omits prior conversation messages.
+         *
+         * Supersedes `AIAgent.MessageMode`.
+         */
+        messageMode?: 'All' | 'Bookend' | 'Latest' | 'None' | null;
+
+        /**
+         * Maximum number of conversation messages included when `messageMode` is `'Bookend'` or
+         * `'Latest'`. `null` imposes no explicit message-count cap. Supersedes
+         * `AIAgent.MaxMessages`.
+         */
+        maxMessages?: number | null;
+
+        /**
+         * Optional storage root path or prefix under the agent's storage account where
+         * conversation and run attachments are stored. `null` uses the storage provider or system
+         * default path. Supersedes `AIAgent.AttachmentRootPath`.
+         */
+        rootPath?: string | null;
+
+        /**
+         * Size threshold in bytes below which attachments may be stored or transmitted inline
+         * rather than offloaded to external blob storage. `null` uses the system default
+         * threshold. Supersedes `AIAgent.InlineStorageThresholdBytes`.
+         */
+        inlineStorageThresholdBytes?: number | null;
+
+        /**
+         * Whether the agent accepts file attachments that have not been registered as tracked MJ
+         * file or artifact records. **Narrow-only security invariant** (monotonic logical `AND`
+         * down the `BaseAgentID` chain and defaults cascade): once `false` on an ancestor or
+         * default tier, descendants cannot re-enable it. Default: `false`. Supersedes
+         * `AIAgent.AcceptUnregisteredFiles`.
+         */
+        acceptUnregisteredFiles?: boolean | null;
+    } | null;
+
+    /**
+     * Output artifact creation lifecycle and optional default artifact type binding.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    artifacts?: {
+        /**
+         * Controls when outputs from this agent are persisted as `MJ: Artifacts` records:
+         * - `'Always'`: creates user-visible artifacts for eligible outputs.
+         * - `'Never'`: disables artifact creation.
+         * - `'System Only'`: creates internal system-scoped artifacts hidden from end users.
+         *
+         * Supersedes `AIAgent.ArtifactCreationMode`.
+         */
+        creationMode?: 'Always' | 'Never' | 'System Only' | null;
+
+        /**
+         * Optional foreign key UUID (`MJ: Artifact Types.ID`) specifying the default artifact type
+         * assigned when this agent creates artifacts without an explicit type override. `null`
+         * defers to inference or the system default type. Supersedes
+         * `AIAgent.DefaultArtifactTypeID`.
+         */
+        defaultArtifactTypeID?: string | null;
+    } | null;
+
+    /**
+     * Search-scope visibility policy and secondary scope dimension configuration.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    scope?: {
+        /**
+         * Controls which search scopes the agent can query:
+         * - `'All'`: permits querying all scopes visible to the invoking user.
+         * - `'Assigned'`: restricts queries to scopes explicitly assigned to the agent.
+         * - `'None'`: disables search-scope access.
+         *
+         * **Narrow-only security invariant** (`All` > `Assigned` > `None` down the `BaseAgentID`
+         * chain): descendants can narrow scope access, never widen it. Supersedes
+         * `AIAgent.SearchScopeAccess`.
+         */
+        searchScopeAccess?: 'All' | 'Assigned' | 'None' | null;
+
+        /**
+         * Optional structured JSON configuration defining secondary scope filtering dimensions
+         * (such as tenant, workspace, or domain-specific entity filters) applied during execution.
+         * `null` applies no secondary scope rules. Supersedes `AIAgent.ScopeConfig`.
+         */
+        secondaryScopeConfig?: { [key: string]: unknown } | null;
+    } | null;
+
+    /**
+     * Skill discovery and activation behavior.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    skills?: {
+        /**
+         * Controls how skills available to the agent are activated:
+         * - `'Auto'`: allows the agent to autonomously activate matching skills based on context.
+         * - `'RequestedOnly'`: restricts activation to skills explicitly requested by the user or
+         *   caller.
+         *
+         * **Narrow-only security invariant** (`Auto` -> `RequestedOnly` down the `BaseAgentID`
+         * chain): once narrowed to `'RequestedOnly'`, descendants cannot widen back to `'Auto'`.
+         * Supersedes `AIAgent.SkillActivationMode`.
+         */
+        activationMode?: 'Auto' | 'RequestedOnly' | null;
+    } | null;
+
+    /**
+     * Client-side tool execution policy.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    clientTools?: {
+        /**
+         * Whether the agent is permitted to invoke ephemeral (session-registered, non-persisted)
+         * client tools advertised by the caller UI/runtime. **Narrow-only security invariant**
+         * (monotonic logical `AND` down the `BaseAgentID` chain and defaults cascade): once
+         * `false` on an ancestor or default tier, descendants cannot widen back to `true`.
+         * Default: `true`. Supersedes `AIAgent.AllowEphemeralClientTools`.
+         */
+        allowEphemeral?: boolean | null;
+    } | null;
+
+    /**
+     * Default realtime session recording policy.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    recording?: {
+        /**
+         * Default recording mode applied to realtime sessions hosted by this agent:
+         * - `'Audio'`: records audio streams only.
+         * - `'AudioVideo'`: records both audio and video streams.
+         * - `'None'`: disables session recording by default.
+         *
+         * `null` defers to the inherited or session default. Supersedes
+         * `AIAgent.RecordingDefault`.
+         */
+        defaultMode?: 'Audio' | 'AudioVideo' | 'None' | null;
+    } | null;
+
+    /**
+     * Admin-only per-agent pluggable `BaseAgent` helper seam overrides (Extension Point #3).
+     * Collected cumulatively across `AgentType -> Categories -> BaseAgent Chain -> Agent`
+     * (child tiers cannot strip plugins bound by an ancestor or default tier; higher-priority
+     * or more specific entries for the same seam take precedence).
+     * Code-only security seams (`limits`, `actionPolicy`, `policy`, `permissions`, `permission`,
+     * `setup`, `steps`, `actions`, `subAgents`) are strictly forbidden in metadata and rejected
+     * both at save time and at runtime.
+     */
+    helperPlugins?: Array<{
+        /**
+         * Canonical `BaseAgent` helper seam key to override (for example `'messaging'`,
+         * `'payload'`, `'compaction'`, `'realtime'`, `'iteration'`, `'skills'`, or `'prompt'`).
+         * Code-only security seams (`'limits'`, `'actionPolicy'`, `'policy'`, `'permissions'`,
+         * `'permission'`, `'setup'`, `'steps'`, `'actions'`, `'subAgents'`) are always rejected.
+         */
+        seam: string;
+
+        /**
+         * Registered `@RegisterClass(BaseAgent<Seam>Helper, driverClass)` key identifying the
+         * custom helper implementation to instantiate for this seam.
+         */
+        driverClass: string;
+
+        /**
+         * Optional precedence weight when multiple plugin entries target the same `seam` across
+         * the cascade. Higher values win; equal priorities favor the later (more specific) entry.
+         */
+        priority?: number;
+    }> | null;
+
+    /**
+     * Optional UX hints for instantiable agent templates (`InstantiationMode` of `'Optional'` or
+     * `'Required'`). Automatically stripped from resolved configurations on non-instantiable leaf
+     * instances (`BaseAgentID != null && InstantiationMode === 'None'`).
+     * Set to `null` to explicitly clear instantiation hints at this cascade tier.
+     */
+    instantiation?: {
+        /**
+         * Pre-populated display-name suggestions offered to users when creating a personal
+         * instance from this agent template.
+         */
+        suggestedNames?: string[];
+
+        /**
+         * Suggested Font Awesome icon classes or icon identifiers presented in the instance
+         * creation UI.
+         */
+        suggestedIcons?: string[];
+
+        /**
+         * Suggested persona names for customizing the instantiated agent's conversational
+         * identity.
+         */
+        suggestedPersonaNames?: string[];
+
+        /**
+         * Positive integer cap limiting how many personal instances a single user may create from
+         * this agent template.
+         */
+        maxInstancesPerUser?: number;
+
+        /**
+         * Initial greeting message displayed to the user when opening a newly created instance for
+         * the first time.
+         */
+        onboardingGreeting?: string;
+
+        /**
+         * Curated communication-style presets offered during instantiation so users can pick a
+         * tone and speaking style for their instance.
+         */
+        personalityPresets?: Array<{
+            /**
+             * Short user-facing display label for the preset (for example `'Executive Brief'` or
+             * `'Warm Collaborator'`).
+             */
+            label: string;
+
+            /**
+             * Concise description of the interpersonal tone injected into the instance's persona
+             * instructions.
+             */
+            tone: string;
+
+            /**
+             * Stylistic guidance describing phrasing, structure, verbosity, and formatting
+             * conventions for the instance's responses.
+             */
+            speakingStyle: string;
+
+            /**
+             * Optional longer helper text explaining when to choose this preset in the
+             * instantiation UI.
+             */
+            description?: string;
+        }>;
+    } | null;
+
+    /**
+     * Default prompt template parameters merged beneath agent-level `AIAgent.AgentTypePromptParams`
+     * across the cascade (`AgentType -> Category -> BaseAgent Chain -> Agent`), enabling shared
+     * category and type prompt defaults without duplicating them per agent.
+     * Set to `null` to explicitly clear prompt defaults at this cascade tier.
+     */
+    promptDefaults?: { [key: string]: unknown } | null;
+}
+
+/**
  * MJ: AI Agent Categories - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentCategory
@@ -1303,6 +1917,35 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
     }
     set DefaultStorageAccountID(value: string | null) {
         this.Set('DefaultStorageAccountID', value);
+    }
+
+    /**
+    * * Field Name: DefaultConfiguration
+    * * Display Name: Default Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIAgentCategoryEntity_IAgentConfiguration
+    * * Description: Default typed JSON configuration bag (IAgentConfiguration) inherited by agents in this category and child categories (walks ParentID tree). Narrow-only security invariants cannot be loosened by category defaults.
+    */
+    get DefaultConfiguration(): string | null {
+        return this.Get('DefaultConfiguration');
+    }
+    set DefaultConfiguration(value: string | null) {
+        this.Set('DefaultConfiguration', value);
+    }
+
+    /**
+    * Typed accessor for DefaultConfiguration — a live view of the parsed JSON as MJAIAgentCategoryEntity_IAgentConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying DefaultConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get DefaultConfigurationObject(): MJAIAgentCategoryEntity_IAgentConfiguration | null {
+        return this.GetJSONFieldObject<MJAIAgentCategoryEntity_IAgentConfiguration>('DefaultConfiguration');
+    }
+    set DefaultConfigurationObject(value: MJAIAgentCategoryEntity_IAgentConfiguration | null) {
+        this.SetJSONFieldObject<MJAIAgentCategoryEntity_IAgentConfiguration>('DefaultConfiguration', value);
     }
 
     /**
@@ -7655,6 +8298,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     *   * Actions
     *   * Chat
     *   * Compaction
+    *   * Custom
     *   * Decision
     *   * ForEach
     *   * Handoff
@@ -7666,12 +8310,12 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     *   * Tool
     *   * Validation
     *   * While
-    * * Description: Type of execution step: Actions, Chat, Compaction, Decision, ForEach, Handoff, Plan, Prompt, Skill, Sub-Agent, TaskGraph, Tool, Validation, While.
+    * * Description: Type of execution step: Actions, Chat, Compaction, Custom, Decision, ForEach, Handoff, Plan, Prompt, Skill, Sub-Agent, TaskGraph, Tool, Validation, While.
     */
-    get StepType(): 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Handoff' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While' {
+    get StepType(): 'Actions' | 'Chat' | 'Compaction' | 'Custom' | 'Decision' | 'ForEach' | 'Handoff' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Handoff' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While') {
+    set StepType(value: 'Actions' | 'Chat' | 'Compaction' | 'Custom' | 'Decision' | 'ForEach' | 'Handoff' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -8042,6 +8686,20 @@ detailed information about what validation rules failed.
     }
 
     /**
+    * * Field Name: StepTypeID
+    * * Display Name: Step Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Step Types (vwAIAgentStepTypes.ID)
+    * * Description: Optional foreign key to AIAgentStepType identifying the pluggable step type definition executed by this run step (especially when StepType is Custom).
+    */
+    get StepTypeID(): string | null {
+        return this.Get('StepTypeID');
+    }
+    set StepTypeID(value: string | null) {
+        this.Set('StepTypeID', value);
+    }
+
+    /**
     * * Field Name: AgentRun
     * * Display Name: Agent Run Context
     * * SQL Data Type: nvarchar(255)
@@ -8075,6 +8733,15 @@ detailed information about what validation rules failed.
     */
     get PayloadAtEndSourceStep(): string | null {
         return this.Get('PayloadAtEndSourceStep');
+    }
+
+    /**
+    * * Field Name: StepType_Virtual
+    * * Display Name: Step Type Virtual
+    * * SQL Data Type: nvarchar(100)
+    */
+    get StepType_Virtual(): string | null {
+        return this.Get('StepType_Virtual');
     }
 
     /**
@@ -11146,6 +11813,230 @@ export class MJAIAgentStepPathEntity extends BaseEntity<MJAIAgentStepPathEntityT
 
 
 /**
+ * MJ: AI Agent Step Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentStepType
+ * * Base View: vwAIAgentStepTypes
+ * * @description Catalog of built-in and OpenApp-registered AI agent step types resolved through AgentStepTypeRegistry and @RegisterClass(BaseAgentStepHandler).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Step Types')
+export class MJAIAgentStepTypeEntity extends BaseEntity<MJAIAgentStepTypeEntityType> {
+    /**
+    * Loads the MJ: AI Agent Step Types record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Step Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentStepTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique canonical step key (e.g. Actions, Sub-Agent, Skill, Plan, Handoff, or a custom OpenApp step key).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable description of what this step type performs during agent execution.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: @RegisterClass(BaseAgentStepHandler, DriverClass) key used by AgentStepTypeRegistry to instantiate the runtime handler for this step type.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: AppliesTo
+    * * Display Name: Applies To
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Loop
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Both
+    *   * Flow
+    *   * Loop
+    * * Description: Which agent execution models support this step type: Loop, Flow, Both, or All.
+    */
+    get AppliesTo(): 'All' | 'Both' | 'Flow' | 'Loop' {
+        return this.Get('AppliesTo');
+    }
+    set AppliesTo(value: 'All' | 'Both' | 'Flow' | 'Loop') {
+        this.Set('AppliesTo', value);
+    }
+
+    /**
+    * * Field Name: AllowedInUnapprovedPlanMode
+    * * Display Name: Allowed In Unapproved Plan Mode
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When false, invoking this step while Plan Mode is active and unapproved is rejected with a Retry prompting the agent to present a Plan first.
+    */
+    get AllowedInUnapprovedPlanMode(): boolean {
+        return this.Get('AllowedInUnapprovedPlanMode');
+    }
+    set AllowedInUnapprovedPlanMode(value: boolean) {
+        this.Set('AllowedInUnapprovedPlanMode', value);
+    }
+
+    /**
+    * * Field Name: CountsAgainstTreeBudget
+    * * Display Name: Counts Against Tree Budget
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, dispatching this step checks and counts against cumulative AgentTreeBudget limits.
+    */
+    get CountsAgainstTreeBudget(): boolean {
+        return this.Get('CountsAgainstTreeBudget');
+    }
+    set CountsAgainstTreeBudget(value: boolean) {
+        this.Set('CountsAgainstTreeBudget', value);
+    }
+
+    /**
+    * * Field Name: DefaultEnabledInPrompt
+    * * Display Name: Default Enabled In Prompt
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether prompt templates should advertise this step type by default when constructing agent instructions.
+    */
+    get DefaultEnabledInPrompt(): boolean {
+        return this.Get('DefaultEnabledInPrompt');
+    }
+    set DefaultEnabledInPrompt(value: boolean) {
+        this.Set('DefaultEnabledInPrompt', value);
+    }
+
+    /**
+    * * Field Name: PromptDocsTemplate
+    * * Display Name: Prompt Docs Template
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional Nunjucks/Markdown prompt documentation snippet describing how an LLM invokes this step type.
+    */
+    get PromptDocsTemplate(): string | null {
+        return this.Get('PromptDocsTemplate');
+    }
+    set PromptDocsTemplate(value: string | null) {
+        this.Set('PromptDocsTemplate', value);
+    }
+
+    /**
+    * * Field Name: ResponseSchemaSnippet
+    * * Display Name: Response Schema Snippet
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON schema fragment describing the payload fields emitted by an LLM response envelope for this step type.
+    */
+    get ResponseSchemaSnippet(): string | null {
+        return this.Get('ResponseSchemaSnippet');
+    }
+    set ResponseSchemaSnippet(value: string | null) {
+        this.Set('ResponseSchemaSnippet', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    * * Description: Lifecycle status of this step type registration: Active, Deprecated, or Disabled.
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON configuration bag specific to this step type handler.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: AI Agent Steps - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentStep
@@ -11308,6 +12199,7 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Action
+    *   * Custom
     *   * Decision
     *   * External
     *   * ForEach
@@ -11316,12 +12208,12 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     *   * Sub-Agent
     *   * Wait
     *   * While
-    * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).
+    * * Description: Type of step: Action (execute an action), Custom (pluggable step type referenced by StepTypeID), Decision (one typed decision call whose answers the outgoing paths route on), External, ForEach / While (a loop), Human (ask a person), Prompt (run an AI prompt), Sub-Agent (delegate to another agent), or Wait.
     */
-    get StepType(): 'Action' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'Wait' | 'While' {
+    get StepType(): 'Action' | 'Custom' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'Wait' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'Wait' | 'While') {
+    set StepType(value: 'Action' | 'Custom' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'Wait' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -11571,6 +12463,20 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     }
 
     /**
+    * * Field Name: StepTypeID
+    * * Display Name: Step Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Step Types (vwAIAgentStepTypes.ID)
+    * * Description: Optional foreign key to AIAgentStepType identifying the pluggable step type definition for this flow agent step (especially when StepType is Custom).
+    */
+    get StepTypeID(): string | null {
+        return this.Get('StepTypeID');
+    }
+    set StepTypeID(value: string | null) {
+        this.Set('StepTypeID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -11604,6 +12510,15 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     */
     get Prompt(): string | null {
         return this.Get('Prompt');
+    }
+
+    /**
+    * * Field Name: StepType_Virtual
+    * * Display Name: Step Type Virtual
+    * * SQL Data Type: nvarchar(100)
+    */
+    get StepType_Virtual(): string | null {
+        return this.Get('StepType_Virtual');
     }
 }
 
@@ -11811,6 +12726,619 @@ export class MJAIAgentSuggestionEntity extends BaseEntity<MJAIAgentSuggestionEnt
     }
 }
 
+
+/**
+ * Unified typed AI Agent configuration bag stored across the 3-table settings cascade:
+ *   - `MJ: AI Agents.Configuration`
+ *   - `MJ: AI Agent Categories.DefaultConfiguration`
+ *   - `MJ: AI Agent Types.DefaultAgentConfiguration`
+ *
+ * Resolution precedence:
+ *   Instance -> BaseAgent Chain (root..leaf) -> Category -> Parent Categories -> AgentType -> System Default
+ *
+ * Narrow-only security invariants (`supportsPlanMode`, `requirePlanMode`, `skills.activationMode`,
+ * `scope.searchScopeAccess`, `clientTools.allowEphemeral`, `attachments.acceptUnregisteredFiles`,
+ * and numeric execution/consult ceilings) can never be loosened down the chain or via category/type
+ * defaults.
+ *
+ * **Single source of truth**: this file is canonical for both CodeGen (`MJCoreEntities`) and
+ * `@memberjunction/ai-core-plus`, which auto-copies it into
+ * `packages/AI/CorePlus/src/JSONType-interfaces/` during `prebuild`
+ * (`npm run sync:json-types`). Do not maintain separate physical copies.
+ */
+export interface MJAIAgentTypeEntity_IAgentConfiguration {
+    /**
+     * Core execution, planning, model selection, and tool-calling protocol settings.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    execution?: {
+        /**
+         * Controls which model selection hierarchy is consulted for the agent's prompts:
+         * - `'Agent'`: uses the agent's own prompt/model bindings.
+         * - `'Agent Type'`: defers to the agent type's default prompt model selection.
+         *
+         * When a derived agent owns no active prompts, resolution falls back to the nearest
+         * prompt-owning ancestor before category/type defaults. Default: `'Agent Type'`.
+         * Supersedes `AIAgent.ModelSelectionMode`.
+         */
+        modelSelectionMode?: 'Agent' | 'Agent Type' | null;
+
+        /**
+         * Default reasoning / thinking effort level (typically `1`–`100`, where higher values
+         * allocate more model reasoning budget) applied to prompt runs when neither the caller
+         * nor the prompt overrides it. `null` leaves effort selection to the prompt or model
+         * default. Supersedes `AIAgent.DefaultPromptEffortLevel`.
+         */
+        defaultPromptEffortLevel?: number | null;
+
+        /**
+         * Determines how `BaseAgent` handles a plain conversational chat response when a
+         * structured action or completion was expected:
+         * - `'Consult'`: escalates to the parent agent or user for clarification.
+         * - `'Failed'`: marks the run as failed.
+         * - `'Retry'`: re-prompts the agent to produce a valid structured response.
+         * - `'Success'`: accepts the chat message as a valid completion.
+         *
+         * `null` uses the runtime default. Supersedes `AIAgent.ChatHandlingOption`.
+         */
+        chatHandlingOption?: 'Consult' | 'Failed' | 'Retry' | 'Success' | null;
+
+        /**
+         * Whether the agent is permitted to enter structured plan mode before executing actions.
+         * **Narrow-only security invariant** (monotonic logical `AND` down the `BaseAgentID` chain
+         * and defaults cascade): once `false` on an ancestor, category, or agent type, descendants
+         * cannot re-enable it. Default: `true`. Supersedes `AIAgent.SupportsPlanMode`.
+         */
+        supportsPlanMode?: boolean | null;
+
+        /**
+         * Whether the agent must produce and have a plan approved before executing actions.
+         * **Narrow-only security invariant** (monotonic logical `OR` down the `BaseAgentID` chain
+         * and defaults cascade): once `true` on an ancestor, category, or agent type, descendants
+         * cannot disable it. Default: `false`. Supersedes `AIAgent.RequirePlanMode`.
+         */
+        requirePlanMode?: boolean | null;
+
+        /**
+         * When `true`, exposes available actions to the underlying LLM as native provider
+         * function/tool declarations rather than relying solely on JSON-in-prompt action
+         * instructions. Default: `true`. Supersedes `AIAgent.DeclareActionsAsNativeTools`.
+         */
+        declareActionsAsNativeTools?: boolean | null;
+    } | null;
+
+    /**
+     * Context window sizing, token-budget compaction thresholds, and legacy message-count
+     * compression settings. Also configurable at the agent-type tier via
+     * `AIAgentType.DefaultAgentConfiguration.contextWindow`.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    contextWindow?: {
+        /**
+         * Enables legacy message-count-based context compression during long agent runs.
+         * Default: `false`. Supersedes `AIAgent.EnableContextCompression`.
+         */
+        enableCompression?: boolean | null;
+
+        /**
+         * Minimum number of messages in the conversation/step history before legacy context
+         * compression triggers. `null` inherits from category/agent type or disables
+         * message-count-triggered compression. Supersedes
+         * `AIAgent.ContextCompressionMessageThreshold` and
+         * `AIAgentType.ContextCompressionMessageThreshold`.
+         */
+        compressionMessageThreshold?: number | null;
+
+        /**
+         * Foreign key UUID (`MJ: AI Prompts.ID`) of the prompt executed to compress older
+         * messages when legacy context compression runs. `null` uses the inherited or system
+         * default compression prompt. Supersedes `AIAgent.ContextCompressionPromptID` and
+         * `AIAgentType.ContextCompressionPromptID`.
+         */
+        compressionPromptID?: string | null;
+
+        /**
+         * Number of most-recent messages kept verbatim (uncompressed) whenever legacy context
+         * compression summarizes older history. `null` uses the inherited or system default
+         * retention count. Supersedes `AIAgent.ContextCompressionMessageRetentionCount` and
+         * `AIAgentType.ContextCompressionMessageRetentionCount`.
+         */
+        compressionMessageRetentionCount?: number | null;
+
+        /**
+         * Maximum token budget targeted for the agent's active context window before automatic
+         * compaction runs. `null` defers to the category, agent type, or underlying model limit.
+         * Supersedes `AIAgent.ContextWindowMaxTokens` and `AIAgentType.ContextWindowMaxTokens`.
+         */
+        maxTokens?: number | null;
+
+        /**
+         * Percentage (`0`–`100`) of `maxTokens` at which automatic token-budget context
+         * compaction triggers. `null` uses the inherited or system default trigger threshold.
+         * Supersedes `AIAgent.CompactionTriggerPercent` and
+         * `AIAgentType.CompactionTriggerPercent`.
+         */
+        compactionTriggerPercent?: number | null;
+
+        /**
+         * Target context utilization percentage (`0`–`100`, lower than `compactionTriggerPercent`)
+         * that automatic compaction aims to reduce the active context window down to. `null` uses
+         * the inherited or system default target. Supersedes `AIAgent.CompactionTargetPercent`
+         * and `AIAgentType.CompactionTargetPercent`.
+         */
+        compactionTargetPercent?: number | null;
+
+        /**
+         * Foreign key UUID (`MJ: AI Prompts.ID`) of the prompt used to generate conversation or
+         * run summaries during token-budget compaction. `null` uses the inherited or system
+         * default summary prompt. Supersedes `AIAgent.ConversationSummaryPromptID` and
+         * `AIAgentType.ConversationSummaryPromptID`.
+         */
+        summaryPromptID?: string | null;
+    } | null;
+
+    /**
+     * Notes and few-shot examples memory injection, retention lifecycle, write access, and
+     * semantic reranker settings.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    memory?: {
+        /**
+         * When `true`, injects matching `MJ: AI Agent Notes` records into the agent's prompt
+         * context at run start. Default: `true`. Supersedes `AIAgent.InjectNotes`.
+         */
+        injectNotes?: boolean | null;
+
+        /**
+         * Maximum number of agent notes injected into a single run's context when `injectNotes`
+         * is enabled. Default: `5` (setting `null` resets the legacy NOT NULL column to `5`).
+         * Supersedes `AIAgent.MaxNotesToInject`.
+         */
+        maxNotesToInject?: number | null;
+
+        /**
+         * Selection strategy for choosing which notes are injected:
+         * - `'All'`: includes all eligible notes up to `maxNotesToInject`.
+         * - `'Recent'`: prioritizes the most recently created or updated notes.
+         * - `'Relevant'`: ranks notes by semantic/contextual similarity to the current task.
+         *
+         * Supersedes `AIAgent.NoteInjectionStrategy`.
+         */
+        noteInjectionStrategy?: 'All' | 'Recent' | 'Relevant' | null;
+
+        /**
+         * When `true`, injects matching `MJ: AI Agent Examples` few-shot records into the agent's
+         * prompt context. Default: `false`. Supersedes `AIAgent.InjectExamples`.
+         */
+        injectExamples?: boolean | null;
+
+        /**
+         * Maximum number of few-shot examples injected into a single run's context when
+         * `injectExamples` is enabled. Default: `3` (setting `null` resets the legacy NOT NULL
+         * column to `3`). Supersedes `AIAgent.MaxExamplesToInject`.
+         */
+        maxExamplesToInject?: number | null;
+
+        /**
+         * Ranking strategy for choosing which few-shot examples are injected:
+         * - `'Rated'`: prioritizes highest-rated examples.
+         * - `'Recent'`: prioritizes most recently created or updated examples.
+         * - `'Semantic'`: ranks examples by embedding similarity to the current request.
+         *
+         * Supersedes `AIAgent.ExampleInjectionStrategy`.
+         */
+        exampleInjectionStrategy?: 'Rated' | 'Recent' | 'Semantic' | null;
+
+        /**
+         * Number of days before eligible agent notes age out for archiving/cleanup. `null`
+         * disables age-based note expiration. Supersedes `AIAgent.NoteRetentionDays`.
+         */
+        noteRetentionDays?: number | null;
+
+        /**
+         * Number of days before eligible agent examples age out for archiving/cleanup. `null`
+         * disables age-based example expiration. Supersedes `AIAgent.ExampleRetentionDays`.
+         */
+        exampleRetentionDays?: number | null;
+
+        /**
+         * When `true`, enables automatic archiving of expired or superseded agent notes and
+         * examples according to `noteRetentionDays` and `exampleRetentionDays`. Default: `true`.
+         * Supersedes `AIAgent.AutoArchiveEnabled`.
+         */
+        autoArchiveEnabled?: boolean | null;
+
+        /**
+         * Controls whether the agent is permitted to create, update, or persist new memory records
+         * (notes/examples) during execution. Default: `true`. Supersedes
+         * `AIAgent.AllowMemoryWrite`.
+         */
+        allowMemoryWrite?: boolean | null;
+
+        /**
+         * Optional structured configuration object for the memory reranker (for example enabled
+         * flag, reranker model/provider selection, top-K cutoff, and minimum score threshold).
+         * `null` disables custom reranker settings. Supersedes `AIAgent.RerankerConfiguration`.
+         */
+        reranker?: { [key: string]: unknown } | null;
+    } | null;
+
+    /**
+     * Payload path scoping (downstream, upstream, and self read/write isolation) and
+     * starting/final JSON Schema payload validation settings.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    payload?: {
+        /**
+         * JSON path patterns defining which fields from a parent agent's payload are passed
+         * downstream into this agent when invoked as a sub-agent (for example `['*']` for full
+         * visibility or `['customer.*', 'orderId']`). Setting `null` resets the legacy NOT NULL
+         * column to `'["*"]'`. Supersedes `AIAgent.PayloadDownstreamPaths`.
+         */
+        downstreamPaths?: string[] | null;
+
+        /**
+         * JSON path patterns defining which payload fields this sub-agent is permitted to merge
+         * back upstream into the parent agent's payload upon completion (for example `['*']` or
+         * `['analysis.summary']`). Setting `null` resets the legacy NOT NULL column to `'["*"]'`.
+         * Supersedes `AIAgent.PayloadUpstreamPaths`.
+         */
+        upstreamPaths?: string[] | null;
+
+        /**
+         * Optional JSON path patterns restricting which portions of its own payload the agent's
+         * prompts may read. `null` imposes no additional self-read restriction. Supersedes
+         * `AIAgent.PayloadSelfReadPaths`.
+         */
+        selfReadPaths?: string[] | null;
+
+        /**
+         * Optional JSON path patterns restricting which portions of its own payload the agent may
+         * mutate via payload change requests. `null` imposes no additional self-write restriction.
+         * Supersedes `AIAgent.PayloadSelfWritePaths`.
+         */
+        selfWritePaths?: string[] | null;
+
+        /**
+         * Optional dot-delimited root path within the parent payload where this sub-agent's scoped
+         * view is anchored (for example `'research'` mounts `parentPayload.research` as the
+         * sub-agent's root payload). `null` operates at the payload root. Supersedes
+         * `AIAgent.PayloadScope`.
+         */
+        scope?: string | null;
+
+        /**
+         * Optional JSON Schema string used to validate the incoming payload before execution
+         * starts. `null` disables starting payload validation. Supersedes
+         * `AIAgent.StartingPayloadValidation`.
+         */
+        startingValidationSchema?: string | null;
+
+        /**
+         * Behavior when the incoming payload fails `startingValidationSchema`:
+         * - `'Fail'`: aborts execution immediately with a validation error.
+         * - `'Warn'`: logs a warning and continues execution.
+         *
+         * Supersedes `AIAgent.StartingPayloadValidationMode`.
+         */
+        startingValidationMode?: 'Fail' | 'Warn' | null;
+
+        /**
+         * Optional JSON Schema string used to validate the agent's final output payload before
+         * marking the run complete. `null` disables final payload validation. Supersedes
+         * `AIAgent.FinalPayloadValidation`.
+         */
+        finalValidationSchema?: string | null;
+
+        /**
+         * Behavior when the final output payload fails `finalValidationSchema`:
+         * - `'Fail'`: fails the run immediately.
+         * - `'Retry'`: feeds validation errors back to the agent up to `finalValidationMaxRetries`
+         *   times to self-correct.
+         * - `'Warn'`: logs a warning and accepts the payload.
+         *
+         * Supersedes `AIAgent.FinalPayloadValidationMode`.
+         */
+        finalValidationMode?: 'Fail' | 'Retry' | 'Warn' | null;
+
+        /**
+         * Maximum number of self-correction retry attempts allowed when `finalValidationMode` is
+         * `'Retry'`. Default: `3` (setting `null` resets the legacy NOT NULL column to `3`).
+         * Supersedes `AIAgent.FinalPayloadValidationMaxRetries`.
+         */
+        finalValidationMaxRetries?: number | null;
+    } | null;
+
+    /**
+     * Sub-agent invocation concurrency mode, per-run execution count bounds, and parent-child
+     * consultation round ceiling.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    subAgentExecution?: {
+        /**
+         * Controls whether multiple sub-agent invocations dispatched in a single step execute
+         * concurrently (`'Parallel'`) or one after another (`'Sequential'`). Supersedes
+         * `AIAgent.ExecutionMode`.
+         */
+        mode?: 'Parallel' | 'Sequential' | null;
+
+        /**
+         * Optional minimum number of times this sub-agent should be executed within a parent run.
+         * `null` imposes no minimum execution count. Supersedes `AIAgent.MinExecutionsPerRun`.
+         */
+        minExecutionsPerRun?: number | null;
+
+        /**
+         * Maximum number of times this sub-agent may be invoked within a single parent run.
+         * **Narrow-only ceiling invariant** (clamped via `Math.min` across defaults and
+         * `BaseAgentID` ancestors): descendants may lower the cap, never raise it. `null` leaves
+         * the cap unconstrained at this tier. Supersedes `AIAgent.MaxExecutionsPerRun`.
+         */
+        maxExecutionsPerRun?: number | null;
+
+        /**
+         * Maximum number of back-and-forth consultation rounds allowed between a parent agent and
+         * this sub-agent during a single invocation. **Narrow-only ceiling invariant** (clamped
+         * via `Math.min` across defaults and `BaseAgentID` ancestors). `null` uses the inherited
+         * or system default ceiling. Supersedes `AIAgent.MaxSubAgentConsultRounds`.
+         */
+        maxConsultRounds?: number | null;
+    } | null;
+
+    /**
+     * Conversation message windowing, attachment storage path, inline threshold, and unregistered
+     * file policy.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    attachments?: {
+        /**
+         * Controls which prior conversation messages are passed into the agent:
+         * - `'All'`: passes the entire conversation history.
+         * - `'Bookend'`: retains the opening and most-recent messages up to `maxMessages`.
+         * - `'Latest'`: retains only the most-recent `maxMessages`.
+         * - `'None'`: omits prior conversation messages.
+         *
+         * Supersedes `AIAgent.MessageMode`.
+         */
+        messageMode?: 'All' | 'Bookend' | 'Latest' | 'None' | null;
+
+        /**
+         * Maximum number of conversation messages included when `messageMode` is `'Bookend'` or
+         * `'Latest'`. `null` imposes no explicit message-count cap. Supersedes
+         * `AIAgent.MaxMessages`.
+         */
+        maxMessages?: number | null;
+
+        /**
+         * Optional storage root path or prefix under the agent's storage account where
+         * conversation and run attachments are stored. `null` uses the storage provider or system
+         * default path. Supersedes `AIAgent.AttachmentRootPath`.
+         */
+        rootPath?: string | null;
+
+        /**
+         * Size threshold in bytes below which attachments may be stored or transmitted inline
+         * rather than offloaded to external blob storage. `null` uses the system default
+         * threshold. Supersedes `AIAgent.InlineStorageThresholdBytes`.
+         */
+        inlineStorageThresholdBytes?: number | null;
+
+        /**
+         * Whether the agent accepts file attachments that have not been registered as tracked MJ
+         * file or artifact records. **Narrow-only security invariant** (monotonic logical `AND`
+         * down the `BaseAgentID` chain and defaults cascade): once `false` on an ancestor or
+         * default tier, descendants cannot re-enable it. Default: `false`. Supersedes
+         * `AIAgent.AcceptUnregisteredFiles`.
+         */
+        acceptUnregisteredFiles?: boolean | null;
+    } | null;
+
+    /**
+     * Output artifact creation lifecycle and optional default artifact type binding.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    artifacts?: {
+        /**
+         * Controls when outputs from this agent are persisted as `MJ: Artifacts` records:
+         * - `'Always'`: creates user-visible artifacts for eligible outputs.
+         * - `'Never'`: disables artifact creation.
+         * - `'System Only'`: creates internal system-scoped artifacts hidden from end users.
+         *
+         * Supersedes `AIAgent.ArtifactCreationMode`.
+         */
+        creationMode?: 'Always' | 'Never' | 'System Only' | null;
+
+        /**
+         * Optional foreign key UUID (`MJ: Artifact Types.ID`) specifying the default artifact type
+         * assigned when this agent creates artifacts without an explicit type override. `null`
+         * defers to inference or the system default type. Supersedes
+         * `AIAgent.DefaultArtifactTypeID`.
+         */
+        defaultArtifactTypeID?: string | null;
+    } | null;
+
+    /**
+     * Search-scope visibility policy and secondary scope dimension configuration.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    scope?: {
+        /**
+         * Controls which search scopes the agent can query:
+         * - `'All'`: permits querying all scopes visible to the invoking user.
+         * - `'Assigned'`: restricts queries to scopes explicitly assigned to the agent.
+         * - `'None'`: disables search-scope access.
+         *
+         * **Narrow-only security invariant** (`All` > `Assigned` > `None` down the `BaseAgentID`
+         * chain): descendants can narrow scope access, never widen it. Supersedes
+         * `AIAgent.SearchScopeAccess`.
+         */
+        searchScopeAccess?: 'All' | 'Assigned' | 'None' | null;
+
+        /**
+         * Optional structured JSON configuration defining secondary scope filtering dimensions
+         * (such as tenant, workspace, or domain-specific entity filters) applied during execution.
+         * `null` applies no secondary scope rules. Supersedes `AIAgent.ScopeConfig`.
+         */
+        secondaryScopeConfig?: { [key: string]: unknown } | null;
+    } | null;
+
+    /**
+     * Skill discovery and activation behavior.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    skills?: {
+        /**
+         * Controls how skills available to the agent are activated:
+         * - `'Auto'`: allows the agent to autonomously activate matching skills based on context.
+         * - `'RequestedOnly'`: restricts activation to skills explicitly requested by the user or
+         *   caller.
+         *
+         * **Narrow-only security invariant** (`Auto` -> `RequestedOnly` down the `BaseAgentID`
+         * chain): once narrowed to `'RequestedOnly'`, descendants cannot widen back to `'Auto'`.
+         * Supersedes `AIAgent.SkillActivationMode`.
+         */
+        activationMode?: 'Auto' | 'RequestedOnly' | null;
+    } | null;
+
+    /**
+     * Client-side tool execution policy.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    clientTools?: {
+        /**
+         * Whether the agent is permitted to invoke ephemeral (session-registered, non-persisted)
+         * client tools advertised by the caller UI/runtime. **Narrow-only security invariant**
+         * (monotonic logical `AND` down the `BaseAgentID` chain and defaults cascade): once
+         * `false` on an ancestor or default tier, descendants cannot widen back to `true`.
+         * Default: `true`. Supersedes `AIAgent.AllowEphemeralClientTools`.
+         */
+        allowEphemeral?: boolean | null;
+    } | null;
+
+    /**
+     * Default realtime session recording policy.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    recording?: {
+        /**
+         * Default recording mode applied to realtime sessions hosted by this agent:
+         * - `'Audio'`: records audio streams only.
+         * - `'AudioVideo'`: records both audio and video streams.
+         * - `'None'`: disables session recording by default.
+         *
+         * `null` defers to the inherited or session default. Supersedes
+         * `AIAgent.RecordingDefault`.
+         */
+        defaultMode?: 'Audio' | 'AudioVideo' | 'None' | null;
+    } | null;
+
+    /**
+     * Admin-only per-agent pluggable `BaseAgent` helper seam overrides (Extension Point #3).
+     * Collected cumulatively across `AgentType -> Categories -> BaseAgent Chain -> Agent`
+     * (child tiers cannot strip plugins bound by an ancestor or default tier; higher-priority
+     * or more specific entries for the same seam take precedence).
+     * Code-only security seams (`limits`, `actionPolicy`, `policy`, `permissions`, `permission`,
+     * `setup`, `steps`, `actions`, `subAgents`) are strictly forbidden in metadata and rejected
+     * both at save time and at runtime.
+     */
+    helperPlugins?: Array<{
+        /**
+         * Canonical `BaseAgent` helper seam key to override (for example `'messaging'`,
+         * `'payload'`, `'compaction'`, `'realtime'`, `'iteration'`, `'skills'`, or `'prompt'`).
+         * Code-only security seams (`'limits'`, `'actionPolicy'`, `'policy'`, `'permissions'`,
+         * `'permission'`, `'setup'`, `'steps'`, `'actions'`, `'subAgents'`) are always rejected.
+         */
+        seam: string;
+
+        /**
+         * Registered `@RegisterClass(BaseAgent<Seam>Helper, driverClass)` key identifying the
+         * custom helper implementation to instantiate for this seam.
+         */
+        driverClass: string;
+
+        /**
+         * Optional precedence weight when multiple plugin entries target the same `seam` across
+         * the cascade. Higher values win; equal priorities favor the later (more specific) entry.
+         */
+        priority?: number;
+    }> | null;
+
+    /**
+     * Optional UX hints for instantiable agent templates (`InstantiationMode` of `'Optional'` or
+     * `'Required'`). Automatically stripped from resolved configurations on non-instantiable leaf
+     * instances (`BaseAgentID != null && InstantiationMode === 'None'`).
+     * Set to `null` to explicitly clear instantiation hints at this cascade tier.
+     */
+    instantiation?: {
+        /**
+         * Pre-populated display-name suggestions offered to users when creating a personal
+         * instance from this agent template.
+         */
+        suggestedNames?: string[];
+
+        /**
+         * Suggested Font Awesome icon classes or icon identifiers presented in the instance
+         * creation UI.
+         */
+        suggestedIcons?: string[];
+
+        /**
+         * Suggested persona names for customizing the instantiated agent's conversational
+         * identity.
+         */
+        suggestedPersonaNames?: string[];
+
+        /**
+         * Positive integer cap limiting how many personal instances a single user may create from
+         * this agent template.
+         */
+        maxInstancesPerUser?: number;
+
+        /**
+         * Initial greeting message displayed to the user when opening a newly created instance for
+         * the first time.
+         */
+        onboardingGreeting?: string;
+
+        /**
+         * Curated communication-style presets offered during instantiation so users can pick a
+         * tone and speaking style for their instance.
+         */
+        personalityPresets?: Array<{
+            /**
+             * Short user-facing display label for the preset (for example `'Executive Brief'` or
+             * `'Warm Collaborator'`).
+             */
+            label: string;
+
+            /**
+             * Concise description of the interpersonal tone injected into the instance's persona
+             * instructions.
+             */
+            tone: string;
+
+            /**
+             * Stylistic guidance describing phrasing, structure, verbosity, and formatting
+             * conventions for the instance's responses.
+             */
+            speakingStyle: string;
+
+            /**
+             * Optional longer helper text explaining when to choose this preset in the
+             * instantiation UI.
+             */
+            description?: string;
+        }>;
+    } | null;
+
+    /**
+     * Default prompt template parameters merged beneath agent-level `AIAgent.AgentTypePromptParams`
+     * across the cascade (`AgentType -> Category -> BaseAgent Chain -> Agent`), enabling shared
+     * category and type prompt defaults without duplicating them per agent.
+     * Set to `null` to explicitly clear prompt defaults at this cascade tier.
+     */
+    promptDefaults?: { [key: string]: unknown } | null;
+}
 
 /**
  * MJ: AI Agent Types - strongly typed entity sub-class
@@ -12156,8 +13684,9 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     /**
     * * Field Name: ContextCompressionMessageThreshold
     * * Display Name: Context Compression Message Threshold
-    * * SQL Data Type: int
-    * * Description: Type-level default for the in-turn context-compression message-count threshold. Overridable per agent via AIAgent.ContextCompressionMessageThreshold.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.compressionMessageThreshold. Kept bidirectionally synced during v6.x.
     */
     get ContextCompressionMessageThreshold(): number | null {
         return this.Get('ContextCompressionMessageThreshold');
@@ -12169,9 +13698,10 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     /**
     * * Field Name: ContextCompressionPromptID
     * * Display Name: Context Compression Prompt ID
-    * * SQL Data Type: uniqueidentifier
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
-    * * Description: Type-level default prompt used for in-turn context compression. Overridable per agent via AIAgent.ContextCompressionPromptID.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.compressionPromptID. Kept bidirectionally synced during v6.x.
     */
     get ContextCompressionPromptID(): string | null {
         return this.Get('ContextCompressionPromptID');
@@ -12183,8 +13713,9 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     /**
     * * Field Name: ContextCompressionMessageRetentionCount
     * * Display Name: Context Compression Message Retention Count
-    * * SQL Data Type: int
-    * * Description: Type-level default for the number of most-recent messages kept uncompressed (the "hot tail") when context compression is applied. Overridable per agent via AIAgent.ContextCompressionMessageRetentionCount.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.compressionMessageRetentionCount. Kept bidirectionally synced during v6.x.
     */
     get ContextCompressionMessageRetentionCount(): number | null {
         return this.Get('ContextCompressionMessageRetentionCount');
@@ -12196,8 +13727,9 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     /**
     * * Field Name: ContextWindowMaxTokens
     * * Display Name: Context Window Max Tokens
-    * * SQL Data Type: int
-    * * Description: Type-level default effective working-context budget, in tokens. Null means use the selected model's MaxInputTokens. The resolved value is clamped to the model's limit at runtime (a warning is logged if it would exceed it). Overridable per agent via AIAgent.ContextWindowMaxTokens.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.maxTokens. Kept bidirectionally synced during v6.x.
     */
     get ContextWindowMaxTokens(): number | null {
         return this.Get('ContextWindowMaxTokens');
@@ -12209,9 +13741,10 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     /**
     * * Field Name: CompactionTriggerPercent
     * * Display Name: Compaction Trigger Percent
-    * * SQL Data Type: int
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
     * * Default Value: 75
-    * * Description: Type-level default: the percentage of the effective context budget at which cross-turn conversation compaction is triggered. Defaults to 75. Overridable per agent via AIAgent.CompactionTriggerPercent.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.compactionTriggerPercent. Kept bidirectionally synced during v6.x.
     */
     get CompactionTriggerPercent(): number {
         return this.Get('CompactionTriggerPercent');
@@ -12223,9 +13756,10 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     /**
     * * Field Name: CompactionTargetPercent
     * * Display Name: Compaction Target Percent
-    * * SQL Data Type: int
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
     * * Default Value: 30
-    * * Description: Type-level default: the target percentage of the effective context budget to reduce to after a cross-turn compaction. Defaults to 30. Overridable per agent via AIAgent.CompactionTargetPercent.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.compactionTargetPercent. Kept bidirectionally synced during v6.x.
     */
     get CompactionTargetPercent(): number {
         return this.Get('CompactionTargetPercent');
@@ -12237,15 +13771,45 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     /**
     * * Field Name: ConversationSummaryPromptID
     * * Display Name: Conversation Summary Prompt ID
-    * * SQL Data Type: uniqueidentifier
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
-    * * Description: Type-level default prompt used for cross-turn conversation compaction (the durable summary baseline). Distinct from ContextCompressionPromptID, which governs in-turn compression. Overridable per agent via AIAgent.ConversationSummaryPromptID.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.summaryPromptID. Kept bidirectionally synced during v6.x.
     */
     get ConversationSummaryPromptID(): string | null {
         return this.Get('ConversationSummaryPromptID');
     }
     set ConversationSummaryPromptID(value: string | null) {
         this.Set('ConversationSummaryPromptID', value);
+    }
+
+    /**
+    * * Field Name: DefaultAgentConfiguration
+    * * Display Name: Default Agent Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIAgentTypeEntity_IAgentConfiguration
+    * * Description: Default typed JSON configuration bag (IAgentConfiguration) providing agent-type-level defaults (such as contextWindow settings) inherited by agents of this type beneath category and agent overrides. Distinct from DefaultConfiguration, which seeds type-specific TypeConfiguration.
+    */
+    get DefaultAgentConfiguration(): string | null {
+        return this.Get('DefaultAgentConfiguration');
+    }
+    set DefaultAgentConfiguration(value: string | null) {
+        this.Set('DefaultAgentConfiguration', value);
+    }
+
+    /**
+    * Typed accessor for DefaultAgentConfiguration — a live view of the parsed JSON as MJAIAgentTypeEntity_IAgentConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying DefaultAgentConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get DefaultAgentConfigurationObject(): MJAIAgentTypeEntity_IAgentConfiguration | null {
+        return this.GetJSONFieldObject<MJAIAgentTypeEntity_IAgentConfiguration>('DefaultAgentConfiguration');
+    }
+    set DefaultAgentConfigurationObject(value: MJAIAgentTypeEntity_IAgentConfiguration | null) {
+        this.SetJSONFieldObject<MJAIAgentTypeEntity_IAgentConfiguration>('DefaultAgentConfiguration', value);
     }
 
     /**
@@ -12883,6 +14447,619 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
 
 
 /**
+ * Unified typed AI Agent configuration bag stored across the 3-table settings cascade:
+ *   - `MJ: AI Agents.Configuration`
+ *   - `MJ: AI Agent Categories.DefaultConfiguration`
+ *   - `MJ: AI Agent Types.DefaultAgentConfiguration`
+ *
+ * Resolution precedence:
+ *   Instance -> BaseAgent Chain (root..leaf) -> Category -> Parent Categories -> AgentType -> System Default
+ *
+ * Narrow-only security invariants (`supportsPlanMode`, `requirePlanMode`, `skills.activationMode`,
+ * `scope.searchScopeAccess`, `clientTools.allowEphemeral`, `attachments.acceptUnregisteredFiles`,
+ * and numeric execution/consult ceilings) can never be loosened down the chain or via category/type
+ * defaults.
+ *
+ * **Single source of truth**: this file is canonical for both CodeGen (`MJCoreEntities`) and
+ * `@memberjunction/ai-core-plus`, which auto-copies it into
+ * `packages/AI/CorePlus/src/JSONType-interfaces/` during `prebuild`
+ * (`npm run sync:json-types`). Do not maintain separate physical copies.
+ */
+export interface MJAIAgentEntity_IAgentConfiguration {
+    /**
+     * Core execution, planning, model selection, and tool-calling protocol settings.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    execution?: {
+        /**
+         * Controls which model selection hierarchy is consulted for the agent's prompts:
+         * - `'Agent'`: uses the agent's own prompt/model bindings.
+         * - `'Agent Type'`: defers to the agent type's default prompt model selection.
+         *
+         * When a derived agent owns no active prompts, resolution falls back to the nearest
+         * prompt-owning ancestor before category/type defaults. Default: `'Agent Type'`.
+         * Supersedes `AIAgent.ModelSelectionMode`.
+         */
+        modelSelectionMode?: 'Agent' | 'Agent Type' | null;
+
+        /**
+         * Default reasoning / thinking effort level (typically `1`–`100`, where higher values
+         * allocate more model reasoning budget) applied to prompt runs when neither the caller
+         * nor the prompt overrides it. `null` leaves effort selection to the prompt or model
+         * default. Supersedes `AIAgent.DefaultPromptEffortLevel`.
+         */
+        defaultPromptEffortLevel?: number | null;
+
+        /**
+         * Determines how `BaseAgent` handles a plain conversational chat response when a
+         * structured action or completion was expected:
+         * - `'Consult'`: escalates to the parent agent or user for clarification.
+         * - `'Failed'`: marks the run as failed.
+         * - `'Retry'`: re-prompts the agent to produce a valid structured response.
+         * - `'Success'`: accepts the chat message as a valid completion.
+         *
+         * `null` uses the runtime default. Supersedes `AIAgent.ChatHandlingOption`.
+         */
+        chatHandlingOption?: 'Consult' | 'Failed' | 'Retry' | 'Success' | null;
+
+        /**
+         * Whether the agent is permitted to enter structured plan mode before executing actions.
+         * **Narrow-only security invariant** (monotonic logical `AND` down the `BaseAgentID` chain
+         * and defaults cascade): once `false` on an ancestor, category, or agent type, descendants
+         * cannot re-enable it. Default: `true`. Supersedes `AIAgent.SupportsPlanMode`.
+         */
+        supportsPlanMode?: boolean | null;
+
+        /**
+         * Whether the agent must produce and have a plan approved before executing actions.
+         * **Narrow-only security invariant** (monotonic logical `OR` down the `BaseAgentID` chain
+         * and defaults cascade): once `true` on an ancestor, category, or agent type, descendants
+         * cannot disable it. Default: `false`. Supersedes `AIAgent.RequirePlanMode`.
+         */
+        requirePlanMode?: boolean | null;
+
+        /**
+         * When `true`, exposes available actions to the underlying LLM as native provider
+         * function/tool declarations rather than relying solely on JSON-in-prompt action
+         * instructions. Default: `true`. Supersedes `AIAgent.DeclareActionsAsNativeTools`.
+         */
+        declareActionsAsNativeTools?: boolean | null;
+    } | null;
+
+    /**
+     * Context window sizing, token-budget compaction thresholds, and legacy message-count
+     * compression settings. Also configurable at the agent-type tier via
+     * `AIAgentType.DefaultAgentConfiguration.contextWindow`.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    contextWindow?: {
+        /**
+         * Enables legacy message-count-based context compression during long agent runs.
+         * Default: `false`. Supersedes `AIAgent.EnableContextCompression`.
+         */
+        enableCompression?: boolean | null;
+
+        /**
+         * Minimum number of messages in the conversation/step history before legacy context
+         * compression triggers. `null` inherits from category/agent type or disables
+         * message-count-triggered compression. Supersedes
+         * `AIAgent.ContextCompressionMessageThreshold` and
+         * `AIAgentType.ContextCompressionMessageThreshold`.
+         */
+        compressionMessageThreshold?: number | null;
+
+        /**
+         * Foreign key UUID (`MJ: AI Prompts.ID`) of the prompt executed to compress older
+         * messages when legacy context compression runs. `null` uses the inherited or system
+         * default compression prompt. Supersedes `AIAgent.ContextCompressionPromptID` and
+         * `AIAgentType.ContextCompressionPromptID`.
+         */
+        compressionPromptID?: string | null;
+
+        /**
+         * Number of most-recent messages kept verbatim (uncompressed) whenever legacy context
+         * compression summarizes older history. `null` uses the inherited or system default
+         * retention count. Supersedes `AIAgent.ContextCompressionMessageRetentionCount` and
+         * `AIAgentType.ContextCompressionMessageRetentionCount`.
+         */
+        compressionMessageRetentionCount?: number | null;
+
+        /**
+         * Maximum token budget targeted for the agent's active context window before automatic
+         * compaction runs. `null` defers to the category, agent type, or underlying model limit.
+         * Supersedes `AIAgent.ContextWindowMaxTokens` and `AIAgentType.ContextWindowMaxTokens`.
+         */
+        maxTokens?: number | null;
+
+        /**
+         * Percentage (`0`–`100`) of `maxTokens` at which automatic token-budget context
+         * compaction triggers. `null` uses the inherited or system default trigger threshold.
+         * Supersedes `AIAgent.CompactionTriggerPercent` and
+         * `AIAgentType.CompactionTriggerPercent`.
+         */
+        compactionTriggerPercent?: number | null;
+
+        /**
+         * Target context utilization percentage (`0`–`100`, lower than `compactionTriggerPercent`)
+         * that automatic compaction aims to reduce the active context window down to. `null` uses
+         * the inherited or system default target. Supersedes `AIAgent.CompactionTargetPercent`
+         * and `AIAgentType.CompactionTargetPercent`.
+         */
+        compactionTargetPercent?: number | null;
+
+        /**
+         * Foreign key UUID (`MJ: AI Prompts.ID`) of the prompt used to generate conversation or
+         * run summaries during token-budget compaction. `null` uses the inherited or system
+         * default summary prompt. Supersedes `AIAgent.ConversationSummaryPromptID` and
+         * `AIAgentType.ConversationSummaryPromptID`.
+         */
+        summaryPromptID?: string | null;
+    } | null;
+
+    /**
+     * Notes and few-shot examples memory injection, retention lifecycle, write access, and
+     * semantic reranker settings.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    memory?: {
+        /**
+         * When `true`, injects matching `MJ: AI Agent Notes` records into the agent's prompt
+         * context at run start. Default: `true`. Supersedes `AIAgent.InjectNotes`.
+         */
+        injectNotes?: boolean | null;
+
+        /**
+         * Maximum number of agent notes injected into a single run's context when `injectNotes`
+         * is enabled. Default: `5` (setting `null` resets the legacy NOT NULL column to `5`).
+         * Supersedes `AIAgent.MaxNotesToInject`.
+         */
+        maxNotesToInject?: number | null;
+
+        /**
+         * Selection strategy for choosing which notes are injected:
+         * - `'All'`: includes all eligible notes up to `maxNotesToInject`.
+         * - `'Recent'`: prioritizes the most recently created or updated notes.
+         * - `'Relevant'`: ranks notes by semantic/contextual similarity to the current task.
+         *
+         * Supersedes `AIAgent.NoteInjectionStrategy`.
+         */
+        noteInjectionStrategy?: 'All' | 'Recent' | 'Relevant' | null;
+
+        /**
+         * When `true`, injects matching `MJ: AI Agent Examples` few-shot records into the agent's
+         * prompt context. Default: `false`. Supersedes `AIAgent.InjectExamples`.
+         */
+        injectExamples?: boolean | null;
+
+        /**
+         * Maximum number of few-shot examples injected into a single run's context when
+         * `injectExamples` is enabled. Default: `3` (setting `null` resets the legacy NOT NULL
+         * column to `3`). Supersedes `AIAgent.MaxExamplesToInject`.
+         */
+        maxExamplesToInject?: number | null;
+
+        /**
+         * Ranking strategy for choosing which few-shot examples are injected:
+         * - `'Rated'`: prioritizes highest-rated examples.
+         * - `'Recent'`: prioritizes most recently created or updated examples.
+         * - `'Semantic'`: ranks examples by embedding similarity to the current request.
+         *
+         * Supersedes `AIAgent.ExampleInjectionStrategy`.
+         */
+        exampleInjectionStrategy?: 'Rated' | 'Recent' | 'Semantic' | null;
+
+        /**
+         * Number of days before eligible agent notes age out for archiving/cleanup. `null`
+         * disables age-based note expiration. Supersedes `AIAgent.NoteRetentionDays`.
+         */
+        noteRetentionDays?: number | null;
+
+        /**
+         * Number of days before eligible agent examples age out for archiving/cleanup. `null`
+         * disables age-based example expiration. Supersedes `AIAgent.ExampleRetentionDays`.
+         */
+        exampleRetentionDays?: number | null;
+
+        /**
+         * When `true`, enables automatic archiving of expired or superseded agent notes and
+         * examples according to `noteRetentionDays` and `exampleRetentionDays`. Default: `true`.
+         * Supersedes `AIAgent.AutoArchiveEnabled`.
+         */
+        autoArchiveEnabled?: boolean | null;
+
+        /**
+         * Controls whether the agent is permitted to create, update, or persist new memory records
+         * (notes/examples) during execution. Default: `true`. Supersedes
+         * `AIAgent.AllowMemoryWrite`.
+         */
+        allowMemoryWrite?: boolean | null;
+
+        /**
+         * Optional structured configuration object for the memory reranker (for example enabled
+         * flag, reranker model/provider selection, top-K cutoff, and minimum score threshold).
+         * `null` disables custom reranker settings. Supersedes `AIAgent.RerankerConfiguration`.
+         */
+        reranker?: { [key: string]: unknown } | null;
+    } | null;
+
+    /**
+     * Payload path scoping (downstream, upstream, and self read/write isolation) and
+     * starting/final JSON Schema payload validation settings.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    payload?: {
+        /**
+         * JSON path patterns defining which fields from a parent agent's payload are passed
+         * downstream into this agent when invoked as a sub-agent (for example `['*']` for full
+         * visibility or `['customer.*', 'orderId']`). Setting `null` resets the legacy NOT NULL
+         * column to `'["*"]'`. Supersedes `AIAgent.PayloadDownstreamPaths`.
+         */
+        downstreamPaths?: string[] | null;
+
+        /**
+         * JSON path patterns defining which payload fields this sub-agent is permitted to merge
+         * back upstream into the parent agent's payload upon completion (for example `['*']` or
+         * `['analysis.summary']`). Setting `null` resets the legacy NOT NULL column to `'["*"]'`.
+         * Supersedes `AIAgent.PayloadUpstreamPaths`.
+         */
+        upstreamPaths?: string[] | null;
+
+        /**
+         * Optional JSON path patterns restricting which portions of its own payload the agent's
+         * prompts may read. `null` imposes no additional self-read restriction. Supersedes
+         * `AIAgent.PayloadSelfReadPaths`.
+         */
+        selfReadPaths?: string[] | null;
+
+        /**
+         * Optional JSON path patterns restricting which portions of its own payload the agent may
+         * mutate via payload change requests. `null` imposes no additional self-write restriction.
+         * Supersedes `AIAgent.PayloadSelfWritePaths`.
+         */
+        selfWritePaths?: string[] | null;
+
+        /**
+         * Optional dot-delimited root path within the parent payload where this sub-agent's scoped
+         * view is anchored (for example `'research'` mounts `parentPayload.research` as the
+         * sub-agent's root payload). `null` operates at the payload root. Supersedes
+         * `AIAgent.PayloadScope`.
+         */
+        scope?: string | null;
+
+        /**
+         * Optional JSON Schema string used to validate the incoming payload before execution
+         * starts. `null` disables starting payload validation. Supersedes
+         * `AIAgent.StartingPayloadValidation`.
+         */
+        startingValidationSchema?: string | null;
+
+        /**
+         * Behavior when the incoming payload fails `startingValidationSchema`:
+         * - `'Fail'`: aborts execution immediately with a validation error.
+         * - `'Warn'`: logs a warning and continues execution.
+         *
+         * Supersedes `AIAgent.StartingPayloadValidationMode`.
+         */
+        startingValidationMode?: 'Fail' | 'Warn' | null;
+
+        /**
+         * Optional JSON Schema string used to validate the agent's final output payload before
+         * marking the run complete. `null` disables final payload validation. Supersedes
+         * `AIAgent.FinalPayloadValidation`.
+         */
+        finalValidationSchema?: string | null;
+
+        /**
+         * Behavior when the final output payload fails `finalValidationSchema`:
+         * - `'Fail'`: fails the run immediately.
+         * - `'Retry'`: feeds validation errors back to the agent up to `finalValidationMaxRetries`
+         *   times to self-correct.
+         * - `'Warn'`: logs a warning and accepts the payload.
+         *
+         * Supersedes `AIAgent.FinalPayloadValidationMode`.
+         */
+        finalValidationMode?: 'Fail' | 'Retry' | 'Warn' | null;
+
+        /**
+         * Maximum number of self-correction retry attempts allowed when `finalValidationMode` is
+         * `'Retry'`. Default: `3` (setting `null` resets the legacy NOT NULL column to `3`).
+         * Supersedes `AIAgent.FinalPayloadValidationMaxRetries`.
+         */
+        finalValidationMaxRetries?: number | null;
+    } | null;
+
+    /**
+     * Sub-agent invocation concurrency mode, per-run execution count bounds, and parent-child
+     * consultation round ceiling.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    subAgentExecution?: {
+        /**
+         * Controls whether multiple sub-agent invocations dispatched in a single step execute
+         * concurrently (`'Parallel'`) or one after another (`'Sequential'`). Supersedes
+         * `AIAgent.ExecutionMode`.
+         */
+        mode?: 'Parallel' | 'Sequential' | null;
+
+        /**
+         * Optional minimum number of times this sub-agent should be executed within a parent run.
+         * `null` imposes no minimum execution count. Supersedes `AIAgent.MinExecutionsPerRun`.
+         */
+        minExecutionsPerRun?: number | null;
+
+        /**
+         * Maximum number of times this sub-agent may be invoked within a single parent run.
+         * **Narrow-only ceiling invariant** (clamped via `Math.min` across defaults and
+         * `BaseAgentID` ancestors): descendants may lower the cap, never raise it. `null` leaves
+         * the cap unconstrained at this tier. Supersedes `AIAgent.MaxExecutionsPerRun`.
+         */
+        maxExecutionsPerRun?: number | null;
+
+        /**
+         * Maximum number of back-and-forth consultation rounds allowed between a parent agent and
+         * this sub-agent during a single invocation. **Narrow-only ceiling invariant** (clamped
+         * via `Math.min` across defaults and `BaseAgentID` ancestors). `null` uses the inherited
+         * or system default ceiling. Supersedes `AIAgent.MaxSubAgentConsultRounds`.
+         */
+        maxConsultRounds?: number | null;
+    } | null;
+
+    /**
+     * Conversation message windowing, attachment storage path, inline threshold, and unregistered
+     * file policy.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    attachments?: {
+        /**
+         * Controls which prior conversation messages are passed into the agent:
+         * - `'All'`: passes the entire conversation history.
+         * - `'Bookend'`: retains the opening and most-recent messages up to `maxMessages`.
+         * - `'Latest'`: retains only the most-recent `maxMessages`.
+         * - `'None'`: omits prior conversation messages.
+         *
+         * Supersedes `AIAgent.MessageMode`.
+         */
+        messageMode?: 'All' | 'Bookend' | 'Latest' | 'None' | null;
+
+        /**
+         * Maximum number of conversation messages included when `messageMode` is `'Bookend'` or
+         * `'Latest'`. `null` imposes no explicit message-count cap. Supersedes
+         * `AIAgent.MaxMessages`.
+         */
+        maxMessages?: number | null;
+
+        /**
+         * Optional storage root path or prefix under the agent's storage account where
+         * conversation and run attachments are stored. `null` uses the storage provider or system
+         * default path. Supersedes `AIAgent.AttachmentRootPath`.
+         */
+        rootPath?: string | null;
+
+        /**
+         * Size threshold in bytes below which attachments may be stored or transmitted inline
+         * rather than offloaded to external blob storage. `null` uses the system default
+         * threshold. Supersedes `AIAgent.InlineStorageThresholdBytes`.
+         */
+        inlineStorageThresholdBytes?: number | null;
+
+        /**
+         * Whether the agent accepts file attachments that have not been registered as tracked MJ
+         * file or artifact records. **Narrow-only security invariant** (monotonic logical `AND`
+         * down the `BaseAgentID` chain and defaults cascade): once `false` on an ancestor or
+         * default tier, descendants cannot re-enable it. Default: `false`. Supersedes
+         * `AIAgent.AcceptUnregisteredFiles`.
+         */
+        acceptUnregisteredFiles?: boolean | null;
+    } | null;
+
+    /**
+     * Output artifact creation lifecycle and optional default artifact type binding.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    artifacts?: {
+        /**
+         * Controls when outputs from this agent are persisted as `MJ: Artifacts` records:
+         * - `'Always'`: creates user-visible artifacts for eligible outputs.
+         * - `'Never'`: disables artifact creation.
+         * - `'System Only'`: creates internal system-scoped artifacts hidden from end users.
+         *
+         * Supersedes `AIAgent.ArtifactCreationMode`.
+         */
+        creationMode?: 'Always' | 'Never' | 'System Only' | null;
+
+        /**
+         * Optional foreign key UUID (`MJ: Artifact Types.ID`) specifying the default artifact type
+         * assigned when this agent creates artifacts without an explicit type override. `null`
+         * defers to inference or the system default type. Supersedes
+         * `AIAgent.DefaultArtifactTypeID`.
+         */
+        defaultArtifactTypeID?: string | null;
+    } | null;
+
+    /**
+     * Search-scope visibility policy and secondary scope dimension configuration.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    scope?: {
+        /**
+         * Controls which search scopes the agent can query:
+         * - `'All'`: permits querying all scopes visible to the invoking user.
+         * - `'Assigned'`: restricts queries to scopes explicitly assigned to the agent.
+         * - `'None'`: disables search-scope access.
+         *
+         * **Narrow-only security invariant** (`All` > `Assigned` > `None` down the `BaseAgentID`
+         * chain): descendants can narrow scope access, never widen it. Supersedes
+         * `AIAgent.SearchScopeAccess`.
+         */
+        searchScopeAccess?: 'All' | 'Assigned' | 'None' | null;
+
+        /**
+         * Optional structured JSON configuration defining secondary scope filtering dimensions
+         * (such as tenant, workspace, or domain-specific entity filters) applied during execution.
+         * `null` applies no secondary scope rules. Supersedes `AIAgent.ScopeConfig`.
+         */
+        secondaryScopeConfig?: { [key: string]: unknown } | null;
+    } | null;
+
+    /**
+     * Skill discovery and activation behavior.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    skills?: {
+        /**
+         * Controls how skills available to the agent are activated:
+         * - `'Auto'`: allows the agent to autonomously activate matching skills based on context.
+         * - `'RequestedOnly'`: restricts activation to skills explicitly requested by the user or
+         *   caller.
+         *
+         * **Narrow-only security invariant** (`Auto` -> `RequestedOnly` down the `BaseAgentID`
+         * chain): once narrowed to `'RequestedOnly'`, descendants cannot widen back to `'Auto'`.
+         * Supersedes `AIAgent.SkillActivationMode`.
+         */
+        activationMode?: 'Auto' | 'RequestedOnly' | null;
+    } | null;
+
+    /**
+     * Client-side tool execution policy.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    clientTools?: {
+        /**
+         * Whether the agent is permitted to invoke ephemeral (session-registered, non-persisted)
+         * client tools advertised by the caller UI/runtime. **Narrow-only security invariant**
+         * (monotonic logical `AND` down the `BaseAgentID` chain and defaults cascade): once
+         * `false` on an ancestor or default tier, descendants cannot widen back to `true`.
+         * Default: `true`. Supersedes `AIAgent.AllowEphemeralClientTools`.
+         */
+        allowEphemeral?: boolean | null;
+    } | null;
+
+    /**
+     * Default realtime session recording policy.
+     * Set to `null` to explicitly clear overrides at this cascade tier.
+     */
+    recording?: {
+        /**
+         * Default recording mode applied to realtime sessions hosted by this agent:
+         * - `'Audio'`: records audio streams only.
+         * - `'AudioVideo'`: records both audio and video streams.
+         * - `'None'`: disables session recording by default.
+         *
+         * `null` defers to the inherited or session default. Supersedes
+         * `AIAgent.RecordingDefault`.
+         */
+        defaultMode?: 'Audio' | 'AudioVideo' | 'None' | null;
+    } | null;
+
+    /**
+     * Admin-only per-agent pluggable `BaseAgent` helper seam overrides (Extension Point #3).
+     * Collected cumulatively across `AgentType -> Categories -> BaseAgent Chain -> Agent`
+     * (child tiers cannot strip plugins bound by an ancestor or default tier; higher-priority
+     * or more specific entries for the same seam take precedence).
+     * Code-only security seams (`limits`, `actionPolicy`, `policy`, `permissions`, `permission`,
+     * `setup`, `steps`, `actions`, `subAgents`) are strictly forbidden in metadata and rejected
+     * both at save time and at runtime.
+     */
+    helperPlugins?: Array<{
+        /**
+         * Canonical `BaseAgent` helper seam key to override (for example `'messaging'`,
+         * `'payload'`, `'compaction'`, `'realtime'`, `'iteration'`, `'skills'`, or `'prompt'`).
+         * Code-only security seams (`'limits'`, `'actionPolicy'`, `'policy'`, `'permissions'`,
+         * `'permission'`, `'setup'`, `'steps'`, `'actions'`, `'subAgents'`) are always rejected.
+         */
+        seam: string;
+
+        /**
+         * Registered `@RegisterClass(BaseAgent<Seam>Helper, driverClass)` key identifying the
+         * custom helper implementation to instantiate for this seam.
+         */
+        driverClass: string;
+
+        /**
+         * Optional precedence weight when multiple plugin entries target the same `seam` across
+         * the cascade. Higher values win; equal priorities favor the later (more specific) entry.
+         */
+        priority?: number;
+    }> | null;
+
+    /**
+     * Optional UX hints for instantiable agent templates (`InstantiationMode` of `'Optional'` or
+     * `'Required'`). Automatically stripped from resolved configurations on non-instantiable leaf
+     * instances (`BaseAgentID != null && InstantiationMode === 'None'`).
+     * Set to `null` to explicitly clear instantiation hints at this cascade tier.
+     */
+    instantiation?: {
+        /**
+         * Pre-populated display-name suggestions offered to users when creating a personal
+         * instance from this agent template.
+         */
+        suggestedNames?: string[];
+
+        /**
+         * Suggested Font Awesome icon classes or icon identifiers presented in the instance
+         * creation UI.
+         */
+        suggestedIcons?: string[];
+
+        /**
+         * Suggested persona names for customizing the instantiated agent's conversational
+         * identity.
+         */
+        suggestedPersonaNames?: string[];
+
+        /**
+         * Positive integer cap limiting how many personal instances a single user may create from
+         * this agent template.
+         */
+        maxInstancesPerUser?: number;
+
+        /**
+         * Initial greeting message displayed to the user when opening a newly created instance for
+         * the first time.
+         */
+        onboardingGreeting?: string;
+
+        /**
+         * Curated communication-style presets offered during instantiation so users can pick a
+         * tone and speaking style for their instance.
+         */
+        personalityPresets?: Array<{
+            /**
+             * Short user-facing display label for the preset (for example `'Executive Brief'` or
+             * `'Warm Collaborator'`).
+             */
+            label: string;
+
+            /**
+             * Concise description of the interpersonal tone injected into the instance's persona
+             * instructions.
+             */
+            tone: string;
+
+            /**
+             * Stylistic guidance describing phrasing, structure, verbosity, and formatting
+             * conventions for the instance's responses.
+             */
+            speakingStyle: string;
+
+            /**
+             * Optional longer helper text explaining when to choose this preset in the
+             * instantiation UI.
+             */
+            description?: string;
+        }>;
+    } | null;
+
+    /**
+     * Default prompt template parameters merged beneath agent-level `AIAgent.AgentTypePromptParams`
+     * across the cascade (`AgentType -> Category -> BaseAgent Chain -> Agent`), enabling shared
+     * category and type prompt defaults without duplicating them per agent.
+     * Set to `null` to explicitly clear prompt defaults at this cascade tier.
+     */
+    promptDefaults?: { [key: string]: unknown } | null;
+}
+
+/**
  * MJ: AI Agents - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgent
@@ -13343,13 +15520,14 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     /**
     * * Field Name: ExecutionMode
     * * Display Name: Execution Mode
-    * * SQL Data Type: nvarchar(20)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(20)
     * * Default Value: Sequential
     * * Value List Type: List
     * * Possible Values 
     *   * Parallel
     *   * Sequential
-    * * Description: Controls how this agent's child agents are executed. Sequential runs children in order, Parallel runs them simultaneously.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.subAgentExecution.mode. Kept bidirectionally synced during v6.x.
     */
     get ExecutionMode(): 'Parallel' | 'Sequential' {
         return this.Get('ExecutionMode');
@@ -13361,9 +15539,10 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     /**
     * * Field Name: EnableContextCompression
     * * Display Name: Enable Context Compression
-    * * SQL Data Type: bit
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: bit
     * * Default Value: 0
-    * * Description: When true, enables automatic compression of conversation context when the message threshold is reached.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.enableCompression. Kept bidirectionally synced during v6.x.
     */
     get EnableContextCompression(): boolean {
         return this.Get('EnableContextCompression');
@@ -13375,8 +15554,9 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     /**
     * * Field Name: ContextCompressionMessageThreshold
     * * Display Name: Context Compression Message Threshold
-    * * SQL Data Type: int
-    * * Description: Number of messages that triggers context compression when EnableContextCompression is true.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.compressionMessageThreshold. Kept bidirectionally synced during v6.x.
     */
     get ContextCompressionMessageThreshold(): number | null {
         return this.Get('ContextCompressionMessageThreshold');
@@ -13388,8 +15568,10 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     /**
     * * Field Name: ContextCompressionPromptID
     * * Display Name: Context Compression Prompt ID
-    * * SQL Data Type: uniqueidentifier
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.compressionPromptID. Kept bidirectionally synced during v6.x.
     */
     get ContextCompressionPromptID(): string | null {
         return this.Get('ContextCompressionPromptID');
@@ -13401,8 +15583,9 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     /**
     * * Field Name: ContextCompressionMessageRetentionCount
     * * Display Name: Context Compression Message Retention Count
-    * * SQL Data Type: int
-    * * Description: Number of recent messages to keep uncompressed when context compression is applied.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.compressionMessageRetentionCount. Kept bidirectionally synced during v6.x.
     */
     get ContextCompressionMessageRetentionCount(): number | null {
         return this.Get('ContextCompressionMessageRetentionCount');
@@ -13473,13 +15656,14 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     /**
     * * Field Name: ModelSelectionMode
     * * Display Name: Model Selection Mode
-    * * SQL Data Type: nvarchar(50)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(50)
     * * Default Value: Agent Type
     * * Value List Type: List
     * * Possible Values 
     *   * Agent
     *   * Agent Type
-    * * Description: Controls whether model selection is driven by the Agent Type's system prompt or the Agent's specific prompt. Default is Agent Type for backward compatibility.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.modelSelectionMode. Kept bidirectionally synced during v6.x.
     */
     get ModelSelectionMode(): 'Agent' | 'Agent Type' {
         return this.Get('ModelSelectionMode');
@@ -13491,9 +15675,10 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     /**
     * * Field Name: PayloadDownstreamPaths
     * * Display Name: Payload Downstream Paths
-    * * SQL Data Type: nvarchar(MAX)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
     * * Default Value: ["*"]
-    * * Description: JSON array of paths that define which parts of the payload should be sent downstream to sub-agents. Use ["*"] to send entire payload, or specify paths like ["customer.id", "campaign.*", "analysis.sentiment"]
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.downstreamPaths. Kept bidirectionally synced during v6.x.
     */
     get PayloadDownstreamPaths(): string {
         return this.Get('PayloadDownstreamPaths');
@@ -13505,9 +15690,10 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     /**
     * * Field Name: PayloadUpstreamPaths
     * * Display Name: Payload Upstream Paths
-    * * SQL Data Type: nvarchar(MAX)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
     * * Default Value: ["*"]
-    * * Description: JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.upstreamPaths. Kept bidirectionally synced during v6.x.
     */
     get PayloadUpstreamPaths(): string {
         return this.Get('PayloadUpstreamPaths');
@@ -13519,9 +15705,9 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     /**
     * * Field Name: PayloadSelfReadPaths
     * * Display Name: Payload Self Read Paths
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data 
-flow when the agent executes its own prompt step.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.selfReadPaths. Kept bidirectionally synced during v6.x.
     */
     get PayloadSelfReadPaths(): string | null {
         return this.Get('PayloadSelfReadPaths');
@@ -13533,9 +15719,9 @@ flow when the agent executes its own prompt step.
     /**
     * * Field Name: PayloadSelfWritePaths
     * * Display Name: Payload Self Write Paths
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
-data flow when the agent executes its own prompt step.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.selfWritePaths. Kept bidirectionally synced during v6.x.
     */
     get PayloadSelfWritePaths(): string | null {
         return this.Get('PayloadSelfWritePaths');
@@ -13547,8 +15733,9 @@ data flow when the agent executes its own prompt step.
     /**
     * * Field Name: PayloadScope
     * * Display Name: Payload Scope
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Defines the scope/path within the parent payload that this sub-agent operates on. When set, the sub-agent receives only this portion of the payload and all change requests are relative to this scope. Format: /path/to/scope (e.g. /PropA/SubProp1)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.scope. Kept bidirectionally synced during v6.x.
     */
     get PayloadScope(): string | null {
         return this.Get('PayloadScope');
@@ -13560,8 +15747,9 @@ data flow when the agent executes its own prompt step.
     /**
     * * Field Name: FinalPayloadValidation
     * * Display Name: Final Payload Validation
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.finalValidationSchema. Kept bidirectionally synced during v6.x.
     */
     get FinalPayloadValidation(): string | null {
         return this.Get('FinalPayloadValidation');
@@ -13573,14 +15761,15 @@ data flow when the agent executes its own prompt step.
     /**
     * * Field Name: FinalPayloadValidationMode
     * * Display Name: Final Payload Validation Mode
-    * * SQL Data Type: nvarchar(25)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(25)
     * * Default Value: Retry
     * * Value List Type: List
     * * Possible Values 
     *   * Fail
     *   * Retry
     *   * Warn
-    * * Description: Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.finalValidationMode. Kept bidirectionally synced during v6.x.
     */
     get FinalPayloadValidationMode(): 'Fail' | 'Retry' | 'Warn' {
         return this.Get('FinalPayloadValidationMode');
@@ -13592,10 +15781,10 @@ data flow when the agent executes its own prompt step.
     /**
     * * Field Name: FinalPayloadValidationMaxRetries
     * * Display Name: Final Payload Validation Max Retries
-    * * SQL Data Type: int
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
     * * Default Value: 3
-    * * Description: Maximum number of retry attempts allowed when FinalPayloadValidation fails with
-Retry mode. After reaching this limit, the validation will fail permanently.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.finalValidationMaxRetries. Kept bidirectionally synced during v6.x.
     */
     get FinalPayloadValidationMaxRetries(): number {
         return this.Get('FinalPayloadValidationMaxRetries');
@@ -13663,8 +15852,9 @@ if this limit is exceeded.
     /**
     * * Field Name: MinExecutionsPerRun
     * * Display Name: Min Executions Per Run
-    * * SQL Data Type: int
-    * * Description: When acting as a sub-agent, minimum number of times this agent must be executed per parent agent run
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.subAgentExecution.minExecutionsPerRun. Kept bidirectionally synced during v6.x.
     */
     get MinExecutionsPerRun(): number | null {
         return this.Get('MinExecutionsPerRun');
@@ -13676,8 +15866,9 @@ if this limit is exceeded.
     /**
     * * Field Name: MaxExecutionsPerRun
     * * Display Name: Max Executions Per Run
-    * * SQL Data Type: int
-    * * Description: When acting as a sub-agent, maximum number of times this agent can be executed per parent agent run
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.subAgentExecution.maxExecutionsPerRun. Kept bidirectionally synced during v6.x.
     */
     get MaxExecutionsPerRun(): number | null {
         return this.Get('MaxExecutionsPerRun');
@@ -13689,8 +15880,9 @@ if this limit is exceeded.
     /**
     * * Field Name: StartingPayloadValidation
     * * Display Name: Starting Payload Validation
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator format as FinalPayloadValidation.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.startingValidationSchema. Kept bidirectionally synced during v6.x.
     */
     get StartingPayloadValidation(): string | null {
         return this.Get('StartingPayloadValidation');
@@ -13702,13 +15894,14 @@ if this limit is exceeded.
     /**
     * * Field Name: StartingPayloadValidationMode
     * * Display Name: Starting Payload Validation Mode
-    * * SQL Data Type: nvarchar(25)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(25)
     * * Default Value: Fail
     * * Value List Type: List
     * * Possible Values 
     *   * Fail
     *   * Warn
-    * * Description: Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but proceed.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.startingValidationMode. Kept bidirectionally synced during v6.x.
     */
     get StartingPayloadValidationMode(): 'Fail' | 'Warn' {
         return this.Get('StartingPayloadValidationMode');
@@ -13720,8 +15913,9 @@ if this limit is exceeded.
     /**
     * * Field Name: DefaultPromptEffortLevel
     * * Display Name: Default Effort Level
-    * * SQL Data Type: int
-    * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.defaultPromptEffortLevel. Kept bidirectionally synced during v6.x.
     */
     get DefaultPromptEffortLevel(): number | null {
         return this.Get('DefaultPromptEffortLevel');
@@ -13733,14 +15927,15 @@ if this limit is exceeded.
     /**
     * * Field Name: ChatHandlingOption
     * * Display Name: Chat Handling Option
-    * * SQL Data Type: nvarchar(30)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
     *   * Consult
     *   * Failed
     *   * Retry
     *   * Success
-    * * Description: Controls how Chat next steps are handled. NULL (default): Chat propagates to the caller. Success, Failed or Retry: the Chat is remapped to that step. Consult: when a sub-agent of this agent returns Chat, this agent answers it itself (or asks its own caller) instead of ending its run; this agent's own Chat still goes to its caller. AIAgentRelationship.ChatHandlingOption overrides this per sub-agent.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.chatHandlingOption. Kept bidirectionally synced during v6.x.
     */
     get ChatHandlingOption(): 'Consult' | 'Failed' | 'Retry' | 'Success' | null {
         return this.Get('ChatHandlingOption');
@@ -13800,14 +15995,15 @@ if this limit is exceeded.
     /**
     * * Field Name: ArtifactCreationMode
     * * Display Name: Artifact Creation Mode
-    * * SQL Data Type: nvarchar(20)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(20)
     * * Default Value: Always
     * * Value List Type: List
     * * Possible Values 
     *   * Always
     *   * Never
     *   * System Only
-    * * Description: Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.artifacts.creationMode. Kept bidirectionally synced during v6.x.
     */
     get ArtifactCreationMode(): 'Always' | 'Never' | 'System Only' {
         return this.Get('ArtifactCreationMode');
@@ -13845,9 +16041,10 @@ if this limit is exceeded.
     /**
     * * Field Name: InjectNotes
     * * Display Name: Inject Notes
-    * * SQL Data Type: bit
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: bit
     * * Default Value: 1
-    * * Description: When enabled, agent notes will be automatically injected into the agent context based on scoping rules.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.injectNotes. Kept bidirectionally synced during v6.x.
     */
     get InjectNotes(): boolean {
         return this.Get('InjectNotes');
@@ -13859,9 +16056,10 @@ if this limit is exceeded.
     /**
     * * Field Name: MaxNotesToInject
     * * Display Name: Max Notes To Inject
-    * * SQL Data Type: int
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
     * * Default Value: 5
-    * * Description: Maximum number of notes to inject into agent context per request.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.maxNotesToInject. Kept bidirectionally synced during v6.x.
     */
     get MaxNotesToInject(): number {
         return this.Get('MaxNotesToInject');
@@ -13873,14 +16071,15 @@ if this limit is exceeded.
     /**
     * * Field Name: NoteInjectionStrategy
     * * Display Name: Note Injection Strategy
-    * * SQL Data Type: nvarchar(20)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(20)
     * * Default Value: Relevant
     * * Value List Type: List
     * * Possible Values 
     *   * All
     *   * Recent
     *   * Relevant
-    * * Description: Strategy for selecting which notes to inject: Relevant (semantic search), Recent (most recent first), or All (up to max limit).
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.noteInjectionStrategy. Kept bidirectionally synced during v6.x.
     */
     get NoteInjectionStrategy(): 'All' | 'Recent' | 'Relevant' {
         return this.Get('NoteInjectionStrategy');
@@ -13892,9 +16091,10 @@ if this limit is exceeded.
     /**
     * * Field Name: InjectExamples
     * * Display Name: Inject Examples
-    * * SQL Data Type: bit
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: bit
     * * Default Value: 0
-    * * Description: When enabled, agent examples will be automatically injected into the agent context based on scoping rules.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.injectExamples. Kept bidirectionally synced during v6.x.
     */
     get InjectExamples(): boolean {
         return this.Get('InjectExamples');
@@ -13906,9 +16106,10 @@ if this limit is exceeded.
     /**
     * * Field Name: MaxExamplesToInject
     * * Display Name: Max Examples To Inject
-    * * SQL Data Type: int
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
     * * Default Value: 3
-    * * Description: Maximum number of examples to inject into agent context per request.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.maxExamplesToInject. Kept bidirectionally synced during v6.x.
     */
     get MaxExamplesToInject(): number {
         return this.Get('MaxExamplesToInject');
@@ -13920,14 +16121,15 @@ if this limit is exceeded.
     /**
     * * Field Name: ExampleInjectionStrategy
     * * Display Name: Example Injection Strategy
-    * * SQL Data Type: nvarchar(20)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(20)
     * * Default Value: Semantic
     * * Value List Type: List
     * * Possible Values 
     *   * Rated
     *   * Recent
     *   * Semantic
-    * * Description: Strategy for selecting which examples to inject: Semantic (vector similarity), Recent (most recent first), or Rated (highest success score first).
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.exampleInjectionStrategy. Kept bidirectionally synced during v6.x.
     */
     get ExampleInjectionStrategy(): 'Rated' | 'Recent' | 'Semantic' {
         return this.Get('ExampleInjectionStrategy');
@@ -13953,7 +16155,8 @@ if this limit is exceeded.
     /**
     * * Field Name: MessageMode
     * * Display Name: Message Mode
-    * * SQL Data Type: nvarchar(50)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(50)
     * * Default Value: None
     * * Value List Type: List
     * * Possible Values 
@@ -13961,7 +16164,7 @@ if this limit is exceeded.
     *   * Bookend
     *   * Latest
     *   * None
-    * * Description: Specifies how conversation messages are passed from parent agent to this child sub-agent (when this agent is a child via ParentID). Valid values: 'None' (fresh start - only context and task message, default), 'All' (all parent conversation history), 'Latest' (most recent MaxMessages messages), 'Bookend' (first 2 messages + most recent MaxMessages-2 messages with indicator between). Stored on child agent because each child has only one parent relationship.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.attachments.messageMode. Kept bidirectionally synced during v6.x.
     */
     get MessageMode(): 'All' | 'Bookend' | 'Latest' | 'None' {
         return this.Get('MessageMode');
@@ -13973,8 +16176,9 @@ if this limit is exceeded.
     /**
     * * Field Name: MaxMessages
     * * Display Name: Max Messages
-    * * SQL Data Type: int
-    * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.attachments.maxMessages. Kept bidirectionally synced during v6.x.
     */
     get MaxMessages(): number | null {
         return this.Get('MaxMessages');
@@ -14000,8 +16204,9 @@ if this limit is exceeded.
     /**
     * * Field Name: AttachmentRootPath
     * * Display Name: Attachment Root Path
-    * * SQL Data Type: nvarchar(500)
-    * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(500)
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.attachments.rootPath. Kept bidirectionally synced during v6.x.
     */
     get AttachmentRootPath(): string | null {
         return this.Get('AttachmentRootPath');
@@ -14013,8 +16218,9 @@ if this limit is exceeded.
     /**
     * * Field Name: InlineStorageThresholdBytes
     * * Display Name: Inline Storage Threshold (Bytes)
-    * * SQL Data Type: int
-    * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.attachments.inlineStorageThresholdBytes. Kept bidirectionally synced during v6.x.
     */
     get InlineStorageThresholdBytes(): number | null {
         return this.Get('InlineStorageThresholdBytes');
@@ -14039,8 +16245,9 @@ if this limit is exceeded.
     /**
     * * Field Name: ScopeConfig
     * * Display Name: Scope Configuration
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.scope.secondaryScopeConfig. Kept bidirectionally synced during v6.x.
     */
     get ScopeConfig(): string | null {
         return this.Get('ScopeConfig');
@@ -14052,9 +16259,10 @@ if this limit is exceeded.
     /**
     * * Field Name: NoteRetentionDays
     * * Display Name: Note Retention Days
-    * * SQL Data Type: int
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
     * * Default Value: 90
-    * * Description: Number of days to retain notes before archiving due to inactivity. Default 90. NULL means use system default.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.noteRetentionDays. Kept bidirectionally synced during v6.x.
     */
     get NoteRetentionDays(): number | null {
         return this.Get('NoteRetentionDays');
@@ -14066,9 +16274,10 @@ if this limit is exceeded.
     /**
     * * Field Name: ExampleRetentionDays
     * * Display Name: Example Retention Days
-    * * SQL Data Type: int
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
     * * Default Value: 180
-    * * Description: Number of days to retain examples before archiving due to inactivity. Default 180. NULL means use system default.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.exampleRetentionDays. Kept bidirectionally synced during v6.x.
     */
     get ExampleRetentionDays(): number | null {
         return this.Get('ExampleRetentionDays');
@@ -14080,9 +16289,10 @@ if this limit is exceeded.
     /**
     * * Field Name: AutoArchiveEnabled
     * * Display Name: Auto Archive Enabled
-    * * SQL Data Type: bit
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: bit
     * * Default Value: 1
-    * * Description: Whether automatic archival of stale notes/examples is enabled for this agent. Default true.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.autoArchiveEnabled. Kept bidirectionally synced during v6.x.
     */
     get AutoArchiveEnabled(): boolean {
         return this.Get('AutoArchiveEnabled');
@@ -14094,8 +16304,9 @@ if this limit is exceeded.
     /**
     * * Field Name: RerankerConfiguration
     * * Display Name: Reranker Configuration
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON configuration for optional reranking of retrieved memory items. Schema: { enabled: boolean, rerankerModelId: string, retrievalMultiplier: number (default 3), minRelevanceThreshold: number (default 0.5), rerankPromptId?: string, contextFields?: string[], fallbackOnError: boolean (default true) }. When null or disabled, vector search results are used directly without reranking.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.reranker. Kept bidirectionally synced during v6.x.
     */
     get RerankerConfiguration(): string | null {
         return this.Get('RerankerConfiguration');
@@ -14121,9 +16332,10 @@ if this limit is exceeded.
     /**
     * * Field Name: AllowEphemeralClientTools
     * * Display Name: Allow Ephemeral Client Tools
-    * * SQL Data Type: bit
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: bit
     * * Default Value: 1
-    * * Description: When true (default), this agent accepts runtime-registered ephemeral client tools that are not defined in metadata. Set to false for agents that require strict tool governance.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.clientTools.allowEphemeral. Kept bidirectionally synced during v6.x.
     */
     get AllowEphemeralClientTools(): boolean {
         return this.Get('AllowEphemeralClientTools');
@@ -14149,14 +16361,15 @@ if this limit is exceeded.
     /**
     * * Field Name: SearchScopeAccess
     * * Display Name: Search Scope Access
-    * * SQL Data Type: nvarchar(20)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(20)
     * * Default Value: None
     * * Value List Type: List
     * * Possible Values 
     *   * All
     *   * Assigned
     *   * None
-    * * Description: Controls the agent's search capability. All = may use any scope including Global; search action does not restrict. Assigned = may use ONLY scopes explicitly linked via AIAgentSearchScope; scoped search action enforces this. None = agent has no search capability; the scoped search action rejects all requests.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.scope.searchScopeAccess. Kept bidirectionally synced during v6.x.
     */
     get SearchScopeAccess(): 'All' | 'Assigned' | 'None' {
         return this.Get('SearchScopeAccess');
@@ -14168,9 +16381,10 @@ if this limit is exceeded.
     /**
     * * Field Name: AcceptUnregisteredFiles
     * * Display Name: Accept Unregistered Files
-    * * SQL Data Type: bit
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: bit
     * * Default Value: 0
-    * * Description: Per-agent opt-in to a Generic Binary fallback for file uploads whose MIME type does not match any registered Artifact Type. When false (default), unrecognized uploads are rejected at upload time with an actionable error. When true, unrecognized uploads resolve to the Generic Binary artifact type, exposing only get_full and get_metadata tools. Scoped per agent — there is no system-wide global flag.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.attachments.acceptUnregisteredFiles. Kept bidirectionally synced during v6.x.
     */
     get AcceptUnregisteredFiles(): boolean {
         return this.Get('AcceptUnregisteredFiles');
@@ -14209,9 +16423,10 @@ if this limit is exceeded.
     /**
     * * Field Name: AllowMemoryWrite
     * * Display Name: Allow Memory Write
-    * * SQL Data Type: bit
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: bit
     * * Default Value: 1
-    * * Description: When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. On by default; disable for restricted or experimental agents.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.allowMemoryWrite. Kept bidirectionally synced during v6.x.
     */
     get AllowMemoryWrite(): boolean {
         return this.Get('AllowMemoryWrite');
@@ -14223,13 +16438,14 @@ if this limit is exceeded.
     /**
     * * Field Name: RecordingDefault
     * * Display Name: Recording Default
-    * * SQL Data Type: nvarchar(20)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
     *   * Audio
     *   * AudioVideo
     *   * None
-    * * Description: Agent-level default recording media for realtime sessions: None, Audio, or AudioVideo. Overridden per session by a runtime parameter; if unset, recording is OFF. Capture only runs when a storage provider is resolvable (RecordingStorageProviderID, else the agent's AttachmentStorageProviderID) AND consent is satisfied.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.recording.defaultMode. Kept bidirectionally synced during v6.x.
     */
     get RecordingDefault(): 'Audio' | 'AudioVideo' | 'None' | null {
         return this.Get('RecordingDefault');
@@ -14269,9 +16485,10 @@ if this limit is exceeded.
     /**
     * * Field Name: SupportsPlanMode
     * * Display Name: Supports Plan Mode
-    * * SQL Data Type: bit
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: bit
     * * Default Value: 1
-    * * Description: Whether this agent supports Plan Mode. Defaults ON (opt-out). Plan-mode instructions are only injected when this is on AND plan mode is enabled per-request, so default runtime behavior is unchanged. Realtime agents are seeded to 0 (they skip plan mode structurally); Remote Proxy agents will be seeded when that type ships.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.supportsPlanMode. Kept bidirectionally synced during v6.x.
     */
     get SupportsPlanMode(): boolean {
         return this.Get('SupportsPlanMode');
@@ -14302,13 +16519,14 @@ if this limit is exceeded.
     /**
     * * Field Name: SkillActivationMode
     * * Display Name: Skill Activation Mode
-    * * SQL Data Type: nvarchar(20)
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(20)
     * * Default Value: RequestedOnly
     * * Value List Type: List
     * * Possible Values 
     *   * Auto
     *   * RequestedOnly
-    * * Description: Controls whether this agent may ever self-activate skills from its prompt catalog. Auto: the agent sees its allowed skills whose own ActivationMode is Auto (double gate) and may activate them mid-run on its own judgment. RequestedOnly (default): the agent's prompt catalog is empty and skills only enter a run via an explicit user request (/skill mention). Orthogonal to AcceptsSkills, which governs which skills are available at all; this governs who may pull the activation trigger.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.skills.activationMode. Kept bidirectionally synced during v6.x.
     */
     get SkillActivationMode(): 'Auto' | 'RequestedOnly' {
         return this.Get('SkillActivationMode');
@@ -14320,9 +16538,10 @@ if this limit is exceeded.
     /**
     * * Field Name: RequirePlanMode
     * * Display Name: Require Plan Mode
-    * * SQL Data Type: bit
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: bit
     * * Default Value: 0
-    * * Description: When 1, every root-level run of this agent executes in plan mode regardless of the per-request planMode flag — the agent must present a plan and receive human approval before any Actions or Sub-Agent steps execute. SupportsPlanMode is irrelevant when this is set. Use for high-consequence agents (e.g. ones with outbound-communication capabilities) where human-in-the-loop review is mandatory.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.requirePlanMode. Kept bidirectionally synced during v6.x.
     */
     get RequirePlanMode(): boolean {
         return this.Get('RequirePlanMode');
@@ -14334,8 +16553,9 @@ if this limit is exceeded.
     /**
     * * Field Name: ContextWindowMaxTokens
     * * Display Name: Context Window Max Tokens
-    * * SQL Data Type: int
-    * * Description: Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type's value (which, if also null, falls back to the selected model's MaxInputTokens). The resolved value is clamped to the model's limit at runtime.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.maxTokens. Kept bidirectionally synced during v6.x.
     */
     get ContextWindowMaxTokens(): number | null {
         return this.Get('ContextWindowMaxTokens');
@@ -14347,8 +16567,9 @@ if this limit is exceeded.
     /**
     * * Field Name: CompactionTriggerPercent
     * * Display Name: Compaction Trigger Percent
-    * * SQL Data Type: int
-    * * Description: Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type's value.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.compactionTriggerPercent. Kept bidirectionally synced during v6.x.
     */
     get CompactionTriggerPercent(): number | null {
         return this.Get('CompactionTriggerPercent');
@@ -14360,8 +16581,9 @@ if this limit is exceeded.
     /**
     * * Field Name: CompactionTargetPercent
     * * Display Name: Compaction Target Percent
-    * * SQL Data Type: int
-    * * Description: Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.compactionTargetPercent. Kept bidirectionally synced during v6.x.
     */
     get CompactionTargetPercent(): number | null {
         return this.Get('CompactionTargetPercent');
@@ -14387,9 +16609,10 @@ if this limit is exceeded.
     /**
     * * Field Name: DeclareActionsAsNativeTools
     * * Display Name: Declare Actions As Native Tools
-    * * SQL Data Type: bit
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: bit
     * * Default Value: 1
-    * * Description: When native tool calling is in effect for a run, whether this agent's Actions are declared as native tools (1, default) or withheld so the agent runs on the envelope path with the prose action catalog (0). Set 0 for coordinator agents whose prompt forbids doing work themselves. Controls supply only: capability and preference on the model and prompt still decide whether declared tools are used.
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.declareActionsAsNativeTools. Kept bidirectionally synced during v6.x.
     */
     get DeclareActionsAsNativeTools(): boolean {
         return this.Get('DeclareActionsAsNativeTools');
@@ -14401,8 +16624,9 @@ if this limit is exceeded.
     /**
     * * Field Name: MaxSubAgentConsultRounds
     * * Display Name: Max Sub Agent Consult Rounds
-    * * SQL Data Type: int
-    * * Description: Maximum number of Consult rounds this agent answers for a sub-agent before that sub-agent's question propagates to this agent's caller. NULL uses the framework default (3).
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: int
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.subAgentExecution.maxConsultRounds. Kept bidirectionally synced during v6.x.
     */
     get MaxSubAgentConsultRounds(): number | null {
         return this.Get('MaxSubAgentConsultRounds');
@@ -14489,6 +16713,35 @@ if this limit is exceeded.
     }
     set IsPrimaryInstance(value: boolean) {
         this.Set('IsPrimaryInstance', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIAgentEntity_IAgentConfiguration
+    * * Description: Unified typed JSON configuration bag (IAgentConfiguration) consolidating operational agent settings across execution, contextWindow, memory, payload, subAgentExecution, attachments, artifacts, scope, skills, clientTools, recording, helperPlugins, instantiation, and promptDefaults. Cascades across Instance -> BaseAgent Chain -> Category -> Parent Categories -> AgentType -> System Default.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJAIAgentEntity_IAgentConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ConfigurationObject(): MJAIAgentEntity_IAgentConfiguration | null {
+        return this.GetJSONFieldObject<MJAIAgentEntity_IAgentConfiguration>('Configuration');
+    }
+    set ConfigurationObject(value: MJAIAgentEntity_IAgentConfiguration | null) {
+        this.SetJSONFieldObject<MJAIAgentEntity_IAgentConfiguration>('Configuration', value);
     }
 
     /**

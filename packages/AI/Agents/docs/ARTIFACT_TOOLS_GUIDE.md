@@ -205,7 +205,7 @@ When a Loop agent completes a turn (`taskComplete: true`), `AgentRunner` can aut
 
 ### 1. Per-Agent Prompt Gating (`_ARTIFACTS_ENABLED`, Default: `true`)
 
-`BaseAgent.isArtifactSupportEnabled(agent)` inspects `AIAgent.ArtifactCreationMode`:
+`BaseAgentPromptHelper.IsArtifactSupportEnabled` (`packages/AI/Agents/src/helpers/prompt/AgentTurnToolsAndFinishIfHelper.ts`, also preserved via the `@deprecated` `BaseAgent.isArtifactSupportEnabled` delegate in `v6.x`) inspects `Configuration.artifacts.creationMode` (bidirectionally synced with legacy `AIAgent.ArtifactCreationMode` during `v6.x`; see [Agent Administrator Guide](../../../../guides/AGENT_ADMINISTRATOR_GUIDE.md)):
 
 | `AIAgent.ArtifactCreationMode` | `_ARTIFACTS_ENABLED` | System Prompt Behavior |
 |---|---|---|

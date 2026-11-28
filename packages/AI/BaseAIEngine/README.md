@@ -97,7 +97,9 @@ const prompts = AIEngineBase.Instance.Prompts;
 | `PromptTypes` | AI Prompt Types | Prompt type categories |
 | `PromptCategories` | AI Prompt Categories | Hierarchical prompt organization |
 | `Agents` | AI Agents | All agent definitions with actions and notes |
-| `AgentTypes` | MJ: AI Agent Types | Agent type definitions |
+| `AgentCategories` | MJ: AI Agent Categories | Hierarchical agent categories carrying `DefaultConfiguration` (`IAgentConfiguration`) |
+| `AgentTypes` | MJ: AI Agent Types | Agent type definitions carrying `DefaultAgentConfiguration` (`IAgentConfiguration`) and per-type `DefaultConfiguration` |
+| `AgentStepTypes` | MJ: AI Agent Step Types | Built-in and OpenApp-registered step-type definitions (`GetAgentStepTypeByName(name)`) consumed by `AgentStepTypeRegistry` |
 | `AgentActions` | AI Agent Actions | Actions associated with agents |
 | `AgentPrompts` | MJ: AI Agent Prompts | Prompts associated with agents |
 | `AgentSteps` | MJ: AI Agent Steps | Flow agent step definitions |
@@ -251,14 +253,15 @@ Use the availability set for the user-requested path (`/skill` mentions → `Exe
 
 Bundle membership is resolved by ID via `GetSkillActionIDs(skillID)` / `GetSkillSubAgentIDs(skillID)`; skill permission rows are cached on `SkillPermissions` and evaluated by `AISkillPermissionHelper` (open-by-default). Full architecture: [Agent Skills & Plan Mode Guide](../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md).
 
-## Multi-Level Prototype Inheritance & 2×2 RBAC
+## 3-Table `IAgentConfiguration` Cascade, Prototype Inheritance & 2×2 RBAC
 
-`AIEngineBase` resolves multi-level `AIAgent.BaseAgentID` prototype chains (max depth 5, cycle-safe) live from cache without cloning agent metadata, and enforces the 2×2 RBAC model with fail-closed Ancestor `CanRun` verification.
+`AIEngineBase` resolves multi-level `AIAgent.BaseAgentID` prototype chains (max depth 5, cycle-safe) and the **3-table `IAgentConfiguration` cascade** (`AIAgentType.DefaultAgentConfiguration` → `AIAgentCategory.DefaultConfiguration` walking up `ParentID` → `AIAgent.Configuration` root → leaf) live from cache without cloning agent metadata, with full `v6.x` dual-read fallback to the 49 deprecated `AIAgent` columns and 7 deprecated `AIAgentType` columns, and enforces the 2×2 RBAC model with fail-closed Ancestor `CanRun` verification.
 
 | API Method / Helper | Responsibility |
 | --- | --- |
 | `GetAgentInheritanceChain(agentId)` / `GetRootAgent(agentId)` | Walks `BaseAgentID` safely up to `MAX_AGENT_INHERITANCE_DEPTH` (5), returning `[root, ..., parent, leaf]`. |
-| `ResolveEffectiveAgentProperties(agent)` | Nearest non-null descendant scalar inheritance + monotonic narrowing (`Isolation`, `AcceptsSkills`, `SkillActivationMode`, run limits) + root → leaf deep-merged `TypeConfiguration` & `AgentTypePromptParams`. |
+| `ResolveEffectiveAgentProperties(agent)` | Resolves the full 3-table `IAgentConfiguration` cascade (`EffectiveAgentProperties.Configuration`), collects admin-configured `EffectiveAgentProperties.HelperPlugins`, dual-reads `Configuration` JSON with fallback to legacy columns, enforces monotonic narrow-only invariants (`Isolation`, `AcceptsSkills`, `SkillActivationMode`, `SearchScopeAccess`, `RequirePlanMode`, `SupportsPlanMode`, `AllowEphemeralClientTools`, `AcceptUnregisteredFiles`, `MaxExecutionsPerRun`, `MaxSubAgentConsultRounds`), and deep-merges `TypeConfiguration` & `AgentTypePromptParams` (layered over `Configuration.promptDefaults`). |
+| `AgentStepTypes` / `GetAgentStepTypeByName(name)` | Cached `MJ: AI Agent Step Types` collection powering `AgentStepTypeRegistry` for built-in and OpenApp custom step types. |
 | `GetEffectiveAgentPrompts(agentId, status?)` | Returns leaf active prompts when defined, otherwise inherits from the nearest prompt-owning ancestor. |
 | `GetEffectiveAgentActions(agentId)` | Unions `AIAgentAction` rows root → leaf by `ActionID`; descendant non-`Active` rows (`Revoked`/`Pending`) veto inherited actions. |
 | `GetStackedAdditionalInstructions(agentId)` | Collects non-empty `AdditionalInstructions` root → leaf so org/dept rules precede personal preferences. |
@@ -267,7 +270,12 @@ Bundle membership is resolved by ID via `GetSkillActionIDs(skillID)` / `GetSkill
 | `GetInstantiableAgents(user)` / `GetUserDerivedAgents(user)` | Lists templates with `InstantiationMode !== 'None'` and the user's personal/shared derived instances (`Required` templates are excluded from `GetUserRunnableAgentDirectory`). |
 | `ResolveAgentForUser(nameOrId, user)` / `ResolvePrimaryUserAgentInstance(baseAgentId, userId)` | Collision-free name lookup (user-owned → shared derived → root catalog) and primary active instance resolution per `(OwnerUserID, RootBaseAgentID)`. |
 
-Full architecture & diagrams: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
+Canonical guides:
+- [Agent Administrator Guide](../../../guides/AGENT_ADMINISTRATOR_GUIDE.md)
+- [Agent Builder & Extension Guide](../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md)
+- [Agent End-User Guide](../../../guides/AGENT_END_USER_GUIDE.md)
+- [BaseAgent Rebase Map](../../../guides/BASE_AGENT_REBASE_MAP.md)
+- [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md)
 
 ## Dependencies
 

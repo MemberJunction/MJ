@@ -20,6 +20,7 @@ import {
     type AgentTreeBudget,
     type BudgetPausedInterval,
     type ExecuteAgentParams,
+    type MJAIAgentEntityExtended,
     type MJAIAgentRunEntityExtended,
     type WorkflowBudgetAttributionContext,
     type WorkflowBudgetBreachDiagnostic,
@@ -90,6 +91,8 @@ export interface AgentGuardrailEvaluationInput {
     ValidationRetryCount: number;
     MaxValidationRetries: number;
     EffectiveBudgets?: MJLimitsBudgetsConfig | null;
+    /** Optional ancestor-clamped `MaxIterationsPerRun` (minimum finite positive value across the `BaseAgentID` chain). */
+    EffectiveMaxIterationsPerRun?: number | null;
     PausedIntervals?: readonly BudgetPausedInterval[];
     NowMs?: number;
     /**
@@ -354,6 +357,7 @@ export class AgentTreeBudgetTracker {
             nowMs,
             input.EffectiveBudgets ?? null,
             input.PausedIntervals,
+            input.EffectiveMaxIterationsPerRun ?? null,
         );
         const budget = input.EnsureTreeBudgetFn
             ? input.EnsureTreeBudgetFn(params)
@@ -536,6 +540,47 @@ export class AgentTreeBudgetTracker {
         return 0;
     }
 
+    /**
+     * Walks the `BaseAgentID` ancestor chain via `lookupAgent` and returns the strictest (minimum)
+     * finite positive `MaxIterationsPerRun` ceiling across leaf and all ancestors, or `null` when
+     * no node in the chain specifies a finite positive iteration limit.
+     */
+    public static ResolveEffectiveMaxIterationsPerRun(
+        agent: MJAIAgentEntityExtended | null | undefined,
+        lookupAgent?: (id: string) => MJAIAgentEntityExtended | undefined
+    ): number | null {
+        if (!agent) {
+            return null;
+        }
+        let best: number | null =
+            typeof agent.MaxIterationsPerRun === 'number' &&
+            Number.isFinite(agent.MaxIterationsPerRun) &&
+            agent.MaxIterationsPerRun > 0
+                ? agent.MaxIterationsPerRun
+                : null;
+        if (!lookupAgent || !agent.BaseAgentID) {
+            return best;
+        }
+        const seen = new Set<string>([agent.ID?.toLowerCase() ?? '']);
+        let curId: string | null | undefined = agent.BaseAgentID;
+        while (curId) {
+            const key = curId.toLowerCase();
+            if (seen.has(key)) break;
+            seen.add(key);
+            const anc = lookupAgent(curId);
+            if (!anc) break;
+            if (
+                typeof anc.MaxIterationsPerRun === 'number' &&
+                Number.isFinite(anc.MaxIterationsPerRun) &&
+                anc.MaxIterationsPerRun > 0
+            ) {
+                best = best === null ? anc.MaxIterationsPerRun : Math.min(best, anc.MaxIterationsPerRun);
+            }
+            curId = anc.BaseAgentID;
+        }
+        return best;
+    }
+
     private evaluatePerRunLimits(
         params: ExecuteAgentParams,
         agentRun: MJAIAgentRunEntityExtended,
@@ -545,6 +590,7 @@ export class AgentTreeBudgetTracker {
         nowMs: number,
         effectiveBudgets: MJLimitsBudgetsConfig | null = null,
         pausedIntervals?: readonly BudgetPausedInterval[],
+        effectiveMaxIterationsOverride: number | null = null,
     ): AgentGuardrailCheckResult {
         const agent = params.agent;
 
@@ -584,17 +630,25 @@ export class AgentTreeBudgetTracker {
             };
         }
 
+        const leafMaxIter =
+            typeof agent.MaxIterationsPerRun === 'number' && Number.isFinite(agent.MaxIterationsPerRun)
+                ? agent.MaxIterationsPerRun
+                : null;
+        const effectiveMaxIterations =
+            leafMaxIter !== null && effectiveMaxIterationsOverride !== null
+                ? Math.min(leafMaxIter, effectiveMaxIterationsOverride)
+                : (effectiveMaxIterationsOverride ?? leafMaxIter);
         if (
-            agent.MaxIterationsPerRun != null &&
+            effectiveMaxIterations != null &&
             agentRun.TotalPromptIterations != null &&
-            agentRun.TotalPromptIterations >= agent.MaxIterationsPerRun
+            agentRun.TotalPromptIterations >= effectiveMaxIterations
         ) {
             return {
                 Exceeded: true,
                 Type: 'iterations',
-                Limit: agent.MaxIterationsPerRun,
+                Limit: effectiveMaxIterations,
                 Current: agentRun.TotalPromptIterations,
-                Reason: `Maximum iteration limit of ${agent.MaxIterationsPerRun} exceeded. Current iterations: ${agentRun.TotalPromptIterations}`,
+                Reason: `Maximum iteration limit of ${effectiveMaxIterations} exceeded. Current iterations: ${agentRun.TotalPromptIterations}`,
             };
         }
 

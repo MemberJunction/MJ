@@ -482,68 +482,76 @@ export interface ResolvedSlidesToolbarItem {
             >
               <i class="fa-solid fa-ellipsis"></i>
             </button>
-
-            @if (ShowMoreToolsMenu) {
-              <div class="mj-slides-more-menu" role="menu" data-testid="slides-more-tools-menu">
-                <div class="mj-slides-more-menu-header">
-                  <div>
-                    <span class="mj-slides-more-menu-title">Tools &amp; View</span>
-                    <span class="mj-slides-more-menu-hint">
-                      Pin up to {{ MaxPinnedToolbarActions }} actions ({{ PinnedToolbarActions.length }}/{{ MaxPinnedToolbarActions }})
-                    </span>
-                  </div>
-                  @if (HasCustomToolbarPreferences) {
-                    <button
-                      type="button"
-                      class="mj-slides-more-reset-btn"
-                      data-testid="slides-reset-toolbar-btn"
-                      (click)="ResetToolbarPreferences()"
-                    >
-                      Reset
-                    </button>
-                  }
-                </div>
-
-                @for (section of OverflowToolbarSections; track section.Category) {
-                  <div class="mj-slides-more-section">
-                    <div class="mj-slides-more-section-label">{{ section.Category }}</div>
-                    @for (item of section.Items; track item.Key) {
-                      <div class="mj-slides-more-row">
-                        <button
-                          type="button"
-                          class="mj-slides-more-action"
-                          [class.active]="item.Active"
-                          [disabled]="item.Disabled"
-                          role="menuitem"
-                          [attr.data-testid]="'slides-overflow-' + item.Key"
-                          (click)="ExecuteToolbarItem(item, true)"
-                        >
-                          <i class="fa-solid" [ngClass]="item.Icon"></i>
-                          <div class="mj-slides-more-action-text">
-                            <span class="mj-slides-more-action-label">{{ item.Label }}</span>
-                            <span class="mj-slides-more-action-desc">{{ item.Description }}</span>
-                          </div>
-                        </button>
-                        <button
-                          type="button"
-                          class="mj-slides-pin-btn"
-                          [class.pinned]="IsToolbarItemPinned(item.Key)"
-                          [disabled]="!IsToolbarItemPinned(item.Key) && PinnedToolbarActions.length >= MaxPinnedToolbarActions"
-                          [title]="IsToolbarItemPinned(item.Key) ? 'Unpin from toolbar' : 'Pin to toolbar'"
-                          [attr.data-testid]="'slides-pin-btn-' + item.Key"
-                          (click)="TogglePinToolbarAction(item.Key, $event)"
-                        >
-                          <i class="fa-solid fa-thumbtack"></i>
-                        </button>
-                      </div>
-                    }
-                  </div>
-                }
-              </div>
-            }
           </div>
         </div>
       </div>
+
+      <!-- Rendered outside .mj-slides-toolbar so toolbar horizontal scrolling (overflow-x: auto) never clips the menu -->
+      @if (ShowMoreToolsMenu) {
+        <div
+          class="mj-slides-more-menu"
+          #moreToolsPanel
+          role="menu"
+          [style.top.px]="MoreMenuTopPx"
+          [style.right.px]="MoreMenuRightPx"
+          data-testid="slides-more-tools-menu"
+        >
+          <div class="mj-slides-more-menu-header">
+            <div>
+              <span class="mj-slides-more-menu-title">Tools &amp; View</span>
+              <span class="mj-slides-more-menu-hint">
+                Pin up to {{ MaxPinnedToolbarActions }} actions ({{ PinnedToolbarActions.length }}/{{ MaxPinnedToolbarActions }})
+              </span>
+            </div>
+            @if (HasCustomToolbarPreferences) {
+              <button
+                type="button"
+                class="mj-slides-more-reset-btn"
+                data-testid="slides-reset-toolbar-btn"
+                (click)="ResetToolbarPreferences()"
+              >
+                Reset
+              </button>
+            }
+          </div>
+
+          @for (section of OverflowToolbarSections; track section.Category) {
+            <div class="mj-slides-more-section">
+              <div class="mj-slides-more-section-label">{{ section.Category }}</div>
+              @for (item of section.Items; track item.Key) {
+                <div class="mj-slides-more-row">
+                  <button
+                    type="button"
+                    class="mj-slides-more-action"
+                    [class.active]="item.Active"
+                    [disabled]="item.Disabled"
+                    role="menuitem"
+                    [attr.data-testid]="'slides-overflow-' + item.Key"
+                    (click)="ExecuteToolbarItem(item, true)"
+                  >
+                    <i class="fa-solid" [ngClass]="item.Icon"></i>
+                    <div class="mj-slides-more-action-text">
+                      <span class="mj-slides-more-action-label">{{ item.Label }}</span>
+                      <span class="mj-slides-more-action-desc">{{ item.Description }}</span>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    class="mj-slides-pin-btn"
+                    [class.pinned]="IsToolbarItemPinned(item.Key)"
+                    [disabled]="!IsToolbarItemPinned(item.Key) && PinnedToolbarActions.length >= MaxPinnedToolbarActions"
+                    [title]="IsToolbarItemPinned(item.Key) ? 'Unpin from toolbar' : 'Pin to toolbar'"
+                    [attr.data-testid]="'slides-pin-btn-' + item.Key"
+                    (click)="TogglePinToolbarAction(item.Key, $event)"
+                  >
+                    <i class="fa-solid fa-thumbtack"></i>
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
 
       @if (LiveSyncUnavailable) {
         <div
@@ -2341,6 +2349,7 @@ export interface ResolvedSlidesToolbarItem {
         width: 100%;
         height: 100%;
         min-height: 640px;
+        position: relative;
         background: var(--mj-bg-surface);
         color: var(--mj-text-primary);
         font-family: var(--mj-font-family, Inter, system-ui, sans-serif);
@@ -2684,11 +2693,11 @@ export interface ResolvedSlidesToolbarItem {
 
       .mj-slides-more-menu {
         position: absolute;
-        top: calc(100% + 6px);
-        right: 0;
-        z-index: 40;
+        top: 44px;
+        right: 10px;
+        z-index: 200;
         width: 310px;
-        max-height: 440px;
+        max-height: min(440px, calc(100% - 56px));
         overflow-y: auto;
         background: var(--mj-bg-surface-card);
         border: 1px solid var(--mj-border-default);
@@ -3960,6 +3969,7 @@ export class SlideDeckArtifactViewerComponent
   }
 
   @ViewChild('moreToolsAnchor') private moreToolsAnchorRef?: ElementRef<HTMLElement>;
+  @ViewChild('moreToolsPanel') private moreToolsPanelRef?: ElementRef<HTMLElement>;
 
   public readonly MaxPinnedToolbarActions = 4;
   public ShowMoreToolsMenu = false;
@@ -6850,9 +6860,23 @@ export class SlideDeckArtifactViewerComponent
     }
   }
 
+  public MoreMenuTopPx = 44;
+  public MoreMenuRightPx = 10;
+
   public ToggleMoreToolsMenu(): void {
     this.ShowMoreToolsMenu = !this.ShowMoreToolsMenu;
     if (this.ShowMoreToolsMenu) {
+      const anchorEl = this.moreToolsAnchorRef?.nativeElement;
+      const shellEl = anchorEl?.closest('.mj-slides-shell') as HTMLElement | null;
+      const anchorRect = anchorEl?.getBoundingClientRect();
+      const shellRect = shellEl?.getBoundingClientRect();
+      if (anchorRect && shellRect && anchorRect.height > 0 && shellRect.width > 0) {
+        this.MoreMenuTopPx = Math.max(36, Math.round(anchorRect.bottom - shellRect.top + 6));
+        this.MoreMenuRightPx = Math.max(8, Math.round(shellRect.right - anchorRect.right));
+      } else {
+        this.MoreMenuTopPx = 44;
+        this.MoreMenuRightPx = 10;
+      }
       this.startMoreMenuDocumentListeners();
     } else {
       this.stopMoreMenuDocumentListeners();
@@ -6873,7 +6897,8 @@ export class SlideDeckArtifactViewerComponent
     const unlistenClick = this.renderer.listen('document', 'click', (evt: MouseEvent) => {
       const target = evt.target as Node | null;
       const anchor = this.moreToolsAnchorRef?.nativeElement;
-      if (anchor && target && anchor.contains(target)) {
+      const panel = this.moreToolsPanelRef?.nativeElement;
+      if (target && ((anchor && anchor.contains(target)) || (panel && panel.contains(target)))) {
         return;
       }
       this.CloseMoreToolsMenu();

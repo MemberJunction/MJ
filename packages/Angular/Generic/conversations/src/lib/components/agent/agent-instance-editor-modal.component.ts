@@ -25,7 +25,7 @@ import {
   IAgentInstantiationConfig,
   IAgentPersonalityPreset,
   MJAIAgentEntityExtended,
-  ParseAgentInstantiationConfig,
+  ResolveAgentInstantiationConfig,
 } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -266,7 +266,23 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
   }
 
   public get InstantiationConfig(): IAgentInstantiationConfig | null {
-    return ParseAgentInstantiationConfig(this.SelectedBaseAgent?.TypeConfiguration);
+    return this.resolveInstantiationConfigForTemplate(this.SelectedBaseAgent);
+  }
+
+  private resolveInstantiationConfigForTemplate(
+    template: MJAIAgentEntityExtended | null | undefined
+  ): IAgentInstantiationConfig | null {
+    if (!template) {
+      return null;
+    }
+    const effective =
+      typeof this.aiEngine.ResolveEffectiveAgentProperties === 'function'
+        ? this.aiEngine.ResolveEffectiveAgentProperties(template)
+        : null;
+    return ResolveAgentInstantiationConfig(
+      effective?.Configuration ?? template.Configuration,
+      effective?.TypeConfiguration ?? template.TypeConfiguration
+    );
   }
 
   public get SuggestedNames(): string[] {
@@ -450,7 +466,7 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
     this.SelectedTemplateCategory = 'All';
     this.updateSiblingCount();
     if (!this.IconClass || this.Mode === 'create') {
-      const cfg = ParseAgentInstantiationConfig(template.TypeConfiguration);
+      const cfg = this.resolveInstantiationConfigForTemplate(template);
       this.IconClass = cfg?.suggestedIcons?.[0] ?? template.IconClass ?? 'fa-solid fa-wand-magic-sparkles';
     }
     if (this.IsChiefOfStaffTemplate && !this.CoordinationMode) {
@@ -614,6 +630,13 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
         entity.InstantiationMode = 'None';
         entity.Status = 'Active';
         entity.TypeID = effectiveBase.TypeID ?? base.TypeID;
+        // Propagate strict-default narrow-only capabilities from the base template explicitly so
+        // GraphQL creates inherit the template's effective capabilities while direct API creates
+        // with explicit strict defaults (e.g. SearchScopeAccess='None') are preserved server-side (R5-1).
+        entity.SearchScopeAccess = effectiveBase.SearchScopeAccess;
+        entity.AcceptUnregisteredFiles = effectiveBase.AcceptUnregisteredFiles;
+        entity.AcceptsSkills = effectiveBase.AcceptsSkills;
+        entity.SkillActivationMode = effectiveBase.SkillActivationMode;
       }
 
       entity.Name = this.InstanceName.trim();
@@ -780,7 +803,7 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
         this.SelectedBaseAgentId = defaultTemplate?.ID ?? '';
         this.InstanceName = '';
         this.Description = '';
-        const cfg = ParseAgentInstantiationConfig(defaultTemplate?.TypeConfiguration);
+        const cfg = this.resolveInstantiationConfigForTemplate(defaultTemplate);
         this.IconClass = cfg?.suggestedIcons?.[0] ?? defaultTemplate?.IconClass ?? 'fa-solid fa-pepper-hot';
         this.LogoURL = '';
         this.AdditionalInstructions = '';

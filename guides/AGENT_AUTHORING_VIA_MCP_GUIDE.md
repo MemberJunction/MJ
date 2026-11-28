@@ -4,7 +4,7 @@ How to author, introspect, test, and govern MemberJunction agents **from an exte
 
 **Read this before** pointing a desktop agent at an MJ MCP server for agent-building work, granting `agent:manage` scope to anyone, or deciding how MCP-authored agents get promoted to production.
 
-**Companions**: [`packages/AI/MCPServer/README.md`](../packages/AI/MCPServer/README.md) (server configuration reference), [`metadata/CLAUDE.md`](../metadata/CLAUDE.md) (file-based metadata + `mj sync`), `plans/external-agent-harness.md` — [PR #3412](https://github.com/MemberJunction/MJ/pull/3412) (the companion initiative: harnesses *running inside* MJ, where this guide is about harnesses *configuring* MJ).
+**Companions**: [Agent Administrator Guide](AGENT_ADMINISTRATOR_GUIDE.md), [Agent Builder & Extension Guide](AGENT_BUILDER_EXTENSION_GUIDE.md), [Agent End-User Guide](AGENT_END_USER_GUIDE.md), [BaseAgent Rebase Map](BASE_AGENT_REBASE_MAP.md), [`packages/AI/MCPServer/README.md`](../packages/AI/MCPServer/README.md) (server configuration reference), [`metadata/CLAUDE.md`](../metadata/CLAUDE.md) (file-based metadata + `mj sync`), `plans/external-agent-harness.md` — [PR #3412](https://github.com/MemberJunction/MJ/pull/3412) (the companion initiative: harnesses *running inside* MJ, where this guide is about harnesses *configuring* MJ).
 
 ---
 
@@ -68,7 +68,7 @@ The intended workflow from the client's chat:
 - **`Update_Agent` is full-replace with orphan cleanup.** The spec you send becomes the truth: agent-action junctions, prompt junctions, flow steps/paths, and relationships that exist in the DB but are missing from your spec are **deleted** (child sub-agents are orphaned — `ParentID` nulled — not deleted). Never hand-craft a partial update spec; always `Get_Agent_Spec` → modify → send the whole thing back.
 - **IDs are server-assigned on create.** `Create_Agent` rejects specs carrying an ID; nested new sub-agents/prompts likewise get IDs on save (returned in the mutation list). On update, the top-level ID is required and related-record IDs determine update-vs-create per record.
 - **Names must be resolvable.** `Get_Agent_Spec` by `agentName` requires a unique name; prefer IDs once you have them.
-- **Sub-agents come in two flavors** — `child` (ParentID-based, shares the parent's payload structure via `PayloadDownstreamPaths`/`PayloadUpstreamPaths`) and `related` (junction-based, with explicit `SubAgentInputMapping`/`SubAgentOutputMapping`/`SubAgentContextPaths`). Get this wrong and payload flow silently doesn't do what you expect — see the AgentSpec TSDoc in `packages/AI/CorePlus/src/agent-spec.ts`.
+- **Sub-agents come in two flavors** — `child` (ParentID-based, shares the parent's payload structure via `Configuration.payload.downstreamPaths`/`upstreamPaths`, bidirectionally synced with legacy `PayloadDownstreamPaths`/`PayloadUpstreamPaths` during `v6.x`) and `related` (junction-based, with explicit `SubAgentInputMapping`/`SubAgentOutputMapping`/`SubAgentContextPaths`). Get this wrong and payload flow silently doesn't do what you expect — see the AgentSpec TSDoc in `packages/AI/CorePlus/src/agent-spec.ts`.
 - **Payload ACL fields default open on save** (`["*"]` for downstream/upstream when unset). For any agent with sub-agents, set the payload path fields deliberately.
 
 ## 5. Governance: iterate via MCP, promote via `mj sync`
